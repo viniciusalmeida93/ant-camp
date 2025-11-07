@@ -902,6 +902,12 @@ export default function Heats() {
                             <span className="text-muted-foreground">
                               {currentEntries.length} atletas/times
                             </span>
+                            {scheduledTime && (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Clock className="w-4 h-4" />
+                                <span className="text-sm">{scheduledTime}</span>
+                              </div>
+                            )}
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
                               Arraste participantes para reorganizar
                             </Badge>
@@ -969,21 +975,12 @@ export default function Heats() {
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="time"
-                          value={scheduledTime}
-                          onChange={(e) => {
-                            const timeStr = e.target.value;
-                            if (timeStr) {
-                              handleTimeUpdate(heat.id, timeStr);
-                            }
-                          }}
-                    className="w-32"
-                    placeholder="HH:MM"
-                  />
-                </div>
+                {scheduledTime && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-sm">{scheduledTime}</span>
+                  </div>
+                )}
               </div>
 
               <Table>

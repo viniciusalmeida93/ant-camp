@@ -360,6 +360,25 @@ export default function Dashboard() {
 
     setLoadingSchedule(true);
     try {
+      // Recarregar os dias para garantir que temos os valores mais recentes do banco
+      const { data: daysDataFresh, error: daysErrorFresh } = await supabase
+        .from("championship_days")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("day_number");
+
+      if (daysErrorFresh) throw daysErrorFresh;
+
+      // Atualizar o estado com os dados frescos
+      if (daysDataFresh && daysDataFresh.length > 0) {
+        setChampionshipDays(daysDataFresh);
+        console.log("Dias recarregados do banco:", daysDataFresh.map(d => ({
+          day: d.day_number,
+          start_time: d.start_time,
+          break_interval_minutes: d.break_interval_minutes
+        })));
+      }
+
       // Buscar todas as baterias do campeonato
       const { data: allHeats, error: heatsError } = await supabase
         .from("heats")
@@ -372,8 +391,9 @@ export default function Dashboard() {
       // Mapa para rastrear quais WODs já foram processados
       const processedWodIds = new Set<string>();
 
-      // Para cada dia, calcular horários
-      for (const day of championshipDays) {
+      // Para cada dia, calcular horários (usar dados frescos do banco)
+      const daysToProcess = daysDataFresh && daysDataFresh.length > 0 ? daysDataFresh : championshipDays;
+      for (const day of daysToProcess) {
         const dayWodsList = dayWods.get(day.day_number) || [];
         if (dayWodsList.length === 0) continue;
 
@@ -399,7 +419,16 @@ export default function Dashboard() {
         // Para cada WOD do dia (em ordem)
         for (let wodIndex = 0; wodIndex < dayWodsList.length; wodIndex++) {
           const wod = dayWodsList[wodIndex];
-          const wodDuration = wod.estimated_duration_minutes || 15;
+          // Buscar duração do WOD diretamente do banco para garantir valor atualizado
+          const { data: wodData } = await supabase
+            .from("wods")
+            .select("estimated_duration_minutes")
+            .eq("id", wod.id)
+            .single();
+          
+          const wodDuration = (wodData?.estimated_duration_minutes ?? wod.estimated_duration_minutes) || 10;
+          
+          console.log(`WOD ${wod.name}: Duração = ${wodDuration} minutos (do banco: ${wodData?.estimated_duration_minutes}, do estado: ${wod.estimated_duration_minutes})`);
 
           // Buscar todas as baterias deste WOD, agrupadas por categoria
           const wodHeats = (allHeats || []).filter(h => h.wod_id === wod.id);
@@ -439,10 +468,10 @@ export default function Dashboard() {
             const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
 
             // Calcular horário para cada bateria desta categoria neste WOD
-            // Usar intervalo do dia, senão usar o padrão de 5 minutos
+            // Usar intervalo do dia (já recarregado do banco no início da função)
             const dayBreakInterval = (day.break_interval_minutes !== null && day.break_interval_minutes !== undefined)
               ? day.break_interval_minutes
-              : 5;
+              : 5; // Padrão se não definido
             
             console.log(`Dia ${day.day_number}: Usando intervalo de ${dayBreakInterval} minutos (valor do dia: ${day.break_interval_minutes})`);
             
@@ -450,12 +479,16 @@ export default function Dashboard() {
               const scheduledTime = currentTime.toISOString();
               const timeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-              await supabase
+              const { error: updateError } = await supabase
                 .from("heats")
                 .update({ scheduled_time: scheduledTime })
                 .eq("id", heat.id);
 
-              console.log(`Bateria ${heat.heat_number} (${wod.name} - ${categoryId}): ${timeStr}, Duração WOD: ${wodDuration}min, Intervalo: ${dayBreakInterval}min`);
+              if (updateError) {
+                console.error(`Erro ao atualizar horário da bateria ${heat.id}:`, updateError);
+              } else {
+                console.log(`✓ Bateria ${heat.heat_number} (${wod.name} - ${categoryId}): ${timeStr}, Duração WOD: ${wodDuration}min, Intervalo: ${dayBreakInterval}min`);
+              }
 
               // Avançar tempo: duração do WOD + intervalo entre baterias
               // O intervalo é aplicado APÓS a duração do WOD
@@ -464,7 +497,7 @@ export default function Dashboard() {
               currentTime = new Date(currentTime.getTime() + (dayBreakInterval * 60000)); // Intervalo entre baterias em milissegundos
               
               const nextTimeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-              console.log(`  Próxima bateria será às: ${nextTimeStr} (avançou ${wodDuration + dayBreakInterval} minutos)`);
+              console.log(`  → Próxima bateria será às: ${nextTimeStr} (avançou ${wodDuration + dayBreakInterval} minutos no total)`);
             }
           }
 
