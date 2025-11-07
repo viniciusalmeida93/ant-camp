@@ -309,20 +309,28 @@ export default function Dashboard() {
 
   const handleDayBreakUpdate = async (dayId: string, field: string, value: any) => {
     try {
+      console.log(`Atualizando campo ${field} para dia ${dayId} com valor:`, value);
+      
       const { error } = await supabase
         .from("championship_days")
         .update({ [field]: value })
         .eq("id", dayId);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro do Supabase:", error);
+        throw error;
+      }
 
       // Atualizar estado local
       setChampionshipDays(prev => prev.map(day => 
         day.id === dayId ? { ...day, [field]: value } : day
       ));
+      
+      console.log(`✓ Campo ${field} atualizado com sucesso para valor:`, value);
+      toast.success("Configuração atualizada!");
     } catch (error: any) {
       console.error("Error updating day break:", error);
-      toast.error("Erro ao atualizar configuração de pausa");
+      toast.error(`Erro ao atualizar configuração: ${error.message || 'Erro desconhecido'}`);
     }
   };
 
@@ -514,19 +522,24 @@ export default function Dashboard() {
             ? day.break_duration_minutes
             : scheduleConfig.breakDurationMinutes;
 
-          console.log(`Verificando pausa após WOD ${wodIndex + 1} (${wod.name}): enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, duration=${dayBreakDuration}`);
+          console.log(`[Dia ${day.day_number}] Verificando pausa após WOD ${wodIndex + 1} (${wod.name}): enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, duration=${dayBreakDuration}, day.break_after_wod_number=${day.break_after_wod_number}`);
 
-          if (dayBreakEnabled && 
-              dayBreakAfterWod && 
-              (wodIndex + 1) === dayBreakAfterWod) {
+          // Verificar se a pausa deve ser aplicada após este WOD
+          // Comparar o índice do WOD (wodIndex + 1) com break_after_wod_number
+          const shouldApplyBreak = dayBreakEnabled && 
+              dayBreakAfterWod !== null && 
+              dayBreakAfterWod !== undefined && 
+              (wodIndex + 1) === dayBreakAfterWod;
+
+          if (shouldApplyBreak) {
             // Adicionar pausa após todas as baterias deste WOD
             // A pausa é aplicada após o último intervalo entre baterias
             // Então não precisamos subtrair o intervalo, pois já foi aplicado na última bateria
             const beforePause = new Date(currentTime);
             currentTime = new Date(currentTime.getTime() + dayBreakDuration * 60000);
-            console.log(`✓✓✓ PAUSA de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+            console.log(`✓✓✓ [Dia ${day.day_number}] PAUSA de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
           } else {
-            console.log(`  → Sem pausa após este WOD (enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, currentWodIndex=${wodIndex + 1})`);
+            console.log(`  → [Dia ${day.day_number}] Sem pausa após este WOD (enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, currentWodIndex=${wodIndex + 1}, comparação: ${wodIndex + 1} === ${dayBreakAfterWod} = ${(wodIndex + 1) === dayBreakAfterWod})`);
           }
         }
       }
