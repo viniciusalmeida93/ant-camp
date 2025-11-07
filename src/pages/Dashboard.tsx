@@ -1,0 +1,1285 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Target, Dumbbell, Calendar, Plus, Loader2, Trophy, Edit, Upload, Clock, Settings, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatsCard } from '@/components/stats/StatsCard';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useChampionship } from '@/contexts/ChampionshipContext';
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { selectedChampionship, setSelectedChampionship, championships, loadChampionships, loading: contextLoading } = useChampionship();
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [stats, setStats] = useState({
+    athletes: 0,
+    categories: 0,
+    wods: 0,
+    teams: 0,
+  });
+  const [formData, setFormData] = useState({
+    name: '',
+    date: '',
+    location: '',
+    description: '',
+  });
+  const [scheduleConfig, setScheduleConfig] = useState({
+    startTime: '08:00',
+    breakIntervalMinutes: 5,
+    enableBreak: false,
+    breakDurationMinutes: 30,
+    breakAfterWodNumber: 1,
+    totalDays: 1,
+  });
+  const [wods, setWods] = useState<any[]>([]);
+  const [championshipDays, setChampionshipDays] = useState<any[]>([]);
+  const [dayWods, setDayWods] = useState<Map<number, any[]>>(new Map());
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  useEffect(() => {
+    if (selectedChampionship) {
+      loadStats();
+      loadScheduleConfig();
+      loadWODs();
+      loadChampionshipDays();
+    }
+  }, [selectedChampionship]);
+
+  const loadStats = async () => {
+    if (!selectedChampionship) return;
+    
+    setLoading(true);
+    try {
+      const [categoriesResult, wodsResult, registrationsResult] = await Promise.all([
+        supabase.from("categories").select("id", { count: "exact" }).eq("championship_id", selectedChampionship.id),
+        supabase.from("wods").select("id", { count: "exact" }).eq("championship_id", selectedChampionship.id),
+        supabase.from("registrations").select("id, team_name").eq("championship_id", selectedChampionship.id),
+      ]);
+
+      // Contar atletas individuais (onde team_name é NULL)
+      const athletes = registrationsResult.data?.filter(r => !r.team_name).length || 0;
+      
+      // Contar times (onde team_name não é NULL)
+      const teams = registrationsResult.data?.filter(r => r.team_name).length || 0;
+
+    setStats({
+        categories: categoriesResult.count || 0,
+        wods: wodsResult.count || 0,
+        athletes: athletes,
+        teams: teams,
+      });
+    } catch (error: any) {
+      console.error("Error loading stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadScheduleConfig = async () => {
+    if (!selectedChampionship) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("championships")
+        .select("enable_break, break_duration_minutes, break_after_wod_number, total_days")
+        .eq("id", selectedChampionship.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setScheduleConfig({
+          startTime: '08:00', // Não usado mais, cada dia tem seu próprio horário
+          breakIntervalMinutes: 5, // Valor padrão, não usado mais (cada dia tem seu próprio intervalo)
+          enableBreak: data.enable_break || false,
+          breakDurationMinutes: data.break_duration_minutes || 30,
+          breakAfterWodNumber: data.break_after_wod_number || 1,
+          totalDays: data.total_days || 1,
+        });
+      }
+    } catch (error: any) {
+      console.error("Error loading schedule config:", error);
+    }
+  };
+
+  const loadWODs = async () => {
+    if (!selectedChampionship) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("wods")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("order_num");
+
+      if (error) throw error;
+      setWods(data || []);
+    } catch (error: any) {
+      console.error("Error loading WODs:", error);
+    }
+  };
+
+  const loadChampionshipDays = async () => {
+    if (!selectedChampionship) return;
+    
+    try {
+      const { data: daysData, error: daysError } = await supabase
+        .from("championship_days")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("day_number");
+
+      if (daysError) throw daysError;
+
+      if (daysData && daysData.length > 0) {
+        setChampionshipDays(daysData);
+
+        // Carregar WODs de cada dia
+        const dayIds = daysData.map(d => d.id);
+        const { data: wodsData, error: wodsError } = await supabase
+          .from("championship_day_wods")
+          .select("*, wods(*)")
+          .in("championship_day_id", dayIds)
+          .order("order_num");
+
+        if (!wodsError && wodsData) {
+          const wodsByDay = new Map<number, any[]>();
+          daysData.forEach(day => {
+            const dayWodsList = wodsData
+              .filter(dw => dw.championship_day_id === day.id)
+              .map(dw => ({ ...dw.wods, order_num: dw.order_num }))
+              .sort((a, b) => a.order_num - b.order_num);
+            wodsByDay.set(day.day_number, dayWodsList);
+          });
+          setDayWods(wodsByDay);
+        }
+      } else {
+        // Se não há dias, criar baseado no total_days
+        await initializeDays();
+      }
+    } catch (error: any) {
+      console.error("Error loading championship days:", error);
+    }
+  };
+
+  const initializeDays = async () => {
+    if (!selectedChampionship) return;
+
+    const days = [];
+    const baseDate = new Date(selectedChampionship.date);
+    
+    for (let i = 1; i <= scheduleConfig.totalDays; i++) {
+      const dayDate = new Date(baseDate);
+      dayDate.setDate(baseDate.getDate() + (i - 1));
+      
+      const { data, error } = await supabase
+        .from("championship_days")
+        .insert({
+          championship_id: selectedChampionship.id,
+          day_number: i,
+          date: dayDate.toISOString().split('T')[0],
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        days.push(data);
+      }
+    }
+
+    if (days.length > 0) {
+      setChampionshipDays(days);
+    }
+  };
+
+  const updateDaysCount = async (newDays: number) => {
+    if (!selectedChampionship) return;
+
+    const currentDays = championshipDays.length;
+    
+    if (newDays > currentDays) {
+      // Adicionar novos dias
+      const baseDate = new Date(selectedChampionship.date);
+      for (let i = currentDays + 1; i <= newDays; i++) {
+        const dayDate = new Date(baseDate);
+        dayDate.setDate(baseDate.getDate() + (i - 1));
+        
+        const { data, error } = await supabase
+          .from("championship_days")
+          .insert({
+            championship_id: selectedChampionship.id,
+            day_number: i,
+            date: dayDate.toISOString().split('T')[0],
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setChampionshipDays(prev => [...prev, data]);
+        }
+      }
+    } else if (newDays < currentDays) {
+      // Remover dias extras
+      const daysToRemove = championshipDays.slice(newDays);
+      for (const day of daysToRemove) {
+        await supabase
+          .from("championship_days")
+          .delete()
+          .eq("id", day.id);
+      }
+      setChampionshipDays(prev => prev.slice(0, newDays));
+    }
+  };
+
+  const addWodToDay = async (dayId: string, wodId: string) => {
+    if (!selectedChampionship) return;
+
+    const day = championshipDays.find(d => d.id === dayId);
+    if (!day) return;
+
+    const dayWodsList = dayWods.get(day.day_number) || [];
+    const maxOrder = dayWodsList.length > 0 
+      ? Math.max(...dayWodsList.map(w => w.order_num))
+      : 0;
+
+    const { error } = await supabase
+      .from("championship_day_wods")
+      .insert({
+        championship_day_id: dayId,
+        wod_id: wodId,
+        order_num: maxOrder + 1,
+      });
+
+    if (error) {
+      toast.error("Erro ao adicionar prova ao dia");
+      return;
+    }
+
+    await loadChampionshipDays();
+    toast.success("Prova adicionada ao dia");
+  };
+
+  const removeWodFromDay = async (dayId: string, wodId: string) => {
+    const { error } = await supabase
+      .from("championship_day_wods")
+      .delete()
+      .eq("championship_day_id", dayId)
+      .eq("wod_id", wodId);
+
+    if (error) {
+      toast.error("Erro ao remover prova do dia");
+      return;
+    }
+
+    await loadChampionshipDays();
+    toast.success("Prova removida do dia");
+  };
+
+  const handleDayBreakToggle = async (dayId: string, enabled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("championship_days")
+        .update({ enable_break: enabled })
+        .eq("id", dayId);
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setChampionshipDays(prev => prev.map(day => 
+        day.id === dayId ? { ...day, enable_break: enabled } : day
+      ));
+
+      toast.success(enabled ? "Pausa ativada para este dia" : "Pausa desativada para este dia");
+    } catch (error: any) {
+      console.error("Error updating day break:", error);
+      toast.error("Erro ao atualizar configuração de pausa");
+    }
+  };
+
+  const handleDayBreakUpdate = async (dayId: string, field: string, value: any) => {
+    try {
+      const { error } = await supabase
+        .from("championship_days")
+        .update({ [field]: value })
+        .eq("id", dayId);
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setChampionshipDays(prev => prev.map(day => 
+        day.id === dayId ? { ...day, [field]: value } : day
+      ));
+    } catch (error: any) {
+      console.error("Error updating day break:", error);
+      toast.error("Erro ao atualizar configuração de pausa");
+    }
+  };
+
+  const handleSaveScheduleConfig = async () => {
+    if (!selectedChampionship) return;
+
+    setSavingSchedule(true);
+    try {
+      const { error } = await supabase
+        .from("championships")
+        .update({
+          enable_break: scheduleConfig.enableBreak,
+          break_duration_minutes: scheduleConfig.breakDurationMinutes,
+          break_after_wod_number: scheduleConfig.breakAfterWodNumber,
+          total_days: scheduleConfig.totalDays,
+        })
+        .eq("id", selectedChampionship.id);
+
+      if (error) throw error;
+
+      // Calcular horários automaticamente após salvar
+      await handleCalculateSchedule();
+
+      toast.success("Configuração salva e horários calculados automaticamente!");
+    } catch (error: any) {
+      console.error("Error saving schedule config:", error);
+      toast.error(error.message || "Erro ao salvar configuração");
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleCalculateSchedule = async () => {
+    if (!selectedChampionship) return;
+
+    setLoadingSchedule(true);
+    try {
+      // Buscar todas as baterias do campeonato
+      const { data: allHeats, error: heatsError } = await supabase
+        .from("heats")
+        .select("*, wods(*)")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number");
+
+      if (heatsError) throw heatsError;
+
+      // Mapa para rastrear quais WODs já foram processados
+      const processedWodIds = new Set<string>();
+
+      // Para cada dia, calcular horários
+      for (const day of championshipDays) {
+        const dayWodsList = dayWods.get(day.day_number) || [];
+        if (dayWodsList.length === 0) continue;
+
+        // Horário de início do dia (priorizar start_time do dia, senão usar o global)
+        // Converter start_time do formato TIME do PostgreSQL (HH:MM:SS) para HH:MM
+        let dayStartTime: string;
+        if (day.start_time) {
+          if (typeof day.start_time === 'string' && day.start_time.includes(':')) {
+            const parts = day.start_time.split(':');
+            dayStartTime = `${parts[0]}:${parts[1]}`;
+          } else {
+            dayStartTime = day.start_time;
+          }
+        } else {
+          dayStartTime = scheduleConfig.startTime || '08:00';
+        }
+        
+        const startTime = new Date(`${day.date}T${dayStartTime}`);
+        let currentTime = new Date(startTime);
+        
+        console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
+
+        // Para cada WOD do dia (em ordem)
+        for (let wodIndex = 0; wodIndex < dayWodsList.length; wodIndex++) {
+          const wod = dayWodsList[wodIndex];
+          const wodDuration = wod.estimated_duration_minutes || 15;
+
+          // Buscar todas as baterias deste WOD, agrupadas por categoria
+          const wodHeats = (allHeats || []).filter(h => h.wod_id === wod.id);
+          
+          if (wodHeats.length === 0) continue;
+
+          // Marcar este WOD como processado
+          processedWodIds.add(wod.id);
+
+          // Agrupar baterias por categoria e ordenar
+          const heatsByCategory = new Map<string, any[]>();
+          wodHeats.forEach(heat => {
+            if (!heatsByCategory.has(heat.category_id)) {
+              heatsByCategory.set(heat.category_id, []);
+            }
+            heatsByCategory.get(heat.category_id)!.push(heat);
+          });
+
+          // Para cada categoria, calcular horários das baterias
+          // Ordenar categorias por order_index
+          const categoryIds = Array.from(heatsByCategory.keys());
+          const { data: categoriesData } = await supabase
+            .from("categories")
+            .select("id, order_index")
+            .in("id", categoryIds);
+          
+          const categoryOrderMap = new Map((categoriesData || []).map(c => [c.id, c.order_index || 0]));
+          const sortedCategoryIds = categoryIds.sort((a, b) => {
+            const orderA = categoryOrderMap.get(a) || 0;
+            const orderB = categoryOrderMap.get(b) || 0;
+            return orderA - orderB;
+          });
+
+          // Calcular horários: todas as baterias da primeira categoria, depois todas da segunda, etc.
+          for (const categoryId of sortedCategoryIds) {
+            const categoryHeats = heatsByCategory.get(categoryId) || [];
+            const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
+
+            // Calcular horário para cada bateria desta categoria neste WOD
+            // Usar intervalo do dia, senão usar o padrão de 5 minutos
+            const dayBreakInterval = (day.break_interval_minutes !== null && day.break_interval_minutes !== undefined)
+              ? day.break_interval_minutes
+              : 5;
+            
+            console.log(`Dia ${day.day_number}: Usando intervalo de ${dayBreakInterval} minutos (valor do dia: ${day.break_interval_minutes})`);
+            
+            for (const heat of sortedHeats) {
+              const scheduledTime = currentTime.toISOString();
+              const timeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+              await supabase
+                .from("heats")
+                .update({ scheduled_time: scheduledTime })
+                .eq("id", heat.id);
+
+              console.log(`Bateria ${heat.heat_number} (${wod.name} - ${categoryId}): ${timeStr}, Duração WOD: ${wodDuration}min, Intervalo: ${dayBreakInterval}min`);
+
+              // Avançar tempo: duração do WOD + intervalo entre baterias
+              // O intervalo é aplicado APÓS a duração do WOD
+              // IMPORTANTE: O intervalo é em MINUTOS, então multiplicamos por 60000 para converter para milissegundos
+              currentTime = new Date(currentTime.getTime() + (wodDuration * 60000)); // Duração do WOD em milissegundos
+              currentTime = new Date(currentTime.getTime() + (dayBreakInterval * 60000)); // Intervalo entre baterias em milissegundos
+              
+              const nextTimeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+              console.log(`  Próxima bateria será às: ${nextTimeStr} (avançou ${wodDuration + dayBreakInterval} minutos)`);
+            }
+          }
+
+          // Verificar se precisa aplicar pausa APÓS este WOD
+          // Priorizar configuração de pausa do dia sobre a configuração global
+          const dayBreakEnabled = day.enable_break !== undefined ? day.enable_break : scheduleConfig.enableBreak;
+          const dayBreakAfterWod = day.break_after_wod_number !== null && day.break_after_wod_number !== undefined 
+            ? day.break_after_wod_number 
+            : scheduleConfig.breakAfterWodNumber;
+          const dayBreakDuration = day.break_duration_minutes !== null && day.break_duration_minutes !== undefined
+            ? day.break_duration_minutes
+            : scheduleConfig.breakDurationMinutes;
+
+          if (dayBreakEnabled && 
+              dayBreakAfterWod && 
+              (wodIndex + 1) === dayBreakAfterWod) {
+            // Adicionar pausa após todas as baterias deste WOD
+            // A pausa é aplicada após o último intervalo entre baterias
+            // Então não precisamos subtrair o intervalo, pois já foi aplicado na última bateria
+            const beforePause = new Date(currentTime);
+            currentTime = new Date(currentTime.getTime() + dayBreakDuration * 60000);
+            console.log(`Pausa de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+          }
+        }
+      }
+
+      // Processar baterias de WODs que não estão atribuídos a nenhum dia
+      // Agrupar por WOD
+      const unprocessedHeats = (allHeats || []).filter(h => !processedWodIds.has(h.wod_id));
+      
+      if (unprocessedHeats.length > 0) {
+        // Usar o primeiro dia ou criar um horário base
+        const firstDay = championshipDays.length > 0 ? championshipDays[0] : null;
+        const baseDate = firstDay?.date || selectedChampionship.date;
+        const baseStartTime = firstDay?.start_time || scheduleConfig.startTime || '08:00';
+        let currentTime = new Date(`${baseDate}T${baseStartTime}`);
+
+        // Agrupar por WOD
+        const heatsByWod = new Map<string, any[]>();
+        unprocessedHeats.forEach(heat => {
+          if (!heatsByWod.has(heat.wod_id)) {
+            heatsByWod.set(heat.wod_id, []);
+          }
+          heatsByWod.get(heat.wod_id)!.push(heat);
+        });
+
+        // Buscar informações dos WODs
+        const wodIds = Array.from(heatsByWod.keys());
+        const { data: wodsData } = await supabase
+          .from("wods")
+          .select("id, order_num, estimated_duration_minutes")
+          .in("id", wodIds);
+
+        const wodsMap = new Map((wodsData || []).map(w => [w.id, w]));
+        
+        // Ordenar WODs por order_num
+        const sortedWodIds = wodIds.sort((a, b) => {
+          const wodA = wodsMap.get(a);
+          const wodB = wodsMap.get(b);
+          const orderA = wodA?.order_num || 0;
+          const orderB = wodB?.order_num || 0;
+          return orderA - orderB;
+        });
+
+        // Processar cada WOD não atribuído
+        for (const wodId of sortedWodIds) {
+          const wod = wodsMap.get(wodId);
+          const wodDuration = wod?.estimated_duration_minutes || 15;
+          const wodHeats = heatsByWod.get(wodId) || [];
+
+          // Agrupar por categoria
+          const heatsByCategory = new Map<string, any[]>();
+          wodHeats.forEach(heat => {
+            if (!heatsByCategory.has(heat.category_id)) {
+              heatsByCategory.set(heat.category_id, []);
+            }
+            heatsByCategory.get(heat.category_id)!.push(heat);
+          });
+
+          // Ordenar categorias
+          const categoryIds = Array.from(heatsByCategory.keys());
+          const { data: categoriesData } = await supabase
+            .from("categories")
+            .select("id, order_index")
+            .in("id", categoryIds);
+          
+          const categoryOrderMap = new Map((categoriesData || []).map(c => [c.id, c.order_index || 0]));
+          const sortedCategoryIds = categoryIds.sort((a, b) => {
+            const orderA = categoryOrderMap.get(a) || 0;
+            const orderB = categoryOrderMap.get(b) || 0;
+            return orderA - orderB;
+          });
+
+          // Calcular horários para cada categoria
+          for (const categoryId of sortedCategoryIds) {
+            const categoryHeats = heatsByCategory.get(categoryId) || [];
+            const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
+
+            for (const heat of sortedHeats) {
+              const scheduledTime = currentTime.toISOString();
+
+              await supabase
+                .from("heats")
+                .update({ scheduled_time: scheduledTime })
+                .eq("id", heat.id);
+
+              // Avançar tempo: duração do WOD + intervalo entre baterias
+              // O intervalo é aplicado APÓS a duração do WOD
+              // Para WODs não atribuídos, usar intervalo padrão de 5 minutos
+              const defaultBreakInterval = 5;
+              
+              currentTime = new Date(currentTime.getTime() + wodDuration * 60000); // Duração do WOD
+              currentTime = new Date(currentTime.getTime() + defaultBreakInterval * 60000); // Intervalo entre baterias
+            }
+          }
+        }
+      }
+
+      toast.success("Horários calculados e aplicados automaticamente!");
+    } catch (error: any) {
+      console.error("Error calculating schedule:", error);
+      toast.error(error.message || "Erro ao calcular horários");
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+  };
+
+  const handleCreateChampionship = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setCreating(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Você precisa estar logado");
+        navigate("/auth");
+        return;
+      }
+
+      const { name, date, location, description } = formData;
+      
+      if (!name || !date || !location) {
+        toast.error("Preencha todos os campos obrigatórios");
+        setCreating(false);
+        return;
+      }
+
+      // Generate unique slug
+      let slug = generateSlug(name);
+      let slugExists = true;
+      let attempts = 0;
+      
+      while (slugExists && attempts < 10) {
+        const { data: existing } = await supabase
+          .from("championships")
+          .select("id")
+          .eq("slug", slug)
+          .maybeSingle();
+        
+        if (!existing) {
+          slugExists = false;
+        } else {
+          slug = `${generateSlug(name)}-${Date.now()}`;
+          attempts++;
+        }
+      }
+
+      const { data: championship, error } = await supabase
+        .from("championships")
+        .insert({
+          name,
+          slug,
+          date,
+          location,
+          description: description || null,
+          organizer_id: session.user.id,
+          is_published: false,
+          is_indexable: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Campeonato criado com sucesso!");
+      setIsDialogOpen(false);
+      setFormData({ name: '', date: '', location: '', description: '' });
+      
+      // Reload championships and select the new one
+      await loadChampionships();
+      if (championship) {
+        setSelectedChampionship(championship);
+      }
+    } catch (error: any) {
+      console.error("Error creating championship:", error);
+      toast.error(error.message || "Erro ao criar campeonato");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (contextLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  // If no championships, show create screen
+  if (championships.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center py-12">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Trophy className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Nenhum campeonato criado</h3>
+            <p className="text-muted-foreground mb-6">
+              Crie seu primeiro campeonato para começar a gerenciar categorias, WODs e inscrições.
+            </p>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setFormData({ name: '', date: '', location: '', description: '' });
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button size="lg" className="shadow-glow">
+                  <Plus className="w-5 h-5 mr-2" />
+                  Criar Primeiro Campeonato
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Campeonato</DialogTitle>
+                  <DialogDescription>
+                    Preencha os dados básicos do seu campeonato. Você poderá configurar categorias, WODs e mais depois.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateChampionship} className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Nome do Campeonato *</Label>
+                    <Input 
+                      id="name" 
+                      name="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Ex: Open 2024" 
+                      required 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="date">Data *</Label>
+                      <Input 
+                        id="date" 
+                        name="date"
+                        type="date" 
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="location">Local *</Label>
+                      <Input 
+                        id="location" 
+                        name="location"
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                        placeholder="Ex: Box CrossFit SP" 
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Descrição</Label>
+                    <Textarea 
+                      id="description" 
+                      name="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Descreva seu campeonato..."
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsDialogOpen(false)}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={creating}>
+                      {creating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Criando...
+                        </>
+                      ) : (
+                        "Criar Campeonato"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show championship selector and dashboard
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8 animate-fade-in">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Meus Campeonatos</h1>
+          <p className="text-muted-foreground">Gerencie seus campeonatos e visualize estatísticas</p>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/bulk-import')}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Importar Dados
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setFormData({ name: '', date: '', location: '', description: '' });
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button className="shadow-glow">
+                <Plus className="w-4 h-4 mr-2" />
+                Criar Campeonato
+              </Button>
+            </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Criar Novo Campeonato</DialogTitle>
+              <DialogDescription>
+                Preencha os dados básicos do seu campeonato. Você poderá configurar categorias, WODs e mais depois.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateChampionship} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nome do Campeonato *</Label>
+                <Input 
+                  id="name" 
+                  name="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ex: Open 2024" 
+                  required 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="date">Data *</Label>
+                  <Input 
+                    id="date" 
+                    name="date"
+                    type="date" 
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="location">Local *</Label>
+                  <Input 
+                    id="location" 
+                    name="location"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Ex: Box CrossFit SP" 
+                    required 
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="description">Descrição</Label>
+                <Textarea 
+                  id="description" 
+                  name="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Descreva seu campeonato..."
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1" disabled={creating}>
+                  {creating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    "Criar Campeonato"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+        </div>
+      </div>
+
+      {/* Championship Selector */}
+      <div className="mb-8">
+        <Label className="mb-2 block">Campeonato Ativo</Label>
+        <Select
+          value={selectedChampionship?.id || ''}
+          onValueChange={(value) => {
+            const champ = championships.find(c => c.id === value);
+            if (champ) {
+              setSelectedChampionship(champ);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full md:w-[400px] bg-card">
+            <SelectValue placeholder="Selecione um campeonato" />
+          </SelectTrigger>
+          <SelectContent>
+            {championships.map((champ) => (
+              <SelectItem key={champ.id} value={champ.id}>
+                {champ.name} - {new Date(champ.date).toLocaleDateString('pt-BR')}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {selectedChampionship ? (
+        <>
+          {/* Championship Info Card */}
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-2xl">{selectedChampionship.name}</CardTitle>
+                  <CardDescription className="mt-2">
+                    <div className="space-y-1">
+                      <p>Data: {new Date(selectedChampionship.date).toLocaleDateString('pt-BR')}</p>
+                      <p>Local: {selectedChampionship.location}</p>
+                      {selectedChampionship.description && (
+                        <p className="mt-2">{selectedChampionship.description}</p>
+                      )}
+                    </div>
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/championships/${selectedChampionship.id}/links`)}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <StatsCard
+          title="Total de Atletas"
+          value={stats.athletes}
+          icon={Users}
+          trend="Inscritos"
+        />
+        <StatsCard
+          title="Categorias Ativas"
+          value={stats.categories}
+          icon={Target}
+          trend="Disponíveis"
+        />
+        <StatsCard
+          title="WODs Criados"
+          value={stats.wods}
+          icon={Dumbbell}
+          trend="Ativos"
+        />
+      </div>
+
+          {/* Schedule Configuration */}
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                <CardTitle>Configuração de Horários</CardTitle>
+              </div>
+              <CardDescription>
+                Configure os horários de início, intervalos e pausas do evento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Basic Schedule Settings */}
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+              <div>
+                    <Label htmlFor="totalDays">Duração do Evento (dias)</Label>
+                    <Input
+                      id="totalDays"
+                      type="number"
+                      min="1"
+                      value={scheduleConfig.totalDays}
+                      onChange={(e) => {
+                        const days = parseInt(e.target.value) || 1;
+                        setScheduleConfig({ ...scheduleConfig, totalDays: days });
+                        updateDaysCount(days);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Break Configuration - Info */}
+                <div className="p-4 border rounded-lg bg-muted/30">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold">Configuração de Pausas</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure pausas específicas para cada dia do evento na seção "Distribuição de Provas por Dia" abaixo.
+                        Cada dia pode ter sua própria pausa com duração e momento personalizados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Days and WODs Distribution */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-lg font-semibold">Distribuição de Provas por Dia</Label>
+                  </div>
+                  
+                  {championshipDays.map((day) => {
+                    const dayWodsList = dayWods.get(day.day_number) || [];
+                    // WODs disponíveis são aqueles que não estão em nenhum dia
+                    const allAssignedWodIds = new Set(
+                      Array.from(dayWods.values()).flat().map(w => w.id)
+                    );
+                    const availableWods = wods.filter(w => !allAssignedWodIds.has(w.id));
+                    
+                    return (
+                      <Card key={day.id} className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h4 className="font-semibold">Dia {day.day_number}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Configurações do dia: Horário de início e Intervalo entre baterias */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <Label htmlFor={`start-time-${day.id}`} className="text-sm">Horário de Início do Dia</Label>
+                            <Input
+                              id={`start-time-${day.id}`}
+                              type="time"
+                              step="60"
+                              value={(() => {
+                                // Converter start_time do formato TIME (HH:MM:SS) para HH:MM
+                                if (day.start_time && typeof day.start_time === 'string') {
+                                  const parts = day.start_time.split(':');
+                                  if (parts.length >= 2) {
+                                    return `${parts[0]}:${parts[1]}`;
+                                  }
+                                }
+                                return '08:00';
+                              })()}
+                              onChange={async (e) => {
+                                const newStartTime = e.target.value; // Já vem em formato HH:MM (24h)
+                                // Converter HH:MM para HH:MM:SS (formato TIME do PostgreSQL)
+                                const timeValue = `${newStartTime}:00`;
+                                
+                                console.log(`Atualizando horário do dia ${day.day_number}: ${newStartTime} -> ${timeValue}`);
+                                
+                                const { error } = await supabase
+                                  .from("championship_days")
+                                  .update({ start_time: timeValue })
+                                  .eq("id", day.id);
+                                
+                                if (!error) {
+                                  await loadChampionshipDays();
+                                  toast.success("Horário de início atualizado!");
+                                } else {
+                                  console.error("Erro ao atualizar horário:", error);
+                                  toast.error("Erro ao atualizar horário");
+                                }
+                              }}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Formato 24 horas (ex: 10:00, 13:00, 19:00)
+                            </p>
+              </div>
+              <div>
+                            <Label htmlFor={`break-interval-${day.id}`} className="text-sm">Intervalo entre Baterias (minutos)</Label>
+                            <Input
+                              id={`break-interval-${day.id}`}
+                              type="number"
+                              min="0"
+                              value={day.break_interval_minutes || scheduleConfig.breakIntervalMinutes || 5}
+                              onChange={async (e) => {
+                                const newInterval = parseInt(e.target.value) || 5;
+                                
+                                const { error } = await supabase
+                                  .from("championship_days")
+                                  .update({ break_interval_minutes: newInterval })
+                                  .eq("id", day.id);
+                                
+                                if (!error) {
+                                  await loadChampionshipDays();
+                                  toast.success("Intervalo entre baterias atualizado!");
+                                } else {
+                                  console.error("Erro ao atualizar intervalo:", error);
+                                  toast.error("Erro ao atualizar intervalo");
+                                }
+                              }}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Tempo de espera entre cada bateria
+                            </p>
+                          </div>
+              </div>
+                        
+                        <div className="space-y-2 mb-3">
+                          <Label className="text-sm">Provas do Dia:</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {dayWodsList.map((wod, idx) => (
+                              <div key={wod.id} className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-md">
+                                <span className="text-sm font-medium">{idx + 1}º - {wod.name}</span>
+        <Button 
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => removeWodFromDay(day.id, wod.id)}
+                                >
+                                  ×
+        </Button>
+                              </div>
+                            ))}
+                            {dayWodsList.length === 0 && (
+                              <p className="text-sm text-muted-foreground">Nenhuma prova atribuída</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {availableWods.length > 0 && (
+                          <Select
+                            onValueChange={(wodId) => addWodToDay(day.id, wodId)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Adicionar prova ao dia" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableWods.map((wod) => (
+                                <SelectItem key={wod.id} value={wod.id}>
+                                  {wod.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {availableWods.length === 0 && dayWodsList.length < wods.length && (
+                          <p className="text-sm text-muted-foreground">
+                            Todas as provas já foram atribuídas a outros dias
+                          </p>
+                        )}
+
+                        {/* Configuração de Pausa para este Dia */}
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <Switch
+                                checked={day.enable_break || false}
+                                onCheckedChange={(checked) => handleDayBreakToggle(day.id, checked)}
+                              />
+                              <div>
+                                <Label className="cursor-pointer">Ativar Pausa para este Dia</Label>
+                                <p className="text-xs text-muted-foreground">Configure uma pausa específica para este dia</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {day.enable_break && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                              <div>
+                                <Label htmlFor={`breakDuration-${day.id}`}>Duração da Pausa (minutos)</Label>
+                                <Input
+                                  id={`breakDuration-${day.id}`}
+                                  type="number"
+                                  min="0"
+                                  value={day.break_duration_minutes || 30}
+                                  onChange={(e) => handleDayBreakUpdate(day.id, 'break_duration_minutes', parseInt(e.target.value) || 30)}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`breakAfterWod-${day.id}`}>Após Qual Prova</Label>
+                                <Select
+                                  value={day.break_after_wod_number?.toString() || '1'}
+                                  onValueChange={(value) => handleDayBreakUpdate(day.id, 'break_after_wod_number', parseInt(value))}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {dayWodsList.map((wod, index) => (
+                                      <SelectItem key={wod.id} value={(index + 1).toString()}>
+                                        Após {wod.name} (Prova {index + 1})
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  A pausa será aplicada após todas as baterias desta prova
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4 border-t">
+        <Button 
+                    onClick={handleSaveScheduleConfig}
+                    disabled={savingSchedule || loadingSchedule}
+                    className="flex-1"
+                  >
+                    {savingSchedule || loadingSchedule ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {savingSchedule ? "Salvando..." : "Calculando..."}
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Salvar Configuração
+                      </>
+                    )}
+                  </Button>
+      </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Next Steps */}
+      <div className="mt-12 p-6 rounded-2xl bg-card shadow-card">
+        <h2 className="text-2xl font-bold mb-4">Próximos Passos</h2>
+        <ul className="space-y-3 text-muted-foreground">
+          <li className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                {stats.categories === 0 
+                  ? "Configure as categorias do seu campeonato"
+                  : `${stats.categories} categoria(s) configurada(s)`
+                }
+          </li>
+          <li className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                {stats.wods === 0 
+                  ? "Crie os WODs que serão realizados"
+                  : `${stats.wods} WOD(s) criado(s)`
+                }
+          </li>
+          <li className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                {stats.athletes === 0 
+                  ? "Abra as inscrições para atletas e times"
+                  : `${stats.athletes} atleta(s) inscrito(s)`
+                }
+          </li>
+        </ul>
+      </div>
+        </>
+      ) : (
+        <Card className="p-8 text-center">
+          <p className="text-muted-foreground">Selecione um campeonato para ver as estatísticas e gerenciar.</p>
+        </Card>
+      )}
+    </div>
+  );
+}
