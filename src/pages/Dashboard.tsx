@@ -375,7 +375,10 @@ export default function Dashboard() {
         console.log("Dias recarregados do banco:", daysDataFresh.map(d => ({
           day: d.day_number,
           start_time: d.start_time,
-          break_interval_minutes: d.break_interval_minutes
+          break_interval_minutes: d.break_interval_minutes,
+          enable_break: d.enable_break,
+          break_duration_minutes: d.break_duration_minutes,
+          break_after_wod_number: d.break_after_wod_number
         })));
       }
 
@@ -511,6 +514,8 @@ export default function Dashboard() {
             ? day.break_duration_minutes
             : scheduleConfig.breakDurationMinutes;
 
+          console.log(`Verificando pausa após WOD ${wodIndex + 1} (${wod.name}): enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, duration=${dayBreakDuration}`);
+
           if (dayBreakEnabled && 
               dayBreakAfterWod && 
               (wodIndex + 1) === dayBreakAfterWod) {
@@ -519,7 +524,9 @@ export default function Dashboard() {
             // Então não precisamos subtrair o intervalo, pois já foi aplicado na última bateria
             const beforePause = new Date(currentTime);
             currentTime = new Date(currentTime.getTime() + dayBreakDuration * 60000);
-            console.log(`Pausa de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+            console.log(`✓✓✓ PAUSA de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+          } else {
+            console.log(`  → Sem pausa após este WOD (enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, currentWodIndex=${wodIndex + 1})`);
           }
         }
       }
