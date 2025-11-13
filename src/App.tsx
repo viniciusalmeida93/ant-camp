@@ -10,6 +10,7 @@ import OrganizerDashboard from "./pages/OrganizerDashboard";
 import PublicRegistration from "./pages/PublicRegistration";
 import Checkout from "./pages/Checkout";
 import ChampionshipFinance from "./pages/ChampionshipFinance";
+import ChampionshipSettings from "./pages/ChampionshipSettings";
 import Dashboard from "./pages/Dashboard";
 import Categories from "./pages/Categories";
 import WODs from "./pages/WODs";
@@ -22,6 +23,7 @@ import TVDisplay from "./pages/TVDisplay";
 import NotFound from "./pages/NotFound";
 import Setup from "./pages/Setup";
 import Integrations from "./pages/Integrations";
+import AsaasIntegration from "./pages/AsaasIntegration";
 import PublicLeaderboard from "./pages/PublicLeaderboard";
 import PublicHeats from "./pages/PublicHeats";
 import LinkPage from "./pages/LinkPage";
@@ -53,7 +55,9 @@ const App = () => (
           
           {/* Organizer dashboard */}
           <Route path="/dashboard" element={<OrganizerDashboard />} />
+          <Route path="/asaas-integration" element={<AsaasIntegration />} />
           <Route path="/championships/:championshipId/finance" element={<ChampionshipFinance />} />
+          <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
           <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
           
           {/* App routes with navbar */}

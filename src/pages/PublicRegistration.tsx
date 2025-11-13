@@ -8,7 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Users, Trophy, Calendar, MapPin } from "lucide-react";
+import { Loader2, Users, Trophy, Calendar, MapPin, QrCode } from "lucide-react";
+
+type PublicRegistrationMember = {
+  name: string;
+  email: string;
+  whatsapp: string;
+  shirtSize: string;
+};
 
 export default function PublicRegistration() {
   const { slug } = useParams();
@@ -18,11 +25,11 @@ export default function PublicRegistration() {
   const [championship, setChampionship] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  
-  const [athleteName, setAthleteName] = useState("");
-  const [athleteEmail, setAthleteEmail] = useState("");
-  const [athletePhone, setAthletePhone] = useState("");
+  const [members, setMembers] = useState<PublicRegistrationMember[]>([
+    { name: "", email: "", whatsapp: "", shirtSize: "M" },
+  ]);
   const [teamName, setTeamName] = useState("");
+  const [athletePhone, setAthletePhone] = useState("");
 
   useEffect(() => {
     loadChampionship();
@@ -52,7 +59,8 @@ export default function PublicRegistration() {
       const { data: cats, error: catsError } = await supabase
         .from("categories")
         .select("*")
-        .eq("championship_id", champ.id);
+        .eq("championship_id", champ.id)
+        .order("order_index", { ascending: true, nullsFirst: true });
 
       if (catsError) throw catsError;
       setCategories(cats);
@@ -64,6 +72,52 @@ export default function PublicRegistration() {
     }
   };
 
+  const computeTeamSize = (category: any) => {
+    if (!category) return 1;
+    if (category.team_size && category.team_size > 0) return category.team_size;
+    switch (category.format) {
+      case "dupla":
+      case "duo":
+        return 2;
+      case "trio":
+        return 3;
+      case "time":
+      case "team":
+        return 4;
+      default:
+        return 1;
+    }
+  };
+
+  const handleSelectCategory = (categoryId: string) => {
+    const category = categories.find((cat) => cat.id === categoryId);
+    if (!category) return;
+
+    setSelectedCategory(category);
+    const teamSize = computeTeamSize(category);
+    const defaultMember: PublicRegistrationMember = {
+      name: "",
+      email: "",
+      whatsapp: "",
+      shirtSize: "M",
+    };
+
+    setMembers((prev) => {
+      const next = Array(teamSize)
+        .fill(null)
+        .map((_, index) => prev[index] ?? { ...defaultMember });
+      return next;
+    });
+    setTeamName("");
+    setAthletePhone("");
+  };
+
+  const updateMember = (index: number, field: keyof PublicRegistrationMember, value: string) => {
+    setMembers((prev) =>
+      prev.map((member, i) => (i === index ? { ...member, [field]: value } : member))
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -72,20 +126,25 @@ export default function PublicRegistration() {
       return;
     }
 
-    // Validações
-    if (!athleteName.trim()) {
-      toast.error("Digite o nome completo");
-      return;
-    }
-
-    if (!athleteEmail.trim()) {
-      toast.error("Digite o email");
-      return;
-    }
-
     if (selectedCategory.format !== "individual" && !teamName.trim()) {
       toast.error("Digite o nome do time");
       return;
+    }
+
+    for (let i = 0; i < members.length; i++) {
+      const member = members[i];
+      if (!member.name.trim()) {
+        toast.error(`Digite o nome completo do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
+        return;
+      }
+      if (!member.email.trim()) {
+        toast.error(`Digite o email do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
+        return;
+      }
+      if (!member.whatsapp.trim()) {
+        toast.error(`Digite o WhatsApp do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -97,15 +156,27 @@ export default function PublicRegistration() {
       const registrationData: any = {
         championship_id: championship.id,
         category_id: selectedCategory.id,
-        athlete_name: selectedCategory.format === "individual" ? athleteName : null,
-        athlete_email: athleteEmail,
-        athlete_phone: athletePhone || null,
+        athlete_name:
+          selectedCategory.format === "individual" ? members[0]?.name ?? "" : teamName,
+        athlete_email: members[0]?.email ?? "",
+        athlete_phone: members[0]?.whatsapp || athletePhone || null,
         team_name: selectedCategory.format !== "individual" ? teamName : null,
         subtotal_cents: selectedCategory.price_cents,
         platform_fee_cents: platformFeeCents,
         total_cents: totalCents,
         status: "pending",
         payment_status: "pending",
+        team_members:
+          selectedCategory.format !== "individual"
+            ? members.map((member) => ({
+                name: member.name,
+                email: member.email,
+                whatsapp: member.whatsapp,
+                shirtSize: member.shirtSize || "M",
+              }))
+            : null,
+        shirt_size:
+          selectedCategory.format === "individual" ? members[0]?.shirtSize || "M" : null,
       };
 
       const { data: registration, error } = await supabase
@@ -117,7 +188,7 @@ export default function PublicRegistration() {
       if (error) throw error;
 
       toast.success("Inscrição criada! Redirecionando para pagamento...");
-      navigate(`/checkout/${registration.id}`);
+      navigate(`/checkout/${registration.id}?method=pix`);
     } catch (error: any) {
       toast.error(error.message || "Erro ao criar inscrição");
       console.error(error);
@@ -207,13 +278,7 @@ export default function PublicRegistration() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria *</Label>
-                  <Select
-                    value={selectedCategory?.id}
-                    onValueChange={(value) => {
-                      const cat = categories.find((c) => c.id === value);
-                      setSelectedCategory(cat);
-                    }}
-                  >
+                  <Select value={selectedCategory?.id} onValueChange={handleSelectCategory}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma categoria" />
                     </SelectTrigger>
@@ -233,38 +298,6 @@ export default function PublicRegistration() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo *</Label>
-                  <Input
-                    id="name"
-                    value={athleteName}
-                    onChange={(e) => setAthleteName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={athleteEmail}
-                    onChange={(e) => setAthleteEmail(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={athletePhone}
-                    onChange={(e) => setAthletePhone(e.target.value)}
-                    placeholder="(00) 00000-0000"
-                  />
-                </div>
-
                 {selectedCategory && selectedCategory.format !== "individual" && (
                   <div className="space-y-2">
                     <Label htmlFor="team">Nome do Time *</Label>
@@ -280,6 +313,87 @@ export default function PublicRegistration() {
                     </p>
                   </div>
                 )}
+
+                {selectedCategory && (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <Label>Integrantes</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Informe os dados de cada integrante. Esses dados aparecerão nas planilhas
+                        internas e ajudam na organização do evento.
+                      </p>
+                    </div>
+                    {members.map((member, index) => (
+                      <Card key={`member-${index}`} className="border">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">Integrante {index + 1}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="space-y-2">
+                            <Label>Nome Completo *</Label>
+                            <Input
+                              value={member.name}
+                              onChange={(e) => updateMember(index, "name", e.target.value)}
+                              placeholder="Nome completo"
+                              required
+                            />
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label>Email *</Label>
+                              <Input
+                                type="email"
+                                value={member.email}
+                                onChange={(e) => updateMember(index, "email", e.target.value)}
+                                placeholder="email@exemplo.com"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>WhatsApp *</Label>
+                              <Input
+                                value={member.whatsapp}
+                                onChange={(e) => updateMember(index, "whatsapp", e.target.value)}
+                                placeholder="(11) 99999-9999"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Tamanho da Camisa *</Label>
+                            <Select
+                              value={member.shirtSize || "M"}
+                              onValueChange={(value) => updateMember(index, "shirtSize", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tamanho" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PP">PP</SelectItem>
+                                <SelectItem value="P">P</SelectItem>
+                                <SelectItem value="M">M</SelectItem>
+                                <SelectItem value="G">G</SelectItem>
+                                <SelectItem value="GG">GG</SelectItem>
+                                <SelectItem value="XG">XG</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefone de Contato</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={athletePhone}
+                    onChange={(e) => setAthletePhone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
 
                 <Button 
                   type="submit" 
@@ -338,6 +452,41 @@ export default function PublicRegistration() {
                         <span>{formatPrice(totals.total)}</span>
                       </div>
                     </div>
+
+                    {championship?.pix_payload ? (
+                      <div className="border-t pt-4 space-y-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 font-medium text-foreground">
+                          <QrCode className="w-4 h-4 text-primary" />
+                          Pagamento via PIX do Organizador
+                        </div>
+                        <p>
+                          Após finalizar o formulário, exibiremos o QR Code e o código “copia e cola” do
+                          organizador para você pagar na hora. Guarde o comprovante para enviar em caso de
+                          solicitação.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="border-t pt-4 text-sm text-muted-foreground">
+                        O organizador ainda não informou a chave PIX. Você receberá instruções após concluir
+                        a inscrição.
+                      </div>
+                    )}
+
+                    {selectedCategory.format !== "individual" && (
+                      <div className="border-t pt-4 space-y-2 text-sm">
+                        <span className="font-semibold text-muted-foreground">Integrantes:</span>
+                        <ul className="space-y-1">
+                          {members.map((member, index) => (
+                            <li key={`member-summary-${index}`} className="flex justify-between">
+                              <span>{member.name || `Integrante ${index + 1}`}</span>
+                              <span className="text-muted-foreground">
+                                {member.shirtSize || "M"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-8">
@@ -362,7 +511,11 @@ export default function PublicRegistration() {
                 </div>
                 <div className="flex gap-2">
                   <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <p>Pagamento via PIX, cartão ou boleto</p>
+                  <p>
+                    {championship?.pix_payload
+                      ? "Pagamento exclusivo via PIX (chave do organizador)"
+                      : "Pagamento por PIX — instruções serão enviadas após a inscrição"}
+                  </p>
                 </div>
               </CardContent>
             </Card>

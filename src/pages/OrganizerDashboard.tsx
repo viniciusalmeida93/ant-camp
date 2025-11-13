@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { 
   Trophy, Users, Calendar, DollarSign, Plus, 
-  BarChart3, Settings, LogOut, ExternalLink 
+  BarChart3, Settings, LogOut, ExternalLink, QrCode, CreditCard
 } from "lucide-react";
+import { useChampionship } from "@/contexts/ChampionshipContext";
 
 export default function OrganizerDashboard() {
   const navigate = useNavigate();
+  const { setSelectedChampionship } = useChampionship();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [championships, setChampionships] = useState<any[]>([]);
@@ -180,27 +182,15 @@ export default function OrganizerDashboard() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Button asChild className="h-auto py-3 sm:py-4 text-sm sm:text-base">
+            <Link to="/asaas-integration">
+              <CreditCard className="w-4 h-4 mr-2" />
+              <span className="truncate">Conectar Asaas</span>
+            </Link>
+          </Button>
+          <Button asChild className="h-auto py-3 sm:py-4 text-sm sm:text-base">
             <Link to="/championships/new">
               <Plus className="w-4 h-4 mr-2" />
               <span className="truncate">Novo Campeonato</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-auto py-3 sm:py-4 text-sm sm:text-base">
-            <Link to="/categories">
-              <Trophy className="w-4 h-4 mr-2" />
-              <span className="truncate">Gerenciar Categorias</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-auto py-3 sm:py-4 text-sm sm:text-base">
-            <Link to="/wods">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              <span className="truncate">Criar WOD</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-auto py-3 sm:py-4 text-sm sm:text-base">
-            <Link to="/results">
-              <Settings className="w-4 h-4 mr-2" />
-              <span className="truncate">Lançar Resultados</span>
             </Link>
           </Button>
         </div>
@@ -253,7 +243,7 @@ export default function OrganizerDashboard() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex gap-4 text-sm">
+                      <div className="flex flex-wrap gap-2 text-sm">
                         <Button variant="outline" size="sm" asChild>
                           <Link to={`/championships/${champ.id}/finance`}>
                             <DollarSign className="w-4 h-4 mr-1" />
@@ -266,11 +256,27 @@ export default function OrganizerDashboard() {
                             Links
                           </Link>
                         </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/championships/${champ.id}/settings`}>
-                            <Settings className="w-4 h-4 mr-1" />
-                            Configurações
-                          </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedChampionship(champ);
+                            navigate("/app");
+                          }}
+                        >
+                          <Settings className="w-4 h-4 mr-1" />
+                          Configurações
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedChampionship(champ);
+                            navigate(`/championships/${champ.id}/settings`);
+                          }}
+                        >
+                          <QrCode className="w-4 h-4 mr-1" />
+                          Configurar PIX
                         </Button>
                       </div>
                     </CardContent>

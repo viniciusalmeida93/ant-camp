@@ -163,6 +163,7 @@ export type Database = {
           is_published: boolean | null
           location: string
           logo_url: string | null
+          pix_payload: string | null
           name: string
           organizer_id: string
           pin_code: string | null
@@ -179,6 +180,7 @@ export type Database = {
           is_published?: boolean | null
           location: string
           logo_url?: string | null
+          pix_payload?: string | null
           name: string
           organizer_id: string
           pin_code?: string | null
@@ -195,6 +197,7 @@ export type Database = {
           is_published?: boolean | null
           location?: string
           logo_url?: string | null
+          pix_payload?: string | null
           name?: string
           organizer_id?: string
           pin_code?: string | null
@@ -676,6 +679,60 @@ export type Database = {
             columns: ["championship_id"]
             isOneToOne: false
             referencedRelation: "championships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wod_category_variations: {
+        Row: {
+          category_id: string
+          created_at: string
+          description: string | null
+          display_name: string | null
+          estimated_duration_minutes: number | null
+          id: string
+          notes: string | null
+          time_cap: string | null
+          updated_at: string
+          wod_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          description?: string | null
+          display_name?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          time_cap?: string | null
+          updated_at?: string
+          wod_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          display_name?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          time_cap?: string | null
+          updated_at?: string
+          wod_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wod_category_variations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wod_category_variations_wod_id_fkey"
+            columns: ["wod_id"]
+            isOneToOne: false
+            referencedRelation: "wods"
             referencedColumns: ["id"]
           },
         ]

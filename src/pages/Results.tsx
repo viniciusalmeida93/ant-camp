@@ -23,6 +23,7 @@ export default function Results() {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [scoringConfigs, setScoringConfigs] = useState<any[]>([]);
   const [existingResults, setExistingResults] = useState<any[]>([]);
+  const [wodVariations, setWodVariations] = useState<Record<string, Record<string, any>>>({});
   
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
@@ -75,6 +76,35 @@ export default function Results() {
       setWODs(wodsResult.data || []);
       setRegistrations(regsResult.data || []);
       setScoringConfigs(configsResult.data || []);
+
+      const wodIds = (wodsResult.data || []).map((wod: any) => wod.id);
+      if (wodIds.length > 0) {
+        const { data: variationsData, error: variationsError } = await supabase
+          .from("wod_category_variations")
+          .select("*")
+          .in("wod_id", wodIds);
+
+        if (variationsError) {
+          if (variationsError.code === '42P01' || (variationsError.message ?? '').includes('wod_category_variations')) {
+            console.warn('Tabela wod_category_variations ausente, seguindo sem variações específicas.');
+            setWodVariations({});
+          } else {
+            throw variationsError;
+          }
+        } else {
+          const map: Record<string, Record<string, any>> = {};
+          (variationsData || []).forEach((variation: any) => {
+            if (!map[variation.wod_id]) {
+              map[variation.wod_id] = {};
+            }
+            map[variation.wod_id][variation.category_id] = variation;
+          });
+
+          setWodVariations(map);
+        }
+      } else {
+        setWodVariations({});
+      }
     } catch (error: any) {
       console.error("Error loading data:", error);
       toast.error("Erro ao carregar dados");
@@ -300,6 +330,10 @@ export default function Results() {
 
   const participants = selectedCategory ? getParticipants() : [];
   const selectedWODData = wods.find(w => w.id === selectedWOD);
+  const selectedVariation = selectedCategory && selectedWOD ? wodVariations[selectedWOD]?.[selectedCategory] : null;
+  const displayTimeCapMinutes = selectedVariation?.estimated_duration_minutes || selectedWODData?.estimated_duration_minutes;
+  const displayDescription = selectedVariation?.description || selectedWODData?.description;
+  const displayNotes = selectedVariation?.notes || selectedWODData?.notes;
   
   // Função para obter o label e placeholder baseado no tipo de WOD
   const getResultFieldInfo = (wodType: string | undefined) => {
@@ -320,6 +354,7 @@ export default function Results() {
           helpText: 'Digite o tempo total de finalização do WOD'
         };
       case 'amrap':
+      case 'emom':
         return {
           label: 'Rounds/Reps Completados',
           placeholder: 'Número de rounds ou reps (ex: 8 ou 150)',
@@ -384,6 +419,7 @@ export default function Results() {
                 {wods.map(wod => {
                   const typeLabel = wod.type === 'for-time' || wod.type === 'tempo' ? 'For Time' :
                                    wod.type === 'amrap' ? 'AMRAP' :
+                                   wod.type === 'emom' ? 'EMOM' :
                                    wod.type === 'tonelagem' ? 'Tonelagem' :
                                    wod.type === 'carga-maxima' ? 'Carga Máxima' :
                                    wod.type || 'Não definido';
@@ -403,16 +439,25 @@ export default function Results() {
         <Card className="p-6 shadow-card">
           <div className="mb-4">
             <h3 className="text-xl font-bold mb-1">
-              {selectedWODData?.name} - {categories.find(c => c.id === selectedCategory)?.name}
+              {(selectedVariation?.display_name || selectedWODData?.name) ?? 'WOD'} - {categories.find(c => c.id === selectedCategory)?.name}
             </h3>
             <p className="text-sm text-muted-foreground">
               Tipo: {selectedWODData?.type === 'for-time' || selectedWODData?.type === 'tempo' ? 'For Time' :
                      selectedWODData?.type === 'amrap' ? 'AMRAP' :
+                     selectedWODData?.type === 'emom' ? 'EMOM' :
                      selectedWODData?.type === 'tonelagem' ? 'Tonelagem' :
                      selectedWODData?.type === 'carga-maxima' ? 'Carga Máxima' :
-                     selectedWODData?.type || 'Não definido'} | 
-              {selectedWODData?.time_cap && ` Time Cap: ${selectedWODData.time_cap}`}
+                     selectedWODData?.type || 'Não definido'}
+              {displayTimeCapMinutes && ` | Time Cap: ${displayTimeCapMinutes} min`}
             </p>
+            {displayDescription && (
+              <div className="mt-3 rounded-lg bg-muted/40 p-3">
+                <pre className="text-sm whitespace-pre-wrap leading-relaxed">{displayDescription}</pre>
+              </div>
+            )}
+            {displayNotes && (
+              <p className="text-xs text-muted-foreground mt-2">{displayNotes}</p>
+            )}
             {selectedWODData && (
               <p className="text-xs text-muted-foreground mt-1">
                 {resultFieldInfo.helpText}

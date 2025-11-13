@@ -70,7 +70,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
   }
   
   // Para AMRAP: maior rounds/reps é melhor
-  if (wodType === 'amrap') {
+  if (wodType === 'amrap' || wodType === 'emom') {
     const aValue = parseFloat(a.result);
     const bValue = parseFloat(b.result);
     if (bValue !== aValue) return bValue - aValue;

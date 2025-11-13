@@ -4,6 +4,7 @@ interface TeamMember {
   name: string;
   email: string;
   whatsapp: string;
+  shirtSize?: string;
   cpf?: string;
   box?: string;
 }
@@ -20,6 +21,7 @@ interface IndividualAthlete {
   name: string;
   email: string;
   whatsapp: string;
+  shirtSize?: string;
   cpf?: string;
   box?: string;
   categoryName: string;
@@ -119,6 +121,7 @@ export async function bulkImportData(
         name: m.name,
         email: m.email,
         whatsapp: m.whatsapp,
+        shirtSize: m.shirtSize || 'M',
         cpf: m.cpf,
         box: m.box,
       }));
@@ -133,6 +136,7 @@ export async function bulkImportData(
           athlete_phone: team.members[0].whatsapp,
           team_name: team.name,
           team_members: teamMembers,
+          shirt_size: team.members[0].shirtSize || 'M',
           subtotal_cents: 0,
           platform_fee_cents: 0,
           total_cents: 0,
@@ -158,6 +162,7 @@ export async function bulkImportData(
           athlete_phone: athlete.whatsapp,
           team_name: null,
           team_members: null,
+          shirt_size: athlete.shirtSize || 'M',
           subtotal_cents: 0,
           platform_fee_cents: 0,
           total_cents: 0,

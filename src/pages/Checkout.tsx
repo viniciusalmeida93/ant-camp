@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, CreditCard, QrCode, FileText, Shield, Copy, CheckCircle2 } from "lucide-react";
+import { getPixPayloadForDisplay } from "@/utils/pix";
 
 export default function Checkout() {
   const { registrationId } = useParams();
@@ -79,9 +80,28 @@ export default function Checkout() {
     }
   };
 
+  const rawPixPayload = registration?.championships?.pix_payload
+    ? String(registration.championships.pix_payload).trim()
+    : "";
+
+  const manualPixData = getPixPayloadForDisplay({
+    rawPayload: rawPixPayload,
+    merchantName: registration?.championships?.name,
+    merchantCity: registration?.championships?.location,
+  });
+
+  const hasManualPix = manualPixData.qrPayload.length > 0;
+  const pixCopyPayload = manualPixData.copyPayload || rawPixPayload;
+  const pixImageUrl = hasManualPix
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+        manualPixData.qrPayload
+      )}`
+    : "";
+
   const copyPixCode = () => {
-    if (payment?.pix_copy_paste) {
-      navigator.clipboard.writeText(payment.pix_copy_paste);
+    const codeToCopy = hasManualPix ? pixCopyPayload : payment?.pix_copy_paste;
+    if (codeToCopy) {
+      navigator.clipboard.writeText(codeToCopy);
       setCopied(true);
       toast.success("Código PIX copiado!");
       setTimeout(() => setCopied(false), 3000);
@@ -129,7 +149,11 @@ export default function Checkout() {
                 </CardDescription>
               </div>
               <Badge variant={registration.payment_status === "approved" ? "default" : "secondary"}>
-                {registration.payment_status === "approved" ? "Pago" : "Pendente"}
+                {registration.payment_status === "approved"
+                  ? "Pago"
+                  : hasManualPix
+                  ? "À confirmar"
+                  : "Pendente"}
               </Badge>
             </div>
           </CardHeader>
@@ -183,6 +207,62 @@ export default function Checkout() {
                   Ver Leaderboard
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        ) : hasManualPix ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Pagamento via PIX</CardTitle>
+              <CardDescription>
+                Utilize o QR Code abaixo para concluir o pagamento diretamente com o organizador.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col items-center gap-4">
+                {pixImageUrl ? (
+                  <div className="bg-white p-4 rounded-lg border shadow-sm">
+                    <img src={pixImageUrl} alt="QR Code PIX" className="w-52 h-52" />
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center">
+                    QR Code indisponível. Copie o código PIX abaixo.
+                  </div>
+                )}
+                <div className="w-full max-w-xl space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Caso prefira, copie o código “copia e cola”:
+                  </p>
+                  <div className="flex gap-2 items-center">
+                    <Input value={pixCopyPayload} readOnly className="font-mono text-xs" />
+                    <Button onClick={copyPixCode} variant="outline">
+                      {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  {manualPixData.generatedFromKey && (
+                    <p className="text-xs text-muted-foreground">
+                      Chave informada pelo organizador: {rawPixPayload}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground space-y-2">
+                <div className="flex items-center gap-2 text-foreground font-medium">
+                  <QrCode className="w-4 h-4 text-primary" />
+                  Como prosseguir
+                </div>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Realize o pagamento via PIX utilizando o QR Code ou o código acima.</li>
+                  <li>Salve o comprovante. O organizador pode solicitá-lo para validação.</li>
+                  <li>
+                    Assim que o repasse for confirmado, sua inscrição constará como “Pago” no painel do
+                    organizador.
+                  </li>
+                </ol>
+              </div>
+              <Button onClick={() => navigate(`/links/${registration.championships.slug}`)}>
+                Voltar para a página do evento
+              </Button>
             </CardContent>
           </Card>
         ) : !payment ? (

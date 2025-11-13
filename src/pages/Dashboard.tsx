@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Target, Dumbbell, Calendar, Plus, Loader2, Trophy, Edit, Upload, Clock, Settings, CheckCircle2 } from 'lucide-react';
+import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsCard } from '@/components/stats/StatsCard';
@@ -14,6 +14,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import { generateDemoData } from '@/utils/generateDemoData';
+import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
+import { ensureRandomResults } from '@/utils/ensureRandomResults';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -46,6 +49,11 @@ export default function Dashboard() {
   const [dayWods, setDayWods] = useState<Map<number, any[]>>(new Map());
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const autoSeededRef = useRef<Set<string>>(new Set());
+  const scaleTriosEnsuredRef = useRef<Set<string>>(new Set());
+  const randomResultsEnsuredRef = useRef<Set<string>>(new Set());
+  const [totalDaysInput, setTotalDaysInput] = useState('1');
 
   useEffect(() => {
     if (selectedChampionship) {
@@ -56,27 +64,168 @@ export default function Dashboard() {
     }
   }, [selectedChampionship]);
 
+  useEffect(() => {
+    const seedDemoData = async () => {
+      if (!selectedChampionship) return;
+
+      const championshipId = selectedChampionship.id;
+      if (autoSeededRef.current.has(championshipId) || seedingDemo) {
+        return;
+      }
+
+      try {
+        const { data: categoriesCheck, error: categoriesCheckError } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("championship_id", championshipId)
+          .limit(1);
+
+        if (categoriesCheckError) {
+          console.error("Erro ao verificar categorias para dados demo:", categoriesCheckError);
+          return;
+        }
+
+        if (!categoriesCheck || categoriesCheck.length === 0) {
+          console.warn("Nenhuma categoria encontrada para gerar dados demo automaticamente.");
+          return;
+        }
+
+        setSeedingDemo(true);
+        await generateDemoData(championshipId);
+        autoSeededRef.current.add(championshipId);
+        toast.success('Dados de demonstração gerados automaticamente!');
+        await Promise.all([
+          loadStats(),
+          loadWODs(),
+          loadChampionshipDays(),
+        ]);
+      } catch (error: any) {
+        console.error('Erro ao gerar dados de demonstração automaticamente:', error);
+        toast.error(error.message || 'Erro ao gerar dados de demonstração');
+        autoSeededRef.current.add(championshipId);
+      } finally {
+        setSeedingDemo(false);
+      }
+    };
+
+    seedDemoData();
+  }, [selectedChampionship]);
+
+  useEffect(() => {
+    const ensureDemoConsistency = async () => {
+      if (!selectedChampionship) return;
+      const championshipId = selectedChampionship.id;
+
+      let shouldRefresh = false;
+
+      if (!scaleTriosEnsuredRef.current.has(championshipId)) {
+        try {
+          const { added } = await ensureScaleTrios(championshipId);
+          if (added > 0) {
+            toast.success(`Adicionados ${added} times fictícios para completar as categorias.`);
+            shouldRefresh = true;
+          }
+        } catch (error: any) {
+          console.error('Erro ao garantir times fictícios:', error);
+        } finally {
+          scaleTriosEnsuredRef.current.add(championshipId);
+        }
+      }
+
+      if (!randomResultsEnsuredRef.current.has(championshipId)) {
+        try {
+          const { generated } = await ensureRandomResults(championshipId);
+          if (generated > 0) {
+            toast.success('Resultados aleatórios gerados para todas as categorias.');
+            shouldRefresh = true;
+          }
+        } catch (error: any) {
+          console.error('Erro ao gerar resultados aleatórios:', error);
+        } finally {
+          randomResultsEnsuredRef.current.add(championshipId);
+        }
+      }
+
+      if (shouldRefresh) {
+        await Promise.all([
+          loadStats(),
+          loadWODs(),
+          loadChampionshipDays(),
+        ]);
+      }
+    };
+
+    ensureDemoConsistency();
+  }, [selectedChampionship]);
+
   const loadStats = async () => {
     if (!selectedChampionship) return;
     
     setLoading(true);
     try {
       const [categoriesResult, wodsResult, registrationsResult] = await Promise.all([
-        supabase.from("categories").select("id", { count: "exact" }).eq("championship_id", selectedChampionship.id),
-        supabase.from("wods").select("id", { count: "exact" }).eq("championship_id", selectedChampionship.id),
-        supabase.from("registrations").select("id, team_name").eq("championship_id", selectedChampionship.id),
+        supabase
+          .from("categories")
+          .select("id, team_size, format", { count: "exact" })
+          .eq("championship_id", selectedChampionship.id),
+        supabase
+          .from("wods")
+          .select("id", { count: "exact" })
+          .eq("championship_id", selectedChampionship.id),
+        supabase
+          .from("registrations")
+          .select("id, team_name, team_members, category_id")
+          .eq("championship_id", selectedChampionship.id),
       ]);
 
-      // Contar atletas individuais (onde team_name é NULL)
-      const athletes = registrationsResult.data?.filter(r => !r.team_name).length || 0;
-      
-      // Contar times (onde team_name não é NULL)
-      const teams = registrationsResult.data?.filter(r => r.team_name).length || 0;
+      const categoriesData = categoriesResult.data || [];
+      const categoryMap = new Map(
+        categoriesData.map((category: any) => [category.id, category])
+      );
+
+      const registrations = registrationsResult.data || [];
+
+      const totalAthletes = registrations.reduce((acc: number, registration: any) => {
+        if (!registration.team_name) {
+          return acc + 1;
+        }
+
+        let teamMembers = registration.team_members;
+        if (typeof teamMembers === 'string') {
+          try {
+            teamMembers = JSON.parse(teamMembers);
+          } catch {
+            teamMembers = null;
+          }
+        }
+
+        if (Array.isArray(teamMembers) && teamMembers.length > 0) {
+          return acc + teamMembers.length;
+        }
+
+        const categoryInfo = categoryMap.get(registration.category_id);
+        if (categoryInfo?.team_size && categoryInfo.team_size > 0) {
+          return acc + categoryInfo.team_size;
+        }
+
+        switch (categoryInfo?.format) {
+          case 'dupla':
+            return acc + 2;
+          case 'trio':
+            return acc + 3;
+          case 'time':
+            return acc + 4;
+          default:
+            return acc + 1;
+        }
+      }, 0);
+
+      const teams = registrations.filter((registration: any) => registration.team_name).length;
 
     setStats({
         categories: categoriesResult.count || 0,
         wods: wodsResult.count || 0,
-        athletes: athletes,
+        athletes: totalAthletes,
         teams: teams,
       });
     } catch (error: any) {
@@ -107,6 +256,7 @@ export default function Dashboard() {
           breakAfterWodNumber: data.break_after_wod_number || 1,
           totalDays: data.total_days || 1,
         });
+        setTotalDaysInput(String(data.total_days || 1));
       }
     } catch (error: any) {
       console.error("Error loading schedule config:", error);
@@ -145,6 +295,9 @@ export default function Dashboard() {
       if (daysData && daysData.length > 0) {
         setChampionshipDays(daysData);
 
+        const wodsByDay = new Map<number, any[]>();
+        daysData.forEach(day => wodsByDay.set(day.day_number, []));
+
         // Carregar WODs de cada dia
         const dayIds = daysData.map(d => d.id);
         const { data: wodsData, error: wodsError } = await supabase
@@ -154,7 +307,6 @@ export default function Dashboard() {
           .order("order_num");
 
         if (!wodsError && wodsData) {
-          const wodsByDay = new Map<number, any[]>();
           daysData.forEach(day => {
             const dayWodsList = wodsData
               .filter(dw => dw.championship_day_id === day.id)
@@ -162,8 +314,8 @@ export default function Dashboard() {
               .sort((a, b) => a.order_num - b.order_num);
             wodsByDay.set(day.day_number, dayWodsList);
           });
-          setDayWods(wodsByDay);
         }
+        setDayWods(wodsByDay);
       } else {
         // Se não há dias, criar baseado no total_days
         await initializeDays();
@@ -200,6 +352,9 @@ export default function Dashboard() {
 
     if (days.length > 0) {
       setChampionshipDays(days);
+      const initialMap = new Map<number, any[]>();
+      days.forEach(day => initialMap.set(day.day_number, []));
+      setDayWods(initialMap);
     }
   };
 
@@ -227,6 +382,11 @@ export default function Dashboard() {
 
         if (!error && data) {
           setChampionshipDays(prev => [...prev, data]);
+          setDayWods(prev => {
+            const next = new Map(prev);
+            next.set(data.day_number, []);
+            return next;
+          });
         }
       }
     } else if (newDays < currentDays) {
@@ -239,7 +399,14 @@ export default function Dashboard() {
           .eq("id", day.id);
       }
       setChampionshipDays(prev => prev.slice(0, newDays));
+      setDayWods(prev => {
+        const next = new Map(prev);
+        daysToRemove.forEach(day => next.delete(day.day_number));
+        return next;
+      });
     }
+
+    await loadChampionshipDays();
   };
 
   const addWodToDay = async (dayId: string, wodId: string) => {
@@ -399,6 +566,30 @@ export default function Dashboard() {
 
       if (heatsError) throw heatsError;
 
+      const variationMap = new Map<string, Map<string, any>>();
+      const wodIdsForVariations = wods.map(wod => wod.id);
+      if (wodIdsForVariations.length > 0) {
+        const { data: variationData, error: variationsError } = await supabase
+          .from("wod_category_variations")
+          .select("*")
+          .in("wod_id", wodIdsForVariations);
+
+        if (variationsError) {
+          if (variationsError.code === '42P01' || (variationsError.message ?? '').includes('wod_category_variations')) {
+            console.warn('Tabela wod_category_variations ausente; agendamento utilizará durações padrão.');
+          } else {
+            throw variationsError;
+          }
+        } else {
+          (variationData || []).forEach((variation: any) => {
+            if (!variationMap.has(variation.wod_id)) {
+              variationMap.set(variation.wod_id, new Map());
+            }
+            variationMap.get(variation.wod_id)!.set(variation.category_id, variation);
+          });
+        }
+      }
+
       // Mapa para rastrear quais WODs já foram processados
       const processedWodIds = new Set<string>();
 
@@ -436,10 +627,9 @@ export default function Dashboard() {
             .select("estimated_duration_minutes")
             .eq("id", wod.id)
             .single();
-          
-          const wodDuration = (wodData?.estimated_duration_minutes ?? wod.estimated_duration_minutes) || 10;
-          
-          console.log(`WOD ${wod.name}: Duração = ${wodDuration} minutos (do banco: ${wodData?.estimated_duration_minutes}, do estado: ${wod.estimated_duration_minutes})`);
+
+          const baseDuration = (wodData?.estimated_duration_minutes ?? wod.estimated_duration_minutes) || 10;
+          console.log(`WOD ${wod.name}: Duração base = ${baseDuration} minutos (do banco: ${wodData?.estimated_duration_minutes}, do estado: ${wod.estimated_duration_minutes})`);
 
           // Buscar todas as baterias deste WOD, agrupadas por categoria
           const wodHeats = (allHeats || []).filter(h => h.wod_id === wod.id);
@@ -477,6 +667,9 @@ export default function Dashboard() {
           for (const categoryId of sortedCategoryIds) {
             const categoryHeats = heatsByCategory.get(categoryId) || [];
             const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
+
+            const variationForCategory = variationMap.get(wod.id)?.get(categoryId);
+            const wodDuration = variationForCategory?.estimated_duration_minutes ?? baseDuration;
 
             // Calcular horário para cada bateria desta categoria neste WOD
             // Usar intervalo do dia (já recarregado do banco no início da função)
@@ -849,115 +1042,28 @@ export default function Dashboard() {
   // Show championship selector and dashboard
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8 animate-fade-in">
+      <div className="flex items-start justify-between gap-4 mb-8 animate-fade-in flex-col md:flex-row md:items-center">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Meus Campeonatos</h1>
-          <p className="text-muted-foreground">Gerencie seus campeonatos e visualize estatísticas</p>
+          <h1 className="text-4xl font-bold mb-2">
+            {selectedChampionship ? selectedChampionship.name : "Escolha um campeonato"}
+          </h1>
+          <p className="text-muted-foreground">
+            Gerencie seu campeonato e visualize estatísticas detalhadas
+          </p>
         </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/bulk-import')}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Importar Dados
-          </Button>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setFormData({ name: '', date: '', location: '', description: '' });
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button className="shadow-glow">
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Campeonato
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Criar Novo Campeonato</DialogTitle>
-              <DialogDescription>
-                Preencha os dados básicos do seu campeonato. Você poderá configurar categorias, WODs e mais depois.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateChampionship} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nome do Campeonato *</Label>
-                <Input 
-                  id="name" 
-                  name="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ex: Open 2024" 
-                  required 
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="date">Data *</Label>
-                  <Input 
-                    id="date" 
-                    name="date"
-                    type="date" 
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="location">Local *</Label>
-                  <Input 
-                    id="location" 
-                    name="location"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Ex: Box CrossFit SP" 
-                    required 
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea 
-                  id="description" 
-                  name="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Descreva seu campeonato..."
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" className="flex-1" disabled={creating}>
-                  {creating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    "Criar Campeonato"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-        </div>
+        <Button
+          size="lg"
+          className="shadow-glow"
+          onClick={() => navigate("/dashboard")}
+        >
+          <Settings className="w-5 h-5 mr-2" />
+          Painel do Organizador
+        </Button>
       </div>
 
       {/* Championship Selector */}
       <div className="mb-8">
-        <Label className="mb-2 block">Campeonato Ativo</Label>
+        <Label className="mb-2 block">Escolha um campeonato</Label>
         <Select
           value={selectedChampionship?.id || ''}
           onValueChange={(value) => {
@@ -968,7 +1074,7 @@ export default function Dashboard() {
           }}
         >
           <SelectTrigger className="w-full md:w-[400px] bg-card">
-            <SelectValue placeholder="Selecione um campeonato" />
+            <SelectValue placeholder="Escolha um campeonato" />
           </SelectTrigger>
           <SelectContent>
             {championships.map((champ) => (
@@ -998,14 +1104,16 @@ export default function Dashboard() {
                     </div>
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/championships/${selectedChampionship.id}/links`)}
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Editar
-                </Button>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/championships/${selectedChampionship.id}/links`)}
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    Links Públicos
+                  </Button>
+                </div>
               </div>
             </CardHeader>
           </Card>
@@ -1053,11 +1161,29 @@ export default function Dashboard() {
                       id="totalDays"
                       type="number"
                       min="1"
-                      value={scheduleConfig.totalDays}
+                      value={totalDaysInput}
                       onChange={(e) => {
-                        const days = parseInt(e.target.value) || 1;
-                        setScheduleConfig({ ...scheduleConfig, totalDays: days });
-                        updateDaysCount(days);
+                        const rawValue = e.target.value;
+                        if (rawValue === '') {
+                          setTotalDaysInput('');
+                          return;
+                        }
+
+                        const parsed = parseInt(rawValue, 10);
+                        if (Number.isNaN(parsed)) {
+                          return;
+                        }
+
+                        const normalized = parsed < 1 ? 1 : parsed;
+                        setTotalDaysInput(String(normalized));
+                        setScheduleConfig({ ...scheduleConfig, totalDays: normalized });
+                        updateDaysCount(normalized);
+                      }}
+                      onBlur={() => {
+                        if (totalDaysInput === '') {
+                          const fallback = scheduleConfig.totalDays || 1;
+                          setTotalDaysInput(String(fallback));
+                        }
                       }}
                     />
                   </div>
@@ -1082,6 +1208,29 @@ export default function Dashboard() {
                     <Label className="text-lg font-semibold">Distribuição de Provas por Dia</Label>
                   </div>
                   
+                  {championshipDays.length === 0 && (
+                    <div className="p-5 rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 flex flex-col gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        Defina a duração do evento em dias e clique em "Gerar dias" para configurar horários, intervalos e pausas.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          onClick={initializeDays}
+                        >
+                          Gerar dias automaticamente
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => updateDaysCount(scheduleConfig.totalDays || 1)}
+                        >
+                          Atualizar conforme duração escolhida
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {championshipDays.map((day) => {
                     const dayWodsList = dayWods.get(day.day_number) || [];
                     // WODs disponíveis são aqueles que não estão em nenhum dia
@@ -1243,8 +1392,25 @@ export default function Dashboard() {
                                   id={`breakDuration-${day.id}`}
                                   type="number"
                                   min="0"
-                                  value={day.break_duration_minutes || 30}
-                                  onChange={(e) => handleDayBreakUpdate(day.id, 'break_duration_minutes', parseInt(e.target.value) || 30)}
+                                  value={
+                                    day.break_duration_minutes !== null && day.break_duration_minutes !== undefined
+                                      ? day.break_duration_minutes
+                                      : ''
+                                  }
+                                  onChange={(e) => {
+                                    const rawValue = e.target.value;
+                                    if (rawValue === '') {
+                                      handleDayBreakUpdate(day.id, 'break_duration_minutes', null);
+                                      return;
+                                    }
+
+                                    const parsed = parseInt(rawValue, 10);
+                                    if (Number.isNaN(parsed)) {
+                                      return;
+                                    }
+
+                                    handleDayBreakUpdate(day.id, 'break_duration_minutes', parsed);
+                                  }}
                                 />
                               </div>
                               <div>
@@ -1300,33 +1466,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Next Steps */}
-      <div className="mt-12 p-6 rounded-2xl bg-card shadow-card">
-        <h2 className="text-2xl font-bold mb-4">Próximos Passos</h2>
-        <ul className="space-y-3 text-muted-foreground">
-          <li className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                {stats.categories === 0 
-                  ? "Configure as categorias do seu campeonato"
-                  : `${stats.categories} categoria(s) configurada(s)`
-                }
-          </li>
-          <li className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                {stats.wods === 0 
-                  ? "Crie os WODs que serão realizados"
-                  : `${stats.wods} WOD(s) criado(s)`
-                }
-          </li>
-          <li className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                {stats.athletes === 0 
-                  ? "Abra as inscrições para atletas e times"
-                  : `${stats.athletes} atleta(s) inscrito(s)`
-                }
-          </li>
-        </ul>
-      </div>
         </>
       ) : (
         <Card className="p-8 text-center">

@@ -31,6 +31,7 @@ const buttonTypes = [
   { value: "registration", label: "Inscrições", icon: Users },
   { value: "heats", label: "Baterias", icon: Calendar },
   { value: "rules", label: "Regras", icon: FileText },
+  { value: "wods", label: "WODs", icon: Trophy },
 ];
 
 export default function LinkPageConfig() {
@@ -87,7 +88,26 @@ export default function LinkPageConfig() {
         }));
         
         console.log("Loaded buttons:", normalizedButtons);
-        setButtons(normalizedButtons);
+        let finalButtons = [...normalizedButtons];
+
+        const hasWodsButton = finalButtons.some(
+          (btn) => (btn.button_type || btn.icon) === "wods"
+        );
+
+        if (!hasWodsButton) {
+          finalButtons.push({
+            id: "wods-default",
+            label: "WODs",
+          url: null,
+            icon: "wods",
+            button_type: "wods",
+            order_index: finalButtons.length,
+            is_active: true,
+            isNew: true,
+          });
+        }
+
+        setButtons(finalButtons);
       } else {
         // Get championship slug for default
         const { data: champ } = await supabase
@@ -240,16 +260,16 @@ export default function LinkPageConfig() {
       }
 
       // Insert new buttons
-      const buttonsToSave = buttons
-        .filter((b) => b.label && (b.url || b.button_type !== "external"))
-        .map((b, index) => ({
+    const buttonsToSave = buttons
+      .filter((b) => b.label?.trim() && (b.button_type !== "external" || b.url?.trim()))
+      .map((b, index) => ({
           link_page_id: pageId,
           label: b.label,
-          url: b.url || "",
+        url: b.button_type === "external" ? (b.url || "") : "",
           icon: b.icon || b.button_type,
           button_type: b.button_type,
           order_index: index,
-          is_active: b.is_active,
+        is_active: b.is_active ?? true,
         }));
 
       if (buttonsToSave.length > 0) {
@@ -549,9 +569,14 @@ export default function LinkPageConfig() {
                                   />
                                 </div>
                               )}
-                              {currentButtonType !== "external" && (
+                              {currentButtonType !== "external" && currentButtonType !== "wods" && (
                                 <div className="text-sm text-muted-foreground">
                                   Este botão será vinculado automaticamente ao seu campeonato.
+                                </div>
+                              )}
+                              {currentButtonType === "wods" && (
+                                <div className="text-sm text-muted-foreground">
+                                  Este botão abre a página pública de WODs do campeonato.
                                 </div>
                               )}
                             </div>

@@ -395,28 +395,38 @@ export default function PublicHeats() {
         
         // Ordenar baterias antes de definir: 1) WOD, 2) Categoria, 3) Horário, 4) Número da bateria
         const sortedHeats = [...formattedHeats].sort((a, b) => {
-          // Primeiro: ordenar por ordem do WOD (prova)
+          // 1) Dia da prova
+          const dayA = a.day_number ?? 9999;
+          const dayB = b.day_number ?? 9999;
+          if (dayA !== dayB) {
+            return dayA - dayB;
+          }
+
+          // 2) Horário agendado
+          if (a.scheduled_time && b.scheduled_time) {
+            const diff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+            if (diff !== 0) return diff;
+          } else if (a.scheduled_time) {
+            return -1;
+          } else if (b.scheduled_time) {
+            return 1;
+          }
+
+          // 3) Ordem do WOD
           const wodOrderA = a.wod_order ?? 9999;
           const wodOrderB = b.wod_order ?? 9999;
           if (wodOrderA !== wodOrderB) {
             return wodOrderA - wodOrderB;
           }
-          
-          // Segundo: ordenar por ordem da categoria (order_index)
+
+          // 4) Ordem da categoria
           const categoryOrderA = a.category_order ?? 9999;
           const categoryOrderB = b.category_order ?? 9999;
           if (categoryOrderA !== categoryOrderB) {
             return categoryOrderA - categoryOrderB;
           }
-          
-          // Terceiro: ordenar por horário
-          if (a.scheduled_time && b.scheduled_time) {
-            return new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
-          }
-          if (a.scheduled_time) return -1;
-          if (b.scheduled_time) return 1;
-          
-          // Quarto: ordenar por número da bateria
+
+          // 5) Número da bateria
           return a.heat_number - b.heat_number;
         });
         
@@ -476,32 +486,33 @@ export default function PublicHeats() {
 
     // Ordenar por: 1) ordem do WOD (order_num), 2) ordem da categoria (order_index), 3) horário, 4) número da bateria
     filtered.sort((a, b) => {
-      // Primeiro: ordenar por ordem do WOD (prova)
+      const dayA = a.day_number ?? 9999;
+      const dayB = b.day_number ?? 9999;
+      if (dayA !== dayB) {
+        return dayA - dayB;
+      }
+
+      if (a.scheduled_time && b.scheduled_time) {
+        const diff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+        if (diff !== 0) return diff;
+      } else if (a.scheduled_time) {
+        return -1;
+      } else if (b.scheduled_time) {
+        return 1;
+      }
+
       const wodOrderA = a.wod_order ?? 9999;
       const wodOrderB = b.wod_order ?? 9999;
       if (wodOrderA !== wodOrderB) {
-        const result = wodOrderA - wodOrderB;
-        console.log(`Ordenando por WOD: ${a.wod_name} (${wodOrderA}) vs ${b.wod_name} (${wodOrderB}) = ${result}`);
-        return result;
+        return wodOrderA - wodOrderB;
       }
-      
-      // Segundo: ordenar por ordem da categoria (order_index)
+
       const categoryOrderA = a.category_order ?? 9999;
       const categoryOrderB = b.category_order ?? 9999;
       if (categoryOrderA !== categoryOrderB) {
-        const result = categoryOrderA - categoryOrderB;
-        console.log(`Ordenando por categoria: ${a.category_name} (${categoryOrderA}) vs ${b.category_name} (${categoryOrderB}) = ${result}`);
-        return result;
+        return categoryOrderA - categoryOrderB;
       }
-      
-      // Terceiro: ordenar por horário
-      if (a.scheduled_time && b.scheduled_time) {
-        return new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
-      }
-      if (a.scheduled_time) return -1;
-      if (b.scheduled_time) return 1;
-      
-      // Quarto: ordenar por número da bateria
+
       return a.heat_number - b.heat_number;
     });
 

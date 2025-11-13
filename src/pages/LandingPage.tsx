@@ -7,6 +7,26 @@ import { Link } from "react-router-dom";
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur border-b border-border/60">
+        <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+            <span className="text-sm sm:text-base font-semibold">CrossFit Competition</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="outline" size="sm" asChild className="sm:hidden">
+              <Link to="/auth">Entrar</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
+              <Link to="/auth">Entrar</Link>
+            </Button>
+            <Button size="sm" asChild className="hidden sm:inline-flex">
+              <Link to="/setup">Checklist</Link>
+            </Button>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 pt-12 sm:pt-16 md:pt-20 pb-16 sm:pb-24 md:pb-32">
         <div className="text-center max-w-4xl mx-auto">

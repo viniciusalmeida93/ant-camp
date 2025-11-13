@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, X, Edit, Trash2 } from 'lucide-react';
+import { Plus, Loader2, X, Edit, Trash2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -194,6 +194,30 @@ export default function Registrations() {
     } catch (error: any) {
       console.error("Error deleting registration:", error);
       toast.error(error.message || "Erro ao excluir inscrição");
+    }
+  };
+
+  const handleApprovePayment = async (reg: any) => {
+    if (!confirm(`Confirmar pagamento de R$ ${(reg.total_cents / 100).toFixed(2).replace('.', ',')} para ${reg.team_name || reg.athlete_name}?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("registrations")
+        .update({
+          payment_status: 'approved',
+          paid_at: new Date().toISOString(),
+        })
+        .eq("id", reg.id);
+
+      if (error) throw error;
+
+      toast.success("Pagamento aprovado com sucesso!");
+      await loadData();
+    } catch (error: any) {
+      console.error("Error approving payment:", error);
+      toast.error(error.message || "Erro ao aprovar pagamento");
     }
   };
 
@@ -603,6 +627,17 @@ export default function Registrations() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  {reg.payment_status === 'pending' && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleApprovePayment(reg)}
+                      title="Aprovar pagamento"
+                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     size="icon"
                     variant="ghost"

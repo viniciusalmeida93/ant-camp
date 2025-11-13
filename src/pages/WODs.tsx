@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2, CopyPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+type CategoryVariationForm = {
+  displayName: string;
+  description: string;
+  notes: string;
+  estimatedDuration: string;
+};
 
 export default function WODs() {
   const navigate = useNavigate();
@@ -21,10 +28,102 @@ export default function WODs() {
   const [wods, setWODs] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingWOD, setEditingWOD] = useState<any>(null);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryVariations, setCategoryVariations] = useState<Record<string, CategoryVariationForm>>({});
+  const [variationCategoriesWithData, setVariationCategoriesWithData] = useState<string[]>([]);
+  const [variationsLoading, setVariationsLoading] = useState(false);
+  const [applyToAllCategories, setApplyToAllCategories] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  const isMissingVariationTable = (error: any) => {
+    if (!error) return false;
+    return error.code === '42P01' || (typeof error.message === 'string' && error.message.includes('wod_category_variations'));
+  };
+
+  const emptyVariation = (): CategoryVariationForm => ({
+    displayName: '',
+    description: '',
+    notes: '',
+    estimatedDuration: '',
+  });
+
+  const createEmptyVariations = () => {
+    const result: Record<string, CategoryVariationForm> = {};
+    categories.forEach(cat => {
+      result[cat.id] = emptyVariation();
+    });
+    return result;
+  };
+
+  const updateVariationField = (categoryId: string, field: keyof CategoryVariationForm, value: string) => {
+    setCategoryVariations(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...(prev[categoryId] || emptyVariation()),
+        [field]: value,
+      },
+    }));
+  };
+
+  const hasVariationData = (variation?: CategoryVariationForm) => {
+    if (!variation) return false;
+    return Boolean(
+      variation.displayName.trim() ||
+      variation.description.trim() ||
+      variation.notes.trim() ||
+      variation.estimatedDuration.trim()
+    );
+  };
+
+  const resetCategoryVariation = (categoryId: string) => {
+    setCategoryVariations(prev => ({
+      ...prev,
+      [categoryId]: emptyVariation(),
+    }));
+  };
+
+  const handleOpenCreate = () => {
+    setEditingWOD(null);
+    setWodType('for-time');
+    setCategoryVariations(createEmptyVariations());
+    setVariationCategoriesWithData([]);
+    setApplyToAllCategories(false);
+  };
+
+  const handleOpenEdit = async (wod: any) => {
+    setEditingWOD(wod);
+    setWodType(wod.type || 'for-time');
+    setIsDialogOpen(true);
+    setCategoryVariations(createEmptyVariations());
+    setVariationCategoriesWithData([]);
+    setApplyToAllCategories(false);
+    await loadWodVariations(wod.id);
+  };
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      setCategoryVariations({});
+      setVariationCategoriesWithData([]);
+      return;
+    }
+
+    setCategoryVariations(prev => {
+      const updated: Record<string, CategoryVariationForm> = {};
+      categories.forEach(cat => {
+        updated[cat.id] = prev[cat.id] || emptyVariation();
+      });
+      return updated;
+    });
+
+    setVariationCategoriesWithData(prev =>
+      prev.filter(categoryId => categories.some(cat => cat.id === categoryId))
+    );
+  }, [categories]);
 
   useEffect(() => {
     checkAuth();
     if (selectedChampionship) {
+      loadCategories();
       loadWODs();
     }
   }, [selectedChampionship]);
@@ -66,6 +165,73 @@ export default function WODs() {
     }
   };
 
+  const loadCategories = async () => {
+    if (!selectedChampionship) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("order_index", { ascending: true, nullsFirst: true });
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error: any) {
+      console.error("Error loading categories:", error);
+      toast.error("Erro ao carregar categorias");
+    }
+  };
+
+  const loadWodVariations = async (wodId: string) => {
+    setVariationsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("wod_category_variations")
+        .select("*")
+        .eq("wod_id", wodId);
+
+      if (error) {
+        if (error.code === '42P01' || (error.message ?? '').includes('wod_category_variations')) {
+          console.warn('Tabela wod_category_variations não encontrada; variações serão ignoradas.');
+          setCategoryVariations(createEmptyVariations());
+          setVariationCategoriesWithData([]);
+        } else {
+          throw error;
+        }
+      } else {
+        const base = createEmptyVariations();
+        const categoriesWithData: string[] = [];
+
+        (data || []).forEach((variation: any) => {
+          if (!base[variation.category_id]) {
+            base[variation.category_id] = emptyVariation();
+          }
+
+          base[variation.category_id] = {
+            displayName: variation.display_name || '',
+            description: variation.description || '',
+            notes: variation.notes || '',
+            estimatedDuration:
+              variation.estimated_duration_minutes !== null && variation.estimated_duration_minutes !== undefined
+                ? String(variation.estimated_duration_minutes)
+                : '',
+          };
+
+          categoriesWithData.push(variation.category_id);
+        });
+
+        setCategoryVariations(base);
+        setVariationCategoriesWithData(categoriesWithData);
+      }
+    } catch (error: any) {
+      console.error("Error loading WOD variations:", error);
+      toast.error("Erro ao carregar variações por categoria");
+    } finally {
+      setVariationsLoading(false);
+    }
+  };
+
   const [wodType, setWodType] = useState<string>('for-time');
 
   useEffect(() => {
@@ -83,6 +249,12 @@ export default function WODs() {
     try {
       const form = e.target as HTMLFormElement;
       const formData = new FormData(form);
+      const baseEstimatedDurationValue = formData.get('estimatedDuration') as string;
+      const parsedBaseDuration = baseEstimatedDurationValue ? parseInt(baseEstimatedDurationValue, 10) : NaN;
+      const baseEstimatedDuration = Number.isFinite(parsedBaseDuration) && parsedBaseDuration > 0
+        ? parsedBaseDuration
+        : 15;
+      const applyAll = applyToAllCategories;
       
       // Get max order_num to add new WOD at the end
       const maxOrder = wods.length > 0 
@@ -94,12 +266,14 @@ export default function WODs() {
         name: formData.get('name') as string,
         type: wodType || 'for-time',
         description: formData.get('description') as string,
-        time_cap: formData.get('timeCap') as string || null,
+        time_cap: null,
         tiebreaker: null, // Removed
         notes: formData.get('notes') as string || null,
-        estimated_duration_minutes: parseInt(formData.get('estimatedDuration') as string) || 15,
+        estimated_duration_minutes: baseEstimatedDuration,
         order_num: editingWOD ? editingWOD.order_num : maxOrder + 1,
       };
+
+      let wodId = editingWOD?.id ?? null;
 
       if (editingWOD) {
         const { error } = await supabase
@@ -108,21 +282,102 @@ export default function WODs() {
           .eq("id", editingWOD.id);
 
         if (error) throw error;
+        wodId = editingWOD.id;
+        setWODs(prev =>
+          prev.map(w =>
+            w.id === editingWOD.id
+              ? { ...w, ...wodData, id: editingWOD.id }
+              : w
+          )
+        );
         toast.success("WOD atualizado com sucesso!");
       } else {
-        const { error } = await supabase
+        const { data: newWod, error } = await supabase
           .from("wods")
           .insert(wodData)
           .select()
           .single();
 
         if (error) throw error;
+        wodId = newWod?.id ?? null;
+        if (newWod) {
+          setWODs(prev => {
+            const next = [...prev, newWod];
+            return next.sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+          });
+        }
         toast.success("WOD criado com sucesso!");
+      }
+
+      if (wodId) {
+        const variationsToUpsert = categories
+          .map(cat => {
+            const variation = categoryVariations[cat.id];
+            const hasData = hasVariationData(variation);
+            if (!hasData && !applyAll) return null;
+
+            const parsedVariationDuration = variation?.estimatedDuration.trim()
+              ? parseInt(variation.estimatedDuration, 10)
+              : NaN;
+            const estimatedDurationMinutes = Number.isFinite(parsedVariationDuration) && parsedVariationDuration > 0
+              ? parsedVariationDuration
+              : baseEstimatedDuration;
+
+            return {
+              wod_id: wodId,
+              category_id: cat.id,
+              display_name: variation?.displayName?.trim() || null,
+              description: variation?.description?.trim() || null,
+              notes: variation?.notes?.trim() || null,
+              estimated_duration_minutes: estimatedDurationMinutes || null,
+            };
+          })
+          .filter(Boolean);
+
+        if (variationsToUpsert.length > 0) {
+          const { error: variationError } = await supabase
+            .from("wod_category_variations")
+            .upsert(variationsToUpsert as any[], { onConflict: "wod_id,category_id" });
+
+          if (variationError && !isMissingVariationTable(variationError)) {
+            throw variationError;
+          }
+
+          if (variationError && isMissingVariationTable(variationError)) {
+            console.warn('Tabela wod_category_variations ausente durante upsert; prosseguindo sem variações específicas.');
+          }
+        }
+
+        const existingSet = new Set(variationCategoriesWithData);
+        const categoriesToDelete = Array.from(existingSet).filter(categoryId => {
+          const variation = categoryVariations[categoryId];
+          if (applyAll) return false;
+          return !hasVariationData(variation);
+        });
+
+        if (categoriesToDelete.length > 0) {
+          const { error: deleteVariationsError } = await supabase
+            .from("wod_category_variations")
+            .delete()
+            .eq("wod_id", wodId)
+            .in("category_id", categoriesToDelete);
+
+          if (deleteVariationsError && !isMissingVariationTable(deleteVariationsError)) {
+            throw deleteVariationsError;
+          }
+
+          if (deleteVariationsError && isMissingVariationTable(deleteVariationsError)) {
+            console.warn('Tabela wod_category_variations ausente durante remoção; prosseguindo sem variações específicas.');
+          }
+        }
       }
 
       setIsDialogOpen(false);
       setEditingWOD(null);
       setWodType('for-time');
+      setCategoryVariations(createEmptyVariations());
+      setVariationCategoriesWithData([]);
+      setApplyToAllCategories(false);
       await loadWODs();
     } catch (error: any) {
       console.error("Error saving WOD:", error);
@@ -144,7 +399,7 @@ export default function WODs() {
       if (error) throw error;
       
       toast.success("WOD removido com sucesso!");
-      await loadChampionshipAndWODs();
+      await loadWODs();
     } catch (error: any) {
       console.error("Error deleting WOD:", error);
       toast.error("Erro ao remover WOD");
@@ -194,13 +449,13 @@ export default function WODs() {
           if (!open) {
             setEditingWOD(null);
             setWodType('for-time');
+            setCategoryVariations(createEmptyVariations());
+            setVariationCategoriesWithData([]);
+            setApplyToAllCategories(false);
           }
         }}>
           <DialogTrigger asChild>
-            <Button onClick={() => {
-              setEditingWOD(null);
-              setWodType('for-time');
-            }} className="shadow-glow">
+            <Button onClick={handleOpenCreate} className="shadow-glow">
               <Plus className="w-4 h-4 mr-2" />
               Novo WOD
             </Button>
@@ -209,7 +464,7 @@ export default function WODs() {
             <DialogHeader>
               <DialogTitle>{editingWOD ? 'Editar' : 'Criar'} WOD</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nome do WOD *</Label>
                 <Input 
@@ -234,6 +489,7 @@ export default function WODs() {
                   <SelectContent>
                     <SelectItem value="for-time">For Time</SelectItem>
                     <SelectItem value="amrap">AMRAP</SelectItem>
+                    <SelectItem value="emom">EMOM</SelectItem>
                     <SelectItem value="tonelagem">Tonelagem</SelectItem>
                     <SelectItem value="carga-maxima">Carga Máxima</SelectItem>
                   </SelectContent>
@@ -253,17 +509,7 @@ export default function WODs() {
               </div>
 
               <div>
-                <Label htmlFor="timeCap">Time Cap</Label>
-                <Input 
-                  id="timeCap" 
-                  name="timeCap"
-                  defaultValue={editingWOD?.time_cap}
-                  placeholder="Ex: 12 minutos"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="estimatedDuration">Duração Estimada (minutos)</Label>
+                <Label htmlFor="estimatedDuration">Time Cap (minutos)</Label>
                 <Input 
                   id="estimatedDuration" 
                   name="estimatedDuration"
@@ -273,7 +519,7 @@ export default function WODs() {
                   placeholder="Ex: 15"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tempo estimado para completar todas as baterias desta prova (usado no cálculo automático de horários)
+                  Tempo previsto para finalizar a prova (usado no cálculo automático de horários)
                 </p>
               </div>
 
@@ -286,6 +532,128 @@ export default function WODs() {
                   placeholder="Padrões de movimento, escalas, regras especiais..."
                   rows={3}
                 />
+              </div>
+
+              <div className="pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label className="font-semibold">Variações por Categoria</Label>
+                  {variationsLoading && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Carregando variações
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={applyToAllCategories ? 'default' : 'outline'}
+                    className="ml-auto flex items-center gap-1"
+                    onClick={() => {
+                      if (!applyToAllCategories && formRef.current) {
+                        const data = new FormData(formRef.current);
+                        const estimatedDurationValue = (data.get('estimatedDuration') as string) || '';
+                        setCategoryVariations(prev => {
+                          const updated: Record<string, CategoryVariationForm> = {};
+                          categories.forEach(cat => {
+                            const current = prev[cat.id] || emptyVariation();
+                            updated[cat.id] = {
+                              ...current,
+                              estimatedDuration: current.estimatedDuration || estimatedDurationValue,
+                            };
+                          });
+                          return updated;
+                        });
+                      }
+                      setApplyToAllCategories(prev => !prev);
+                    }}
+                  >
+                    <CopyPlus className="w-3 h-3" />
+                    {applyToAllCategories ? 'Aplicar em todas as categorias (ativado)' : 'Adicionar WOD a todas as categorias'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Personalize detalhes do WOD para cada categoria. Campos em branco usam as informações padrão acima.
+                  {applyToAllCategories && (
+                    <span className="block text-[11px] text-primary mt-1">
+                      Este WOD será aplicado automaticamente a todas as categorias.
+                    </span>
+                  )}
+                </p>
+
+                {categories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-4">
+                    Cadastre categorias para configurar variações específicas.
+                  </p>
+                ) : (
+                  <Accordion type="multiple" className="mt-4 space-y-2">
+                    {categories.map(category => {
+                      const variation = categoryVariations[category.id] || emptyVariation();
+                      const hasCustomData = hasVariationData(variation);
+
+                      return (
+                        <AccordionItem key={category.id} value={category.id} className="border rounded-lg px-4">
+                          <AccordionTrigger className="py-3 text-left">
+                            <div className="flex flex-col text-left">
+                              <span className="font-medium">{category.name}</span>
+                              {hasCustomData && (
+                                <span className="text-xs text-muted-foreground">Variação personalizada aplicada</span>
+                              )}
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-4 pt-2 space-y-4">
+                            <div>
+                              <Label className="text-sm">Nome exibido</Label>
+                              <Input
+                                value={variation.displayName}
+                                onChange={(event) => updateVariationField(category.id, 'displayName', event.target.value)}
+                                placeholder={`Nome opcional para ${category.name}`}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Descrição personalizada</Label>
+                              <Textarea
+                                value={variation.description}
+                                onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
+                                placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
+                                rows={4}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Time Cap (min)</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={variation.estimatedDuration}
+                                onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
+                                placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Notas específicas</Label>
+                              <Textarea
+                                value={variation.notes}
+                                onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
+                                placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
+                                rows={3}
+                              />
+                            </div>
+                            {hasCustomData && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => resetCategoryVariation(category.id)}
+                                className="text-xs"
+                              >
+                                Limpar variação desta categoria
+                              </Button>
+                            )}
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                )}
               </div>
 
               <div className="flex gap-4">
@@ -339,14 +707,15 @@ export default function WODs() {
                     <Badge variant="outline" className="text-xs">
                       {wod.type === 'for-time' ? 'For Time' :
                        wod.type === 'amrap' ? 'AMRAP' :
+                       wod.type === 'emom' ? 'EMOM' :
                        wod.type === 'tonelagem' ? 'Tonelagem' :
                        wod.type === 'carga-maxima' ? 'Carga Máxima' :
                        wod.type}
                     </Badge>
-                    {wod.time_cap && (
+                    {wod.estimated_duration_minutes && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {wod.time_cap}
+                        Time Cap: {wod.estimated_duration_minutes} min
                       </span>
                     )}
                   </div>
@@ -362,11 +731,7 @@ export default function WODs() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => {
-                      setEditingWOD(wod);
-                      setWodType(wod.type || 'for-time');
-                      setIsDialogOpen(true);
-                    }}
+                    onClick={() => handleOpenEdit(wod)}
                     title="Editar WOD"
                     className="h-8 w-8"
                   >

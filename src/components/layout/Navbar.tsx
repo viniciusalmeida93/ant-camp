@@ -22,10 +22,13 @@ export const Navbar = () => {
     <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-            <h1 className="text-lg sm:text-xl font-bold">CrossFit Competition</h1>
-          </div>
+          <Link to="/app" className="flex items-center gap-3">
+            <img
+              src="/logo-antcamp.svg"
+              alt="AntCamp"
+              className="h-10 w-auto"
+            />
+          </Link>
           
           {/* Desktop Menu */}
           <div className="hidden lg:flex gap-1">

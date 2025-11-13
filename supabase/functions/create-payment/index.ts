@@ -30,13 +30,50 @@ serve(async (req) => {
 
     const { registrationId, categoryId, athleteName, athleteEmail, athletePhone, teamName, teamMembers, priceCents } = await req.json() as PaymentRequest;
 
+    // Get registration to find championship
+    const { data: registration, error: regError } = await supabase
+      .from("registrations")
+      .select("*, championships(*)")
+      .eq("id", registrationId)
+      .single();
+
+    if (regError || !registration) {
+      throw new Error("Registration not found");
+    }
+
+    const championship = registration.championships;
+    const organizerId = championship?.organizer_id;
+
+    // Get organizer's Asaas integration
+    let organizerIntegration = null;
+    if (organizerId) {
+      const { data: integration } = await supabase
+        .from("organizer_asaas_integrations")
+        .select("*")
+        .eq("organizer_id", organizerId)
+        .eq("is_active", true)
+        .maybeSingle();
+      
+      organizerIntegration = integration;
+    }
+
     // Calculate platform fee (5%)
     const platformFeeCents = Math.round(priceCents * 0.05);
     const totalCents = priceCents + platformFeeCents;
 
-    // Check if Asaas is configured
-    const asaasApiKey = Deno.env.get("ASAAS_API_KEY");
+    // Calculate split values (95% organizer, 5% platform)
+    const organizerAmount = priceCents; // 95% of total (priceCents is 95% of totalCents)
+    const platformAmount = platformFeeCents; // 5% of total
+
+    // Use organizer's API key if available, otherwise fallback to platform key
+    const organizerApiKey = organizerIntegration?.asaas_api_key;
+    const platformApiKey = Deno.env.get("ASAAS_API_KEY");
+    const asaasApiKey = organizerApiKey || platformApiKey;
     const useMockPayment = !asaasApiKey || asaasApiKey === "mock";
+    
+    // Get organizer's Asaas wallet ID (from integration or championship)
+    const organizerWalletId = organizerIntegration?.asaas_wallet_id || championship?.asaas_wallet_id;
+    const platformWalletId = Deno.env.get("ASAAS_PLATFORM_WALLET_ID"); // Wallet da plataforma
 
     let paymentData;
 
@@ -54,24 +91,50 @@ serve(async (req) => {
       };
     } else {
       // Real Asaas integration
+      const paymentBody: any = {
+        customer: athleteEmail,
+        billingType: "UNDEFINED", // Allows multiple payment methods
+        value: totalCents / 100,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        description: `Inscrição - ${athleteName}`,
+        externalReference: registrationId,
+      };
+
+      // Configure split payment if organizer wallet is configured
+      if (organizerWalletId && platformWalletId) {
+        // Split payment: 95% to organizer, 5% to platform
+        paymentBody.split = [
+          {
+            walletId: organizerWalletId,
+            totalValue: organizerAmount / 100, // Convert cents to reais
+            percentualValue: 95,
+            fixedValue: null,
+          },
+          {
+            walletId: platformWalletId,
+            totalValue: platformAmount / 100, // Convert cents to reais
+            percentualValue: 5,
+            fixedValue: null,
+          },
+        ];
+        console.log("Using split payment:", paymentBody.split);
+      } else if (organizerWalletId) {
+        console.warn("Organizer wallet configured but platform wallet not found. Using single wallet.");
+      }
+
       const asaasResponse = await fetch("https://www.asaas.com/api/v3/payments", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "access_token": asaasApiKey,
         },
-        body: JSON.stringify({
-          customer: athleteEmail,
-          billingType: "UNDEFINED", // Allows multiple payment methods
-          value: totalCents / 100,
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          description: `Inscrição - ${athleteName}`,
-          externalReference: registrationId,
-        }),
+        body: JSON.stringify(paymentBody),
       });
 
       if (!asaasResponse.ok) {
-        throw new Error("Failed to create payment with Asaas");
+        const errorText = await asaasResponse.text();
+        console.error("Asaas API error:", errorText);
+        throw new Error(`Failed to create payment with Asaas: ${errorText}`);
       }
 
       paymentData = await asaasResponse.json();

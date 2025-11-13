@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
+import { ensureRandomResults } from '@/utils/ensureRandomResults';
 import {
   DndContext,
   closestCenter,
@@ -182,6 +184,19 @@ export default function Categories() {
         toast.error("Selecione um campeonato primeiro");
         navigate("/app");
         return;
+      }
+
+      const [scaleResult, randomResult] = await Promise.all([
+        ensureScaleTrios(selectedChampionship.id),
+        ensureRandomResults(selectedChampionship.id),
+      ]);
+
+      if (scaleResult.added > 0) {
+        toast.success(`Adicionados ${scaleResult.added} times fictícios para completar as categorias.`);
+      }
+
+      if (randomResult.generated > 0) {
+        toast.success('Resultados aleatórios gerados para todas as categorias.');
       }
 
       // Load categories ordered by order_index
