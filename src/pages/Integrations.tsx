@@ -1,25 +1,84 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, XCircle, Loader2, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Eye, EyeOff, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { toast as sonnerToast } from "sonner";
 
 export default function Integrations() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [savingWallet, setSavingWallet] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const [asaasConfig, setAsaasConfig] = useState({
     apiKey: "",
     webhookSecret: "",
   });
+  const [platformWalletId, setPlatformWalletId] = useState("");
   const [connectionStatus, setConnectionStatus] = useState({
     supabase: false,
     asaas: false,
   });
+
+  useEffect(() => {
+    loadPlatformWallet();
+  }, []);
+
+  const loadPlatformWallet = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("platform_settings")
+        .select("value")
+        .eq("key", "asaas_platform_wallet_id")
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("Error loading platform wallet:", error);
+        return;
+      }
+
+      if (data) {
+        setPlatformWalletId(data.value || "");
+      }
+    } catch (error) {
+      console.error("Error loading platform wallet:", error);
+    }
+  };
+
+  const savePlatformWallet = async () => {
+    if (!platformWalletId.trim()) {
+      sonnerToast.error("Por favor, insira o ID da wallet");
+      return;
+    }
+
+    setSavingWallet(true);
+    try {
+      const { error } = await supabase
+        .from("platform_settings")
+        .upsert({
+          key: "asaas_platform_wallet_id",
+          value: platformWalletId.trim(),
+          description: "Wallet ID da plataforma para receber os 5% dos pagamentos",
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "key",
+        });
+
+      if (error) throw error;
+
+      sonnerToast.success("Wallet da plataforma configurada com sucesso!");
+    } catch (error: any) {
+      console.error("Error saving platform wallet:", error);
+      sonnerToast.error("Erro ao salvar wallet: " + (error.message || "Erro desconhecido"));
+    } finally {
+      setSavingWallet(false);
+    }
+  };
 
   const testSupabaseConnection = async () => {
     setLoading(true);
@@ -239,6 +298,59 @@ export default function Integrations() {
         </CardContent>
       </Card>
 
+      {/* Platform Wallet Configuration */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5" />
+            Wallet da Plataforma (5%)
+          </CardTitle>
+          <CardDescription>
+            Configure a wallet Asaas que receberá os 5% dos pagamentos automaticamente
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <AlertDescription>
+              <p className="font-medium mb-2">Como funciona:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Quando um atleta paga, o Asaas divide automaticamente: <strong>95% para o organizador</strong> e <strong>5% para você</strong></li>
+                <li>Tudo acontece na mesma transação - você não precisa fazer nada!</li>
+                <li>O dinheiro é liberado no prazo normal do Asaas</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-2">
+            <Label htmlFor="platform-wallet-id">ID da Wallet/Subconta Asaas</Label>
+            <Input
+              id="platform-wallet-id"
+              type="text"
+              placeholder="wallet_xxxxx ou subaccount_xxxxx"
+              value={platformWalletId}
+              onChange={(e) => setPlatformWalletId(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Para obter sua wallet ID: Acesse o painel do Asaas → Minha Conta → Carteiras ou Subcontas → Copie o ID
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={savePlatformWallet} disabled={savingWallet || !platformWalletId.trim()}>
+              {savingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar Wallet da Plataforma
+            </Button>
+            {platformWalletId && (
+              <Badge variant="default" className="gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Configurado
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Configuration Summary */}
       <Card>
         <CardHeader>
@@ -260,6 +372,14 @@ export default function Integrations() {
             <div className="flex items-center justify-between">
               <span>Asaas Configurado</span>
               {connectionStatus.asaas ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Wallet da Plataforma</span>
+              {platformWalletId ? (
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-muted-foreground" />

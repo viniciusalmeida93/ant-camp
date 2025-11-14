@@ -73,7 +73,18 @@ serve(async (req) => {
     
     // Get organizer's Asaas wallet ID (from integration or championship)
     const organizerWalletId = organizerIntegration?.asaas_wallet_id || championship?.asaas_wallet_id;
-    const platformWalletId = Deno.env.get("ASAAS_PLATFORM_WALLET_ID"); // Wallet da plataforma
+    
+    // Get platform wallet ID - try environment variable first, then database
+    let platformWalletId = Deno.env.get("ASAAS_PLATFORM_WALLET_ID");
+    if (!platformWalletId) {
+      // Fallback to database configuration
+      const { data: platformSetting } = await supabase
+        .from("platform_settings")
+        .select("value")
+        .eq("key", "asaas_platform_wallet_id")
+        .single();
+      platformWalletId = platformSetting?.value || null;
+    }
 
     let paymentData;
 
