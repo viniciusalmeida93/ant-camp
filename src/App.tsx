@@ -29,6 +29,9 @@ import PublicHeats from "./pages/PublicHeats";
 import LinkPage from "./pages/LinkPage";
 import LinkPageConfig from "./pages/LinkPageConfig";
 import BulkImport from "./pages/BulkImport";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import TestAsaasConnections from "./pages/TestAsaasConnections";
+import AssignRoles from "./pages/AssignRoles";
 import { ChampionshipProvider } from "./contexts/ChampionshipContext";
 
 const queryClient = new QueryClient();
@@ -55,7 +58,10 @@ const App = () => (
           
           {/* Organizer dashboard */}
           <Route path="/dashboard" element={<OrganizerDashboard />} />
+          <Route path="/super-admin" element={<SuperAdminDashboard />} />
           <Route path="/asaas-integration" element={<AsaasIntegration />} />
+          <Route path="/test-asaas-connections" element={<TestAsaasConnections />} />
+          <Route path="/assign-roles" element={<AssignRoles />} />
           <Route path="/championships/:championshipId/finance" element={<ChampionshipFinance />} />
           <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
           <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />

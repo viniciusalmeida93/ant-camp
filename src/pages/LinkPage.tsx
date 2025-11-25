@@ -247,9 +247,9 @@ export default function LinkPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-10 px-4">
-      <div className="max-w-lg mx-auto space-y-8">
-        <Card className="overflow-hidden shadow-xl border border-primary/10">
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center py-4 px-4">
+      <div className="max-w-lg w-full mx-auto h-full">
+        <Card className="overflow-hidden shadow-xl border border-primary/10 h-[calc(100vh-2rem)] flex flex-col">
           {linkPage.banner_url && (
             <div className="relative h-40 sm:h-52">
               <img
@@ -261,7 +261,7 @@ export default function LinkPage() {
             </div>
           )}
 
-          <CardContent className="p-6 sm:p-8 space-y-8">
+          <CardContent className="p-6 sm:p-8 space-y-8 flex-1 flex flex-col">
             <div className="text-center space-y-2">
               <h1 className="text-3xl font-bold text-foreground">{linkPage.title}</h1>
               {linkPage.description && (
@@ -271,7 +271,7 @@ export default function LinkPage() {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 flex-1 flex flex-col justify-start">
               {activeButtons.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-muted-foreground/30 py-10 text-center">
                   <p className="text-muted-foreground">Nenhum link disponível no momento.</p>
@@ -297,7 +297,7 @@ export default function LinkPage() {
           </CardContent>
         </Card>
 
-        <div className="text-center">
+        <div className="text-center mt-4">
           <p className="text-xs text-muted-foreground">
             Desenvolvido por <span className="font-semibold text-primary">AntSports</span>
           </p>

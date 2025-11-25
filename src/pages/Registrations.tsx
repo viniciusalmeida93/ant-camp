@@ -72,6 +72,7 @@ export default function Registrations() {
       setCategories(cats || []);
 
       // Load registrations ordenadas por data de criação (mais antigas primeiro para ordem de inscrição)
+      // Apenas mostrar inscrições pagas (payment_status = 'approved')
       const { data: regs, error: regsError } = await supabase
         .from("registrations")
         .select(`
@@ -79,6 +80,7 @@ export default function Registrations() {
           category:categories(*)
         `)
         .eq("championship_id", selectedChampionship.id)
+        .eq("payment_status", "approved") // Apenas inscrições pagas
         .order("created_at", { ascending: true }); // Ordem crescente: mais antigas primeiro
 
       if (regsError) throw regsError;
@@ -258,9 +260,10 @@ export default function Registrations() {
         }
       }
 
-      // Calculate pricing
-      const platformFeeCents = Math.round(selectedCategory.price_cents * 0.05);
-      const totalCents = selectedCategory.price_cents + platformFeeCents;
+      // Calcular valores com taxa de plataforma de 5%
+      const subtotalCents = selectedCategory.price_cents;
+      const platformFeeCents = Math.round(subtotalCents * 0.05); // 5% de taxa de plataforma
+      const totalCents = subtotalCents + platformFeeCents; // Valor total com taxa
 
       // Create or update registration
       const registrationData = {
@@ -277,7 +280,7 @@ export default function Registrations() {
           shirtSize: m.shirtSize || 'M',
         })) : null,
         shirt_size: selectedCategory.format === 'individual' ? (formData.members[0].shirtSize || 'M') : null,
-        subtotal_cents: selectedCategory.price_cents,
+        subtotal_cents: subtotalCents,
         platform_fee_cents: platformFeeCents,
         total_cents: totalCents,
       };
@@ -590,15 +593,6 @@ export default function Registrations() {
                       </span>
                       <p className="font-semibold">{reg.team_name || reg.athlete_name}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      reg.payment_status === 'approved' 
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                        : reg.payment_status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                    }`}>
-                      {reg.payment_status === 'approved' ? 'Pago' : reg.payment_status === 'pending' ? 'Pendente' : reg.payment_status}
-                    </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="font-semibold">{reg.category?.name}</span>
@@ -627,17 +621,6 @@ export default function Registrations() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  {reg.payment_status === 'pending' && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleApprovePayment(reg)}
-                      title="Aprovar pagamento"
-                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </Button>
-                  )}
                   <Button
                     size="icon"
                     variant="ghost"

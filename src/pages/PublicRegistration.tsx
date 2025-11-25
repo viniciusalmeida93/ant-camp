@@ -8,13 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Users, Trophy, Calendar, MapPin, QrCode } from "lucide-react";
+import { Loader2, Users, Trophy, Calendar, MapPin, QrCode, CreditCard } from "lucide-react";
 
 type PublicRegistrationMember = {
   name: string;
   email: string;
   whatsapp: string;
   shirtSize: string;
+  cpf: string;
+  birthDate: string;
 };
 
 export default function PublicRegistration() {
@@ -26,10 +28,9 @@ export default function PublicRegistration() {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [members, setMembers] = useState<PublicRegistrationMember[]>([
-    { name: "", email: "", whatsapp: "", shirtSize: "M" },
+    { name: "", email: "", whatsapp: "", shirtSize: "M", cpf: "", birthDate: "" },
   ]);
   const [teamName, setTeamName] = useState("");
-  const [athletePhone, setAthletePhone] = useState("");
 
   useEffect(() => {
     loadChampionship();
@@ -100,6 +101,8 @@ export default function PublicRegistration() {
       email: "",
       whatsapp: "",
       shirtSize: "M",
+      cpf: "",
+      birthDate: "",
     };
 
     setMembers((prev) => {
@@ -109,7 +112,6 @@ export default function PublicRegistration() {
       return next;
     });
     setTeamName("");
-    setAthletePhone("");
   };
 
   const updateMember = (index: number, field: keyof PublicRegistrationMember, value: string) => {
@@ -145,25 +147,43 @@ export default function PublicRegistration() {
         toast.error(`Digite o WhatsApp do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
         return;
       }
+      if (!member.cpf.trim()) {
+        toast.error(`Digite o CPF do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
+        return;
+      }
+      const cpfClean = member.cpf.replace(/\D/g, "");
+      if (cpfClean.length !== 11 && cpfClean.length !== 14) {
+        toast.error(`CPF/CNPJ do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`} deve ter 11 ou 14 dígitos`);
+        return;
+      }
+      if (!member.birthDate.trim()) {
+        toast.error(`Digite a data de nascimento do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`}`);
+        return;
+      }
     }
 
     setSubmitting(true);
 
     try {
-      const platformFeeCents = Math.round(selectedCategory.price_cents * 0.05);
-      const totalCents = selectedCategory.price_cents + platformFeeCents;
+      // Calcular valores com taxa de plataforma de 5%
+      const subtotalCents = selectedCategory.price_cents;
+      const platformFeeCents = Math.round(subtotalCents * 0.05); // 5% de taxa de plataforma
+      const totalCents = subtotalCents + platformFeeCents; // Valor total com taxa
 
+      // Salvar o valor da inscrição com taxa de plataforma
       const registrationData: any = {
         championship_id: championship.id,
         category_id: selectedCategory.id,
         athlete_name:
           selectedCategory.format === "individual" ? members[0]?.name ?? "" : teamName,
         athlete_email: members[0]?.email ?? "",
-        athlete_phone: members[0]?.whatsapp || athletePhone || null,
+        athlete_phone: members[0]?.whatsapp || null,
+        athlete_cpf: members[0]?.cpf?.replace(/\D/g, "") || null, // CPF do primeiro integrante (pagador)
+        athlete_birth_date: members[0]?.birthDate || null, // Data de nascimento do primeiro integrante
         team_name: selectedCategory.format !== "individual" ? teamName : null,
-        subtotal_cents: selectedCategory.price_cents,
-        platform_fee_cents: platformFeeCents,
-        total_cents: totalCents,
+        subtotal_cents: subtotalCents,
+        platform_fee_cents: platformFeeCents, // 5% de taxa de plataforma
+        total_cents: totalCents, // Total com taxa de 5%
         status: "pending",
         payment_status: "pending",
         team_members:
@@ -173,6 +193,8 @@ export default function PublicRegistration() {
                 email: member.email,
                 whatsapp: member.whatsapp,
                 shirtSize: member.shirtSize || "M",
+                cpf: member.cpf?.replace(/\D/g, "") || "",
+                birthDate: member.birthDate || "",
               }))
             : null,
         shirt_size:
@@ -226,20 +248,22 @@ export default function PublicRegistration() {
   };
 
   const calculateTotal = () => {
-    if (!selectedCategory) return { subtotal: 0, fee: 0, total: 0 };
-    const fee = Math.round(selectedCategory.price_cents * 0.05);
+    if (!selectedCategory) return { subtotal: 0, platformFee: 0, total: 0 };
+    const subtotal = selectedCategory.price_cents;
+    const platformFee = Math.round(subtotal * 0.05); // 5% de taxa de plataforma
+    const total = subtotal + platformFee; // Total com taxa de 5%
     return {
-      subtotal: selectedCategory.price_cents,
-      fee,
-      total: selectedCategory.price_cents + fee,
+      subtotal,
+      platformFee,
+      total,
     };
   };
 
   const totals = calculateTotal();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-12 px-4">
-      <div className="container mx-auto max-w-4xl">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-4 sm:py-12 px-2 sm:px-4">
+      <div className="container mx-auto max-w-4xl px-2 sm:px-4">
         {/* Championship Header */}
         <Card className="mb-8">
           <CardHeader>
@@ -267,15 +291,15 @@ export default function PublicRegistration() {
           </CardHeader>
         </Card>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-4 sm:gap-8">
           {/* Registration Form */}
           <Card>
             <CardHeader>
               <CardTitle>Dados da Inscrição</CardTitle>
               <CardDescription>Preencha seus dados para se inscrever</CardDescription>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+            <CardContent className="px-3 sm:px-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria *</Label>
                   <Select value={selectedCategory?.id} onValueChange={handleSelectCategory}>
@@ -359,6 +383,32 @@ export default function PublicRegistration() {
                               />
                             </div>
                           </div>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label>CPF ou CNPJ *</Label>
+                              <Input
+                                type="text"
+                                value={member.cpf}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/[^\d.\-/]/g, "");
+                                  updateMember(index, "cpf", value);
+                                }}
+                                placeholder="000.000.000-00"
+                                required
+                                maxLength={18}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Data de Nascimento *</Label>
+                              <Input
+                                type="date"
+                                value={member.birthDate}
+                                onChange={(e) => updateMember(index, "birthDate", e.target.value)}
+                                required
+                                max={new Date().toISOString().split('T')[0]}
+                              />
+                            </div>
+                          </div>
                           <div className="space-y-2">
                             <Label>Tamanho da Camisa *</Label>
                             <Select
@@ -384,16 +434,6 @@ export default function PublicRegistration() {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone de Contato</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={athletePhone}
-                    onChange={(e) => setAthletePhone(e.target.value)}
-                    placeholder="(00) 00000-0000"
-                  />
-                </div>
 
                 <Button 
                   type="submit" 
@@ -440,37 +480,21 @@ export default function PublicRegistration() {
 
                     <div className="border-t pt-4 space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span>Subtotal</span>
+                        <span className="text-muted-foreground">Subtotal</span>
                         <span>{formatPrice(totals.subtotal)}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Taxa de serviço (5%)</span>
-                        <span className="text-muted-foreground">{formatPrice(totals.fee)}</span>
-                      </div>
-                      <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      {totals.platformFee > 0 && (
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Taxa de serviço</span>
+                          <span>{formatPrice(totals.platformFee)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-lg font-bold pt-2 border-t">
                         <span>Total</span>
                         <span>{formatPrice(totals.total)}</span>
                       </div>
                     </div>
 
-                    {championship?.pix_payload ? (
-                      <div className="border-t pt-4 space-y-2 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2 font-medium text-foreground">
-                          <QrCode className="w-4 h-4 text-primary" />
-                          Pagamento via PIX do Organizador
-                        </div>
-                        <p>
-                          Após finalizar o formulário, exibiremos o QR Code e o código “copia e cola” do
-                          organizador para você pagar na hora. Guarde o comprovante para enviar em caso de
-                          solicitação.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="border-t pt-4 text-sm text-muted-foreground">
-                        O organizador ainda não informou a chave PIX. Você receberá instruções após concluir
-                        a inscrição.
-                      </div>
-                    )}
 
                     {selectedCategory.format !== "individual" && (
                       <div className="border-t pt-4 space-y-2 text-sm">
@@ -509,13 +533,25 @@ export default function PublicRegistration() {
                   <Users className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p>Vagas limitadas por categoria</p>
                 </div>
-                <div className="flex gap-2">
-                  <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <p>
-                    {championship?.pix_payload
-                      ? "Pagamento exclusivo via PIX (chave do organizador)"
-                      : "Pagamento por PIX — instruções serão enviadas após a inscrição"}
-                  </p>
+                <div className="flex items-start gap-2">
+                  <QrCode className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-foreground">Pagamento por PIX</p>
+                    <p>
+                      Após finalizar o formulário, você poderá pagar via PIX através do QR Code ou código "copia e cola". 
+                      O pagamento é identificado automaticamente após a confirmação.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CreditCard className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-foreground">Pagamento por Cartão de Crédito</p>
+                    <p>
+                      Você também pode pagar com cartão de crédito de forma segura. Os dados do cartão são processados 
+                      diretamente pela Asaas e não são armazenados em nosso sistema.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

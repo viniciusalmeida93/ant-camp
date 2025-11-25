@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { 
   Trophy, Users, Calendar, DollarSign, Plus, 
-  BarChart3, Settings, LogOut, ExternalLink, QrCode, CreditCard
+  BarChart3, Settings, LogOut, ExternalLink, CreditCard, Shield
 } from "lucide-react";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
@@ -16,6 +16,7 @@ export default function OrganizerDashboard() {
   const { setSelectedChampionship } = useChampionship();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [championships, setChampionships] = useState<any[]>([]);
   const [stats, setStats] = useState({
     totalChampionships: 0,
@@ -36,6 +37,16 @@ export default function OrganizerDashboard() {
       return;
     }
     setUser(session.user);
+
+    // Verificar se o usuário é admin ou super_admin
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .in("role", ["admin", "super_admin"])
+      .maybeSingle();
+
+    setIsAdmin(!!roles);
   };
 
   const loadDashboard = async () => {
@@ -107,10 +118,12 @@ export default function OrganizerDashboard() {
               <h1 className="text-xl sm:text-2xl font-bold truncate">Painel do Organizador</h1>
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
-            <Button variant="ghost" onClick={handleSignOut} size="sm" className="w-full sm:w-auto">
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={handleSignOut} size="sm" className="w-full sm:w-auto">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -180,13 +193,7 @@ export default function OrganizerDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <Button asChild className="h-auto py-3 sm:py-4 text-sm sm:text-base">
-            <Link to="/asaas-integration">
-              <CreditCard className="w-4 h-4 mr-2" />
-              <span className="truncate">Conectar Asaas</span>
-            </Link>
-          </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Button asChild className="h-auto py-3 sm:py-4 text-sm sm:text-base">
             <Link to="/championships/new">
               <Plus className="w-4 h-4 mr-2" />
@@ -271,12 +278,11 @@ export default function OrganizerDashboard() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedChampionship(champ);
-                            navigate(`/championships/${champ.id}/settings`);
+                            navigate("/asaas-integration");
                           }}
                         >
-                          <QrCode className="w-4 h-4 mr-1" />
-                          Configurar PIX
+                          <CreditCard className="w-4 h-4 mr-1" />
+                          Configurar Pagamento
                         </Button>
                       </div>
                     </CardContent>

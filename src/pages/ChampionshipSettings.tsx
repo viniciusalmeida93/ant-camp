@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, ArrowLeft, QrCode, Copy, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, ArrowLeft, QrCode, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 import { getPixPayloadForDisplay, isEmvPixPayload } from "@/utils/pix";
@@ -28,34 +28,17 @@ export default function ChampionshipSettings() {
     slug: "",
     location: "",
     date: "",
+    registrationEndDate: "",
     pixPayload: "",
-    asaasWalletId: "",
   });
 
   useEffect(() => {
-    checkAuth();
-    ensurePixColumnExists();
-    loadChampionship();
-    checkAsaasConnection();
-  }, [championshipId]);
-
-  const checkAsaasConnection = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data } = await supabase
-        .from("organizer_asaas_integrations")
-        .select("id, is_active")
-        .eq("organizer_id", session.user.id)
-        .eq("is_active", true)
-        .maybeSingle();
-
-      setAsaasConnected(!!data);
-    } catch (error) {
-      console.error("Error checking Asaas connection:", error);
+    if (championshipId) {
+      checkAuth();
+      ensurePixColumnExists();
+      loadChampionship();
     }
-  };
+  }, [championshipId]);
 
   const ensurePixColumnExists = async () => {
     try {
@@ -77,23 +60,7 @@ export default function ChampionshipSettings() {
     }
   };
 
-  useEffect(() => {
-    if (!championshipId) return;
-    const existing = championships.find((c) => c.id === championshipId);
-    if (existing) {
-      setChampionship(existing);
-      setFormData({
-        name: existing.name,
-        slug: existing.slug,
-        location: existing.location,
-        date: existing.date ? existing.date.split("T")[0] : "",
-        pixPayload: existing.pix_payload || "",
-        asaasWalletId: existing.asaas_wallet_id || "",
-      });
-      setSelectedChampionship(existing);
-      setLoading(false);
-    }
-  }, [championshipId, championships, setSelectedChampionship]);
+  // Removido: useEffect que buscava do contexto - agora usamos apenas loadChampionship que busca do banco
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -122,7 +89,7 @@ export default function ChampionshipSettings() {
       setLoading(true);
       const { data, error } = await supabase
         .from("championships")
-        .select("id, name, slug, location, date, pix_payload, asaas_wallet_id, is_published")
+        .select("id, name, slug, location, date, registration_end_date, pix_payload, is_published")
         .eq("id", championshipId)
         .single();
 
@@ -132,14 +99,19 @@ export default function ChampionshipSettings() {
       setFormData({
         name: data.name,
         slug: data.slug,
-        location: data.location,
+        location: data.location || "",
         date: data.date ? data.date.split("T")[0] : "",
+        registrationEndDate: data.registration_end_date ? data.registration_end_date.split("T")[0] : "",
         pixPayload: data.pix_payload || "",
-        asaasWalletId: data.asaas_wallet_id || "",
       });
+      // Atualiza o contexto também
+      if (championshipId) {
+        setSelectedChampionship(data);
+      }
     } catch (error: any) {
       console.error("Error loading championship:", error);
       toast.error("Erro ao carregar campeonato");
+      setChampionship(null);
     } finally {
       setLoading(false);
     }
@@ -175,10 +147,8 @@ export default function ChampionshipSettings() {
         }
       }
 
-      const walletId = formData.asaasWalletId.trim();
       const updateData: Record<string, any> = {
         pix_payload: payload || null,
-        asaas_wallet_id: walletId || null,
       };
 
       if (formData.location.trim()) {
@@ -187,6 +157,12 @@ export default function ChampionshipSettings() {
 
       if (formData.date) {
         updateData.date = formData.date;
+      }
+
+      if (formData.registrationEndDate) {
+        updateData.registration_end_date = formData.registrationEndDate;
+      } else {
+        updateData.registration_end_date = null;
       }
 
       const { error } = await supabase
@@ -199,7 +175,6 @@ export default function ChampionshipSettings() {
       const updatedChampionship = {
         ...(championship || {}),
         pix_payload: payload || null,
-        asaas_wallet_id: walletId || null,
       };
       setChampionship(updatedChampionship);
       if (championshipId) {
@@ -320,6 +295,56 @@ export default function ChampionshipSettings() {
             </AlertDescription>
           </Alert>
         )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Informações Gerais</CardTitle>
+            <CardDescription>
+              Configure data, local e encerramento de inscrições do campeonato
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Data do Campeonato *</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="registrationEndDate">Data de Encerramento das Inscrições</Label>
+                <Input
+                  id="registrationEndDate"
+                  type="date"
+                  value={formData.registrationEndDate}
+                  onChange={(e) => setFormData({ ...formData, registrationEndDate: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Deixe em branco para não ter data limite de inscrição
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Local *</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="Ex: Box CrossFit, Rua Exemplo, 123"
+                required
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={handleSave} disabled={saving} className="sm:w-auto">
+                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Salvar Informações
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Pagamentos via PIX</CardTitle>
@@ -454,103 +479,6 @@ export default function ChampionshipSettings() {
           </CardContent>
         </Card>
 
-        {/* Asaas Split Payment Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Split de Pagamento Automático (Asaas)</span>
-              {asaasConnected ? (
-                <Badge variant="default" className="gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Asaas Conectado
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1">
-                  <XCircle className="h-3 w-3" />
-                  Não Conectado
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription>
-              Configure sua wallet Asaas para receber automaticamente 95% dos pagamentos. Os 5% restantes ficam para a plataforma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!asaasConnected && (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  <p className="font-medium mb-2">⚠️ Conta Asaas não conectada</p>
-                  <p className="text-sm mb-2">
-                    Para usar o split automático, você precisa conectar sua conta Asaas primeiro.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.href = "/asaas-integration"}
-                  >
-                    Conectar Conta Asaas
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-            <Alert>
-              <AlertDescription>
-                <p className="font-medium mb-2">Como funciona o Split Automático:</p>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Quando um atleta paga, o Asaas divide automaticamente o pagamento</li>
-                  <li><strong>95% vai direto para sua wallet Asaas</strong></li>
-                  <li><strong>5% fica para a plataforma</strong> (taxa de serviço)</li>
-                  <li>Tudo acontece na mesma transação - você não precisa fazer nada!</li>
-                  <li>O dinheiro é liberado no prazo normal do Asaas</li>
-                </ul>
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-2">
-              <Label htmlFor="asaasWalletId">ID da Wallet/Subconta Asaas</Label>
-              <Input
-                id="asaasWalletId"
-                value={formData.asaasWalletId}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, asaasWalletId: e.target.value }))
-                }
-                placeholder="wallet_xxxxx ou subaccount_xxxxx"
-                className="font-mono text-sm"
-              />
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p>
-                  Para obter sua wallet ID:
-                </p>
-                <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li>Acesse o painel do Asaas</li>
-                  <li>Vá em <strong>Minha Conta → Carteiras</strong> ou <strong>Subcontas</strong></li>
-                  <li>Copie o ID da wallet/subconta que deseja usar</li>
-                  <li>Cole aqui e salve</li>
-                </ol>
-                {formData.asaasWalletId && (
-                  <p className="text-primary font-medium mt-2">
-                    ✓ Split automático ativado! Você receberá 95% dos pagamentos automaticamente.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button onClick={handleSave} disabled={saving} className="sm:w-auto">
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Salvar Configurações
-              </Button>
-              <Button
-                variant="outline"
-                onClick={loadChampionship}
-                disabled={saving}
-                className="sm:w-auto"
-              >
-                Recarregar dados
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

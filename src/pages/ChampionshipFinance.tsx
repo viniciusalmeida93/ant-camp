@@ -304,8 +304,6 @@ export default function ChampionshipFinance() {
                     <TableHead>Categoria</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="text-right">Taxa (5%)</TableHead>
-                    <TableHead className="text-right">Líquido</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -323,12 +321,6 @@ export default function ChampionshipFinance() {
                       </TableCell>
                       <TableCell>{reg.categories.name}</TableCell>
                       <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatPrice(reg.subtotal_cents)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatPrice(reg.platform_fee_cents)}
-                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatPrice(reg.subtotal_cents)}
                       </TableCell>

@@ -23,6 +23,13 @@ export default function Dashboard() {
   const { selectedChampionship, setSelectedChampionship, championships, loadChampionships, loading: contextLoading } = useChampionship();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editInfoOpen, setEditInfoOpen] = useState(false);
+  const [editInfoData, setEditInfoData] = useState({
+    date: '',
+    location: '',
+    registrationEndDate: '',
+  });
+  const [savingInfo, setSavingInfo] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [stats, setStats] = useState({
     athletes: 0,
@@ -1104,7 +1111,7 @@ export default function Dashboard() {
                     </div>
                   </CardDescription>
                 </div>
-                <div className="flex flex-wrap gap-2 justify-end">
+                <div className="flex flex-col gap-2 items-end">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1113,6 +1120,124 @@ export default function Dashboard() {
                     <QrCode className="w-4 h-4 mr-2" />
                     Links Públicos
                   </Button>
+                  <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditInfoData({
+                            date: selectedChampionship.date ? selectedChampionship.date.split('T')[0] : '',
+                            location: selectedChampionship.location || '',
+                            registrationEndDate: selectedChampionship.registration_end_date ? selectedChampionship.registration_end_date.split('T')[0] : '',
+                          });
+                        }}
+                      >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Editar Informações
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Editar Informações do Campeonato</DialogTitle>
+                        <DialogDescription>
+                          Atualize a data, local e data de encerramento das inscrições
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-date">Data do Campeonato *</Label>
+                          <Input
+                            id="edit-date"
+                            type="date"
+                            value={editInfoData.date}
+                            onChange={(e) => setEditInfoData({ ...editInfoData, date: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-location">Local *</Label>
+                          <Input
+                            id="edit-location"
+                            value={editInfoData.location}
+                            onChange={(e) => setEditInfoData({ ...editInfoData, location: e.target.value })}
+                            placeholder="Ex: Box CrossFit, Rua Exemplo, 123"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-registration-end-date">Data de Encerramento das Inscrições</Label>
+                          <Input
+                            id="edit-registration-end-date"
+                            type="date"
+                            value={editInfoData.registrationEndDate}
+                            onChange={(e) => setEditInfoData({ ...editInfoData, registrationEndDate: e.target.value })}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Deixe em branco para não ter data limite de inscrição
+                          </p>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditInfoOpen(false)}
+                            disabled={savingInfo}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              if (!selectedChampionship?.id) return;
+                              if (!editInfoData.date || !editInfoData.location) {
+                                toast.error('Data e Local são obrigatórios');
+                                return;
+                              }
+
+                              try {
+                                setSavingInfo(true);
+                                const updateData: Record<string, any> = {
+                                  date: editInfoData.date,
+                                  location: editInfoData.location.trim(),
+                                };
+
+                                if (editInfoData.registrationEndDate) {
+                                  updateData.registration_end_date = editInfoData.registrationEndDate;
+                                } else {
+                                  updateData.registration_end_date = null;
+                                }
+
+                                const { error } = await supabase
+                                  .from('championships')
+                                  .update(updateData)
+                                  .eq('id', selectedChampionship.id);
+
+                                if (error) throw error;
+
+                                await loadChampionships();
+                                const updated = championships.find(c => c.id === selectedChampionship.id) || selectedChampionship;
+                                setSelectedChampionship({
+                                  ...updated,
+                                  ...updateData,
+                                });
+
+                                toast.success('Informações atualizadas com sucesso!');
+                                setEditInfoOpen(false);
+                              } catch (error: any) {
+                                console.error('Error updating championship:', error);
+                                toast.error('Erro ao atualizar informações');
+                              } finally {
+                                setSavingInfo(false);
+                              }
+                            }}
+                            disabled={savingInfo}
+                          >
+                            {savingInfo && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </CardHeader>

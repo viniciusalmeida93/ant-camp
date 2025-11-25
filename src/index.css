@@ -113,6 +113,18 @@ All colors MUST be HSL.
     font-variant-numeric: tabular-nums;
   }
 
+  /* Melhorias para mobile */
+  @media (max-width: 640px) {
+    input, textarea, select {
+      font-size: 16px !important; /* Evita zoom automático no iOS */
+    }
+    
+    .container {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-bold tracking-tight;
   }

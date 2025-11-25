@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,23 +12,81 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast as sonnerToast } from "sonner";
 
 export default function Integrations() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [savingWallet, setSavingWallet] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
-  const [asaasConfig, setAsaasConfig] = useState({
-    apiKey: "",
-    webhookSecret: "",
-  });
   const [platformWalletId, setPlatformWalletId] = useState("");
+  const [platformApiKey, setPlatformApiKey] = useState("");
+  const [validatingPlatform, setValidatingPlatform] = useState(false);
+  const [platformValidationStatus, setPlatformValidationStatus] = useState<{
+    apiKey: boolean | null;
+    walletId: boolean | null;
+    accountInfo: any;
+  }>({
+    apiKey: null,
+    walletId: null,
+    accountInfo: null,
+  });
   const [connectionStatus, setConnectionStatus] = useState({
     supabase: false,
-    asaas: false,
   });
 
   useEffect(() => {
+    checkAuth();
     loadPlatformWallet();
+    
+    // Verificar conexão automaticamente ao carregar
+    const checkConnection = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(import.meta.env.VITE_SUPABASE_URL + "/auth/v1/health", {
+          headers: {
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        });
+        
+        if (response.ok) {
+          setConnectionStatus(prev => ({ ...prev, supabase: true }));
+        } else {
+          setConnectionStatus(prev => ({ ...prev, supabase: false }));
+        }
+      } catch (error) {
+        setConnectionStatus(prev => ({ ...prev, supabase: false }));
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkConnection();
   }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
+
+    // Verificar se o usuário é super_admin (apenas super_admin pode acessar esta página)
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .eq("role", "super_admin")
+      .maybeSingle();
+
+    if (!roles) {
+      toast({
+        title: "Acesso Negado",
+        description: "Apenas super administradores podem acessar esta página.",
+        variant: "destructive",
+      });
+      navigate("/dashboard");
+      return;
+    }
+  };
 
   const loadPlatformWallet = async () => {
     try {
@@ -50,26 +109,105 @@ export default function Integrations() {
     }
   };
 
+  const validatePlatformAccount = async () => {
+    if (!platformApiKey.trim()) {
+      sonnerToast.error("Por favor, insira a chave de API da plataforma");
+      return;
+    }
+
+    setValidatingPlatform(true);
+    setPlatformValidationStatus({
+      apiKey: null,
+      walletId: null,
+      accountInfo: null,
+    });
+
+    try {
+      // Use Edge Function to validate (avoids CORS issues)
+      const { data, error } = await supabase.functions.invoke("validate-asaas-account", {
+        body: {
+          apiKey: platformApiKey,
+          walletId: platformWalletId.trim() || undefined,
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data.valid) {
+        throw new Error(data.error || "Chave de API inválida");
+      }
+
+      if (data.walletId === false && platformWalletId.trim()) {
+        sonnerToast.warning("Wallet ID não encontrado na conta. Verifique se está correto.");
+      }
+
+      setPlatformValidationStatus({
+        apiKey: data.apiKey,
+        walletId: data.walletId,
+        accountInfo: data.accountInfo,
+      });
+
+      sonnerToast.success("Conta da plataforma validada com sucesso!");
+    } catch (error: any) {
+      setPlatformValidationStatus({
+        apiKey: false,
+        walletId: null,
+        accountInfo: null,
+      });
+      sonnerToast.error(error.message || "Erro ao validar conta da plataforma");
+    } finally {
+      setValidatingPlatform(false);
+    }
+  };
+
   const savePlatformWallet = async () => {
     if (!platformWalletId.trim()) {
       sonnerToast.error("Por favor, insira o ID da wallet");
       return;
     }
 
+    // Verificar autenticação antes de salvar
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      sonnerToast.error("Você precisa estar autenticado para salvar");
+      navigate("/auth");
+      return;
+    }
+
     setSavingWallet(true);
     try {
-      const { error } = await supabase
+      // Primeiro, tentar atualizar se existir
+      const { data: existing } = await supabase
         .from("platform_settings")
-        .upsert({
-          key: "asaas_platform_wallet_id",
-          value: platformWalletId.trim(),
-          description: "Wallet ID da plataforma para receber os 5% dos pagamentos",
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: "key",
-        });
+        .select("id")
+        .eq("key", "asaas_platform_wallet_id")
+        .single();
 
-      if (error) throw error;
+      if (existing) {
+        // Atualizar registro existente
+        const { error } = await supabase
+          .from("platform_settings")
+          .update({
+            value: platformWalletId.trim(),
+            description: "Wallet ID da plataforma para receber os 5% dos pagamentos",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("key", "asaas_platform_wallet_id");
+
+        if (error) throw error;
+      } else {
+        // Inserir novo registro
+        const { error } = await supabase
+          .from("platform_settings")
+          .insert({
+            key: "asaas_platform_wallet_id",
+            value: platformWalletId.trim(),
+            description: "Wallet ID da plataforma para receber os 5% dos pagamentos",
+            updated_at: new Date().toISOString(),
+          });
+
+        if (error) throw error;
+      }
 
       sonnerToast.success("Wallet da plataforma configurada com sucesso!");
     } catch (error: any) {
@@ -80,7 +218,7 @@ export default function Integrations() {
     }
   };
 
-  const testSupabaseConnection = async () => {
+  const testSupabaseConnection = async (showToast = false) => {
     setLoading(true);
     try {
       // Test Supabase connection by checking auth
@@ -92,74 +230,43 @@ export default function Integrations() {
       
       if (response.ok) {
         setConnectionStatus(prev => ({ ...prev, supabase: true }));
-        toast({
-          title: "Conexão Backend OK",
-          description: "Backend conectado e funcionando",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Erro na Conexão",
-        description: "Não foi possível conectar ao backend",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const testAsaasConnection = async () => {
-    if (!asaasConfig.apiKey) {
-      toast({
-        title: "Chave API necessária",
-        description: "Por favor, insira a chave da API Asaas",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Mock test - in production would validate with Asaas API
-      const response = await fetch("https://www.asaas.com/api/v3/customers?limit=1", {
-        headers: {
-          "access_token": asaasConfig.apiKey,
-        },
-      });
-
-      if (response.ok) {
-        setConnectionStatus(prev => ({ ...prev, asaas: true }));
-        toast({
-          title: "Asaas Conectado",
-          description: "Chave de API validada com sucesso",
-        });
+        if (showToast) {
+          toast({
+            title: "Conexão Backend OK",
+            description: "Backend conectado e funcionando",
+          });
+        }
       } else {
-        throw new Error("Invalid API key");
+        setConnectionStatus(prev => ({ ...prev, supabase: false }));
+        if (showToast) {
+          toast({
+            title: "Erro na Conexão",
+            description: "Não foi possível conectar ao backend",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
-      toast({
-        title: "Erro na Conexão Asaas",
-        description: "Verifique sua chave de API",
-        variant: "destructive",
-      });
+      setConnectionStatus(prev => ({ ...prev, supabase: false }));
+      if (showToast) {
+        toast({
+          title: "Erro na Conexão",
+          description: "Não foi possível conectar ao backend",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const saveConfiguration = () => {
-    toast({
-      title: "Configurações Salvas",
-      description: "As configurações foram salvas com segurança",
-    });
-  };
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Integrações</h1>
+        <h1 className="text-4xl font-bold mb-2">Conta Super Admin (Plataforma)</h1>
         <p className="text-muted-foreground">
-          Configure e teste as conexões com serviços externos
+          Configure a conta Asaas que receberá os 5% dos pagamentos automaticamente
         </p>
       </div>
 
@@ -210,103 +317,22 @@ export default function Integrations() {
               className="bg-muted"
             />
           </div>
-          <Button onClick={testSupabaseConnection} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Testar Conexão
-          </Button>
+                 <Button onClick={() => testSupabaseConnection(true)} disabled={loading}>
+                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                   Testar Conexão
+                 </Button>
         </CardContent>
       </Card>
 
-      {/* Asaas Integration */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Asaas (Pagamentos)</span>
-            {connectionStatus.asaas ? (
-              <Badge variant="default" className="gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Conectado
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="gap-1">
-                <XCircle className="h-3 w-3" />
-                Não Configurado
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Configure sua conta Asaas para processar pagamentos com taxa de 5%
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertDescription>
-              Para obter suas chaves de API:
-              <ol className="list-decimal list-inside mt-2 space-y-1">
-                <li>Acesse <a href="https://www.asaas.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">asaas.com</a></li>
-                <li>Faça login na sua conta</li>
-                <li>Navegue até Integrações → API Keys</li>
-                <li>Gere uma nova chave de API de produção</li>
-                <li>Configure o webhook apontando para sua aplicação</li>
-              </ol>
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2">
-            <Label htmlFor="asaas-api-key">Chave da API (Produção)</Label>
-            <div className="flex gap-2">
-              <Input 
-                id="asaas-api-key"
-                type={showKeys ? "text" : "password"}
-                placeholder="$aact_..."
-                value={asaasConfig.apiKey}
-                onChange={(e) => setAsaasConfig({ ...asaasConfig, apiKey: e.target.value })}
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowKeys(!showKeys)}
-              >
-                {showKeys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="webhook-secret">Webhook Secret</Label>
-            <Input 
-              id="webhook-secret"
-              type={showKeys ? "text" : "password"}
-              placeholder="whsec_..."
-              value={asaasConfig.webhookSecret}
-              onChange={(e) => setAsaasConfig({ ...asaasConfig, webhookSecret: e.target.value })}
-            />
-            <p className="text-sm text-muted-foreground">
-              URL do Webhook: {window.location.origin}/functions/v1/asaas-webhook
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={testAsaasConnection} disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Testar Conexão
-            </Button>
-            <Button variant="outline" onClick={saveConfiguration}>
-              Salvar Configurações
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Platform Wallet Configuration */}
-      <Card className="mb-6">
+      {/* Platform Account Configuration (Super Admin - 5%) */}
+      <Card className="mb-6 border-primary/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5" />
-            Wallet da Plataforma (5%)
+            <DollarSign className="w-5 h-5 text-primary" />
+            Conta Super Admin (5% da Plataforma)
           </CardTitle>
           <CardDescription>
-            Configure a wallet Asaas que receberá os 5% dos pagamentos automaticamente
+            Configure e valide a conta Asaas que receberá os 5% dos pagamentos automaticamente
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -321,27 +347,116 @@ export default function Integrations() {
             </AlertDescription>
           </Alert>
 
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertDescription>
+              <p className="font-medium mb-2 text-blue-900">⚠️ Importante:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-blue-800">
+                <li>A validação aqui é apenas para <strong>testar</strong> se os dados estão corretos</li>
+                <li>A <strong>chave de API</strong> deve estar configurada no <strong>Supabase</strong> como variável de ambiente <code className="bg-blue-100 px-1 rounded">ASAAS_API_KEY</code></li>
+                <li>O <strong>Wallet ID</strong> pode ser salvo aqui (banco de dados) ou no Supabase como <code className="bg-blue-100 px-1 rounded">ASAAS_PLATFORM_WALLET_ID</code></li>
+                <li>Após validar, configure no Supabase: <strong>Settings → Edge Functions → Environment Variables</strong></li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+
+          {/* API Key Input */}
           <div className="space-y-2">
-            <Label htmlFor="platform-wallet-id">ID da Wallet/Subconta Asaas</Label>
+            <Label htmlFor="platform-api-key">Chave de API da Plataforma *</Label>
+            <div className="flex gap-2">
+              <Input
+                id="platform-api-key"
+                type={showKeys ? "text" : "password"}
+                placeholder="$aact_..."
+                value={platformApiKey}
+                onChange={(e) => setPlatformApiKey(e.target.value)}
+                className="font-mono text-sm"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowKeys(!showKeys)}
+              >
+                {showKeys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Chave de API da conta que receberá os 5% (Super Admin)
+            </p>
+            {platformValidationStatus.apiKey === true && (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CheckCircle2 className="h-4 w-4" />
+                Chave de API válida
+              </div>
+            )}
+            {platformValidationStatus.apiKey === false && (
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <XCircle className="h-4 w-4" />
+                Chave de API inválida
+              </div>
+            )}
+          </div>
+
+          {/* Wallet ID Input */}
+          <div className="space-y-2">
+            <Label htmlFor="platform-wallet-id">ID da Wallet/Subconta Asaas *</Label>
             <Input
               id="platform-wallet-id"
               type="text"
-              placeholder="wallet_xxxxx ou subaccount_xxxxx"
+              placeholder="37e9b404-a5fb-451a-a785-e833ae60e476"
               value={platformWalletId}
               onChange={(e) => setPlatformWalletId(e.target.value)}
               className="font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Para obter sua wallet ID: Acesse o painel do Asaas → Minha Conta → Carteiras ou Subcontas → Copie o ID
+              Wallet ID da conta que receberá os 5%. Você pode encontrar em: Asaas → Integrações → Wallet ID
             </p>
+            {platformValidationStatus.walletId === true && (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CheckCircle2 className="h-4 w-4" />
+                Wallet ID válido e encontrado na conta
+              </div>
+            )}
+            {platformValidationStatus.walletId === false && (
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <XCircle className="h-4 w-4" />
+                Wallet ID não encontrado na conta
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={savePlatformWallet} disabled={savingWallet || !platformWalletId.trim()}>
-              {savingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar Wallet da Plataforma
+          {/* Account Info Display */}
+          {platformValidationStatus.accountInfo && (
+            <Alert className="bg-primary/5 border-primary/20">
+              <AlertDescription>
+                <p className="font-medium mb-2">Informações da Conta Validada:</p>
+                <div className="text-sm space-y-1">
+                  <p><strong>Nome:</strong> {platformValidationStatus.accountInfo.name || "N/A"}</p>
+                  <p><strong>Email:</strong> {platformValidationStatus.accountInfo.email || "N/A"}</p>
+                  <p><strong>CPF/CNPJ:</strong> {platformValidationStatus.accountInfo.cpfCnpj || "N/A"}</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              onClick={validatePlatformAccount} 
+              disabled={validatingPlatform || !platformApiKey.trim()}
+              variant="default"
+            >
+              {validatingPlatform && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Validar Conta
             </Button>
-            {platformWalletId && (
+            <Button 
+              onClick={savePlatformWallet} 
+              disabled={savingWallet || !platformWalletId.trim() || platformValidationStatus.walletId === false}
+              variant="outline"
+            >
+              {savingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar Wallet ID
+            </Button>
+            {platformWalletId && platformValidationStatus.walletId !== false && (
               <Badge variant="default" className="gap-1">
                 <CheckCircle2 className="h-3 w-3" />
                 Configurado
@@ -370,17 +485,33 @@ export default function Integrations() {
               )}
             </div>
             <div className="flex items-center justify-between">
-              <span>Asaas Configurado</span>
-              {connectionStatus.asaas ? (
+              <span>Conta Super Admin (5%)</span>
+              {platformWalletId && (platformValidationStatus.walletId !== false) ? (
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
             <div className="flex items-center justify-between">
-              <span>Wallet da Plataforma</span>
-              {platformWalletId ? (
+              <span>Chave API da Plataforma</span>
+              {platformValidationStatus.apiKey === true ? (
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : platformValidationStatus.apiKey === false ? (
+                <XCircle className="h-5 w-5 text-red-500" />
+              ) : platformWalletId ? (
+                <CheckCircle2 className="h-5 w-5 text-yellow-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Wallet ID da Plataforma</span>
+              {platformValidationStatus.walletId === true ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : platformValidationStatus.walletId === false ? (
+                <XCircle className="h-5 w-5 text-red-500" />
+              ) : platformWalletId ? (
+                <CheckCircle2 className="h-5 w-5 text-yellow-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-muted-foreground" />
               )}

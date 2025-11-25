@@ -20,6 +20,7 @@ export default function AsaasIntegration() {
   const [formData, setFormData] = useState({
     apiKey: "",
     walletId: "",
+    cnpj: "",
   });
   const [connectionStatus, setConnectionStatus] = useState({
     connected: false,
@@ -46,6 +47,23 @@ export default function AsaasIntegration() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      console.log("Carregando integração para organizador:", session.user.id);
+      
+      // Buscar TODAS as integrações do organizador (ativas e inativas)
+      const { data: allIntegrations, error: listError } = await supabase
+        .from("organizer_asaas_integrations")
+        .select("*")
+        .eq("organizer_id", session.user.id)
+        .order("created_at", { ascending: false });
+
+      if (listError) {
+        console.error("Erro ao listar integrações:", listError);
+        throw listError;
+      }
+
+      console.log("Integrações encontradas:", allIntegrations?.length || 0);
+
+      // Buscar a integração ativa
       const { data, error } = await supabase
         .from("organizer_asaas_integrations")
         .select("*")
@@ -53,18 +71,39 @@ export default function AsaasIntegration() {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error && error.code !== "PGRST116") {
+        console.error("Erro ao buscar integração ativa:", error);
+        throw error;
+      }
 
       if (data) {
+        console.log("Integração ativa encontrada:", {
+          id: data.id,
+          organizerId: data.organizer_id,
+          hasApiKey: !!data.asaas_api_key,
+          hasWalletId: !!data.asaas_wallet_id,
+          isActive: data.is_active,
+        });
+        
         setIntegration(data);
         setFormData({
           apiKey: data.asaas_api_key ? "•".repeat(20) : "", // Masked
           walletId: data.asaas_wallet_id || "",
+          cnpj: data.organizer_cnpj || "",
         });
         setConnectionStatus({
           connected: true,
           validated: !!data.last_validated_at,
           lastValidated: data.last_validated_at,
+        });
+      } else {
+        console.log("Nenhuma integração ativa encontrada");
+        setIntegration(null);
+        setFormData({ apiKey: "", walletId: "", cnpj: "" });
+        setConnectionStatus({
+          connected: false,
+          validated: false,
+          lastValidated: null,
         });
       }
     } catch (error: any) {
@@ -76,43 +115,29 @@ export default function AsaasIntegration() {
   };
 
   const testConnection = async () => {
-    if (!formData.apiKey) {
+    if (!formData.apiKey || formData.apiKey.includes("•")) {
       toast.error("Por favor, insira sua chave de API do Asaas");
       return;
     }
 
     setTesting(true);
     try {
-      // Test API key by fetching account info
-      const response = await fetch("https://www.asaas.com/api/v3/myAccount", {
-        headers: {
-          "access_token": formData.apiKey,
+      // Use Edge Function to validate (avoids CORS issues)
+      const { data, error } = await supabase.functions.invoke("validate-asaas-account", {
+        body: {
+          apiKey: formData.apiKey,
+          walletId: formData.walletId || undefined,
         },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.errors?.[0]?.description || "Chave de API inválida");
+      if (error) throw error;
+
+      if (!data.valid) {
+        throw new Error(data.error || "Chave de API inválida");
       }
 
-      const accountData = await response.json();
-
-      // If wallet ID is provided, validate it
-      if (formData.walletId) {
-        const walletsResponse = await fetch("https://www.asaas.com/api/v3/myAccount/wallets", {
-          headers: {
-            "access_token": formData.apiKey,
-          },
-        });
-
-        if (walletsResponse.ok) {
-          const wallets = await walletsResponse.json();
-          const walletExists = wallets.data?.some((w: any) => w.id === formData.walletId);
-          
-          if (!walletExists) {
-            toast.warning("Wallet ID não encontrado. Verifique se está correto.");
-          }
-        }
+      if (data.walletId === false && formData.walletId) {
+        toast.warning("Wallet ID não encontrado. Verifique se está correto.");
       }
 
       setConnectionStatus({
@@ -134,6 +159,96 @@ export default function AsaasIntegration() {
     }
   };
 
+  const testCurrentConnection = async () => {
+    if (!integration) {
+      toast.error("Nenhuma integração encontrada para testar");
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Sessão expirada. Faça login novamente.");
+        return;
+      }
+
+      console.log("Testando conexão do organizador:", session.user.id);
+
+      // Testar conexão usando a função de teste
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-organizer-connection`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            organizerId: session.user.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = errorText;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorJson.message || errorText;
+        } catch (e) {
+          // Se não for JSON, usar o texto como está
+        }
+        throw new Error(errorMessage || `Erro HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Erro ao testar conexão");
+      }
+
+      if (data.connectionWorking) {
+        const accountName = data.tests?.apiKey?.accountName || "Desconhecido";
+        const accountEmail = data.tests?.apiKey?.accountEmail || "";
+        const accountCnpj = data.tests?.apiKey?.accountCpfCnpj || "";
+        
+        toast.success("Conexão funcionando perfeitamente! API Key e Wallet ID estão válidos.");
+        toast.info(`Conta configurada: ${accountName} (${accountEmail})`);
+        
+        // Verificar se não é a conta do super admin
+        if (accountName.includes("Vinicius") || accountEmail.includes("vinicius")) {
+          toast.error("ATENÇÃO: Esta é a conta do super admin! O organizador precisa usar sua própria conta Asaas.");
+        }
+      } else {
+        const issues = [];
+        if (data.tests?.apiKey?.valid !== true) {
+          issues.push(`API Key: ${data.tests?.apiKey?.error || "inválida"}`);
+        }
+        if (data.tests?.walletId?.valid !== true) {
+          issues.push(`Wallet ID: ${data.tests?.walletId?.error || "inválido"}`);
+        }
+        toast.warning(`Conexão com problemas: ${issues.join(", ")}`);
+      }
+
+      // Atualizar status
+      setConnectionStatus({
+        connected: data.hasIntegration,
+        validated: data.connectionWorking,
+        lastValidated: new Date().toISOString(),
+      });
+
+      // Recarregar integração para atualizar dados
+      await loadIntegration();
+    } catch (error: any) {
+      console.error("Erro completo ao testar conexão:", error);
+      toast.error(error.message || "Erro ao testar conexão. Verifique o console para mais detalhes.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const saveIntegration = async () => {
     if (!formData.apiKey || formData.apiKey.includes("•")) {
       toast.error("Por favor, insira uma chave de API válida");
@@ -143,40 +258,139 @@ export default function AsaasIntegration() {
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        toast.error("Sessão expirada. Faça login novamente.");
+        setSaving(false);
+        return;
+      }
 
-      // First validate the connection
-      await testConnection();
-      if (!connectionStatus.validated) {
+      // Validar a conexão primeiro
+      let isValidated = false;
+      let accountInfo = null;
+      
+      const testResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-asaas-account`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            apiKey: formData.apiKey,
+            walletId: formData.walletId || undefined,
+          }),
+        }
+      );
+
+      if (testResponse.ok) {
+        const testData = await testResponse.json();
+        if (testData.valid && testData.accountInfo) {
+          isValidated = true;
+          accountInfo = testData.accountInfo;
+          
+          const accountName = (testData.accountInfo.name || "").toLowerCase();
+          const accountEmail = (testData.accountInfo.email || "").toLowerCase();
+          
+          // Só bloquear se tanto o nome quanto o email indicarem que é do super admin
+          const isSuperAdminAccount = accountName.includes("vinicius") && accountEmail.includes("vinicius");
+          
+          if (isSuperAdminAccount) {
+            toast.error(`ERRO: Esta é a conta do super admin (${testData.accountInfo.name}). O organizador precisa usar sua própria conta Asaas.`);
+            setSaving(false);
+            return;
+          }
+          
+          console.log("Conta que será salva:", {
+            name: testData.accountInfo.name,
+            email: testData.accountInfo.email,
+            cnpj: testData.accountInfo.cpfCnpj,
+          });
+        } else {
+          toast.error(testData.error || "Chave de API inválida. Por favor, valide a conexão antes de salvar.");
+          setSaving(false);
+          return;
+        }
+      } else {
+        const errorData = await testResponse.json().catch(() => ({ error: "Erro ao validar conexão" }));
+        toast.error(errorData.error || "Erro ao validar conexão. Por favor, tente novamente.");
+        setSaving(false);
+        return;
+      }
+
+      if (!isValidated) {
         toast.error("Por favor, valide a conexão antes de salvar");
         setSaving(false);
         return;
+      }
+
+      // Validar CNPJ se fornecido
+      let cnpjClean = null;
+      if (formData.cnpj && formData.cnpj.trim()) {
+        cnpjClean = formData.cnpj.replace(/\D/g, "");
+        if (cnpjClean.length !== 11 && cnpjClean.length !== 14) {
+          toast.error("CNPJ/CPF deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ)");
+          setSaving(false);
+          return;
+        }
       }
 
       const integrationData = {
         organizer_id: session.user.id,
         asaas_api_key: formData.apiKey,
         asaas_wallet_id: formData.walletId || null,
+        organizer_cnpj: cnpjClean || null,
         is_active: true,
         last_validated_at: new Date().toISOString(),
       };
 
       if (integration) {
         // Update existing
-        const { error } = await supabase
+        console.log("Atualizando integração existente:", {
+          integrationId: integration.id,
+          organizerId: session.user.id,
+          integrationData: {
+            ...integrationData,
+            asaas_api_key: integrationData.asaas_api_key.substring(0, 20) + "...", // Log apenas primeiros 20 chars
+          },
+        });
+        
+        const { data: updatedData, error } = await supabase
           .from("organizer_asaas_integrations")
           .update(integrationData)
-          .eq("id", integration.id);
+          .eq("id", integration.id)
+          .eq("organizer_id", session.user.id) // Garantir que pertence ao organizador
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Erro ao atualizar integração:", error);
+          throw error;
+        }
+        
+        console.log("Integração atualizada com sucesso:", updatedData);
         toast.success("Integração atualizada com sucesso!");
       } else {
         // Create new
-        const { error } = await supabase
+        console.log("Criando nova integração:", {
+          organizerId: session.user.id,
+          integrationData: {
+            ...integrationData,
+            asaas_api_key: integrationData.asaas_api_key.substring(0, 20) + "...", // Log apenas primeiros 20 chars
+          },
+        });
+        
+        const { data: newData, error } = await supabase
           .from("organizer_asaas_integrations")
-          .insert(integrationData);
+          .insert(integrationData)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Erro ao criar integração:", error);
+          throw error;
+        }
+        
+        console.log("Integração criada com sucesso:", newData);
         toast.success("Integração criada com sucesso!");
       }
 
@@ -204,7 +418,7 @@ export default function AsaasIntegration() {
 
       toast.success("Conta desconectada com sucesso");
       setIntegration(null);
-      setFormData({ apiKey: "", walletId: "" });
+      setFormData({ apiKey: "", walletId: "", cnpj: "" });
       setConnectionStatus({
         connected: false,
         validated: false,
@@ -233,9 +447,9 @@ export default function AsaasIntegration() {
               Voltar
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">Integração Asaas</h1>
+              <h1 className="text-2xl font-bold">Integração Asaas - Organizador</h1>
               <p className="text-sm text-muted-foreground">
-                Conecte sua conta Asaas para receber pagamentos automaticamente
+                Conecte sua conta Asaas para receber 95% dos pagamentos automaticamente
               </p>
             </div>
           </div>
@@ -312,9 +526,9 @@ export default function AsaasIntegration() {
         {/* Configuration Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Configuração da Conta Asaas</CardTitle>
+            <CardTitle>Configuração da Conta Asaas do Organizador</CardTitle>
             <CardDescription>
-              Conecte sua conta Asaas para habilitar o split automático de pagamentos
+              Conecte sua conta Asaas para receber 95% dos pagamentos automaticamente (5% vai para a plataforma)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -371,18 +585,48 @@ export default function AsaasIntegration() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="space-y-2">
+              <Label htmlFor="cnpj">CNPJ/CPF do Organizador (Opcional)</Label>
+              <Input
+                id="cnpj"
+                type="text"
+                placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                value={formData.cnpj}
+                onChange={(e) => {
+                  // Permitir apenas números, pontos, barras e hífens
+                  const value = e.target.value.replace(/[^\d.\-/]/g, "");
+                  setFormData({ ...formData, cnpj: value });
+                }}
+                maxLength={18}
+              />
+              <p className="text-xs text-muted-foreground">
+                Informe seu CNPJ (14 dígitos) ou CPF (11 dígitos) para validação. Isso ajuda a garantir que sua conta Asaas seja diferente da conta da plataforma (necessário para split de pagamento).
+              </p>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={testConnection}
-                disabled={testing || !formData.apiKey}
+                disabled={testing || !formData.apiKey || formData.apiKey.includes("•") || formData.apiKey.length < 10}
                 variant="outline"
+                title={formData.apiKey.includes("•") ? "Digite uma nova API key para testar" : "Teste a API key antes de salvar"}
               >
                 {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Testar Conexão
+                Testar Nova Conexão
               </Button>
+              {integration && (
+                <Button
+                  onClick={testCurrentConnection}
+                  disabled={testing}
+                  variant="outline"
+                >
+                  {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verificar Conexão Atual
+                </Button>
+              )}
               <Button
                 onClick={saveIntegration}
-                disabled={saving || !formData.apiKey || !connectionStatus.validated}
+                disabled={saving || !formData.apiKey || formData.apiKey.includes("•") || !connectionStatus.validated}
               >
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {integration ? "Atualizar" : "Salvar"} Integração
@@ -391,7 +635,7 @@ export default function AsaasIntegration() {
                 <Button
                   onClick={disconnect}
                   variant="destructive"
-                  disabled={saving}
+                  disabled={saving || testing}
                 >
                   Desconectar
                 </Button>
