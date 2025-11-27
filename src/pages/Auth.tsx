@@ -54,10 +54,20 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Bem-vindo</CardTitle>
-          <CardDescription>
-            Entre ou crie sua conta para começar
-          </CardDescription>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/logo-antcamp.webp" 
+              alt="ANT Camp" 
+              className="h-16 w-auto"
+              onError={(e) => {
+                // Fallback para SVG se WebP não existir ainda
+                const target = e.target as HTMLImageElement;
+                if (target.src.includes('.webp')) {
+                  target.src = '/logo-antcamp.svg';
+                }
+              }}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignIn} className="space-y-4 mt-6">
