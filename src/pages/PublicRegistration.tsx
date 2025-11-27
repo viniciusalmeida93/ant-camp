@@ -178,8 +178,6 @@ export default function PublicRegistration() {
           selectedCategory.format === "individual" ? members[0]?.name ?? "" : teamName,
         athlete_email: members[0]?.email ?? "",
         athlete_phone: members[0]?.whatsapp || null,
-        athlete_cpf: members[0]?.cpf?.replace(/\D/g, "") || null, // CPF do primeiro integrante (pagador)
-        athlete_birth_date: members[0]?.birthDate || null, // Data de nascimento do primeiro integrante
         team_name: selectedCategory.format !== "individual" ? teamName : null,
         subtotal_cents: subtotalCents,
         platform_fee_cents: platformFeeCents, // 5% de taxa de plataforma
@@ -196,9 +194,14 @@ export default function PublicRegistration() {
                 cpf: member.cpf?.replace(/\D/g, "") || "",
                 birthDate: member.birthDate || "",
               }))
-            : null,
-        shirt_size:
-          selectedCategory.format === "individual" ? members[0]?.shirtSize || "M" : null,
+            : {
+                name: members[0]?.name || "",
+                email: members[0]?.email || "",
+                whatsapp: members[0]?.whatsapp || "",
+                shirtSize: members[0]?.shirtSize || "M",
+                cpf: members[0]?.cpf?.replace(/\D/g, "") || "",
+                birthDate: members[0]?.birthDate || "",
+              },
       };
 
       const { data: registration, error } = await supabase
