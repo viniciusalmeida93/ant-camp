@@ -175,38 +175,19 @@ export default function AsaasIntegration() {
 
       console.log("Testando conexão do organizador:", session.user.id);
 
-      // Testar conexão usando a função de teste
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-organizer-connection`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            organizerId: session.user.id,
-          }),
-        }
-      );
+      // Testar conexão usando supabase.functions.invoke (recomendado)
+      const { data, error } = await supabase.functions.invoke("test-organizer-connection", {
+        body: {
+          organizerId: session.user.id,
+        },
+      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = errorText;
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorJson.message || errorText;
-        } catch (e) {
-          // Se não for JSON, usar o texto como está
-        }
-        throw new Error(errorMessage || `Erro HTTP ${response.status}`);
+      if (error) {
+        throw new Error(error.message || "Erro ao testar conexão");
       }
 
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Erro ao testar conexão");
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Erro ao testar conexão");
       }
 
       if (data.connectionWorking) {
