@@ -152,8 +152,8 @@ export default function PublicRegistration() {
         return;
       }
       const cpfClean = member.cpf.replace(/\D/g, "");
-      if (cpfClean.length !== 11 && cpfClean.length !== 14) {
-        toast.error(`CPF/CNPJ do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`} deve ter 11 ou 14 dígitos`);
+      if (cpfClean.length !== 11) {
+        toast.error(`CPF do ${selectedCategory.format === "individual" ? "atleta" : `integrante ${i + 1}`} deve ter 11 dígitos`);
         return;
       }
       if (!member.birthDate.trim()) {
@@ -385,17 +385,17 @@ export default function PublicRegistration() {
                           </div>
                           <div className="grid sm:grid-cols-2 gap-3">
                             <div className="space-y-2">
-                              <Label>CPF ou CNPJ *</Label>
+                              <Label>CPF *</Label>
                               <Input
                                 type="text"
                                 value={member.cpf}
                                 onChange={(e) => {
-                                  const value = e.target.value.replace(/[^\d.\-/]/g, "");
+                                  const value = e.target.value.replace(/[^\d.\-]/g, "");
                                   updateMember(index, "cpf", value);
                                 }}
                                 placeholder="000.000.000-00"
                                 required
-                                maxLength={18}
+                                maxLength={14}
                               />
                             </div>
                             <div className="space-y-2">

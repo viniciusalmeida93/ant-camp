@@ -27,7 +27,7 @@ export default function Checkout() {
     expiryMonth: "",
     expiryYear: "",
     cvv: "",
-    cpf: "", // CPF/CNPJ do portador do cartão
+    cpf: "", // CPF do portador do cartão
     postalCode: "", // CEP do titular do cartão (obrigatório pelo Asaas)
     addressNumber: "", // Número do endereço
   });
@@ -154,10 +154,10 @@ export default function Checkout() {
           setProcessing(false);
           return;
         }
-        // Validar CPF/CNPJ - usar o CPF do portador do cartão se informado, senão usar o CPF do atleta
+        // Validar CPF - usar o CPF do portador do cartão se informado, senão usar o CPF do atleta
         const cpfToUse = cardData.cpf.trim() || registration?.athlete_cpf;
         if (!cpfToUse) {
-          toast.error("CPF/CNPJ é obrigatório para pagamento com cartão de crédito");
+          toast.error("CPF é obrigatório para pagamento com cartão de crédito");
           setProcessing(false);
           return;
         }
@@ -660,23 +660,21 @@ export default function Checkout() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="cpf">CPF/CNPJ do Portador do Cartão *</Label>
+                      <Label htmlFor="cpf">CPF do Portador do Cartão *</Label>
                       <Input
                         id="cpf"
                         value={cardData.cpf}
                         onChange={(e) => {
                           const value = e.target.value.replace(/\D/g, "");
-                          // Formatar como CPF (11 dígitos) ou CNPJ (14 dígitos)
+                          // Formatar como CPF (11 dígitos)
                           let formatted = value;
                           if (value.length <= 11) {
                             formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-                          } else {
-                            formatted = value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
                           }
                           setCardData({ ...cardData, cpf: formatted });
                         }}
                         placeholder={registration?.athlete_cpf ? "Deixe em branco para usar CPF da inscrição" : "000.000.000-00"}
-                        maxLength={18}
+                        maxLength={14}
                       />
                       {registration?.athlete_cpf && (
                         <p className="text-xs text-muted-foreground">
