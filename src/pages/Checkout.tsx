@@ -309,7 +309,6 @@ export default function Checkout() {
       // Verificar se foi sucesso
       if (data?.success) {
         if (paymentMethod === "credit_card") {
-          toast.success("Pagamento processado! Aguardando confirmação...");
           // Recarregar após um delay para verificar status
           setTimeout(async () => {
             await loadRegistration();
@@ -341,10 +340,6 @@ export default function Checkout() {
                 payment_status: "pending",
               });
             }
-            
-            toast.success("QR Code PIX gerado com sucesso! Utilize o código abaixo para pagar.");
-          } else {
-            toast.success("Registro de pagamento criado! Utilize o PIX abaixo para pagar.");
           }
         }
         // Sempre recarregar para garantir que temos os dados mais atualizados do banco
@@ -577,20 +572,18 @@ export default function Checkout() {
                     </div>
                   </Label>
                 </div>
-                {hasAsaasIntegration && (
-                  <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                    <RadioGroupItem value="credit_card" id="credit_card" />
-                    <Label htmlFor="credit_card" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        <div>
-                          <div className="font-medium">Cartão de Crédito</div>
+                <div className="flex items-center space-x-2 p-4 border rounded-lg">
+                  <RadioGroupItem value="credit_card" id="credit_card" />
+                  <Label htmlFor="credit_card" className="flex-1 cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5" />
+                      <div>
+                        <div className="font-medium">Cartão de Crédito</div>
                           <div className="text-sm text-muted-foreground">Pagamento seguro via Asaas</div>
                         </div>
                       </div>
                     </Label>
                   </div>
-                )}
               </RadioGroup>
 
               {paymentMethod === "credit_card" && (
@@ -857,7 +850,6 @@ export default function Checkout() {
                           toast.loading("Atualizando QR Code...");
                           const refreshed = await refreshPixQrCode(payment.id);
                           if (refreshed) {
-                            toast.success("QR Code PIX atualizado com sucesso!");
                             await loadRegistration();
                           } else {
                             toast.error("Não foi possível atualizar o QR Code. Verifique se o pagamento ainda está válido.");
@@ -885,9 +877,7 @@ export default function Checkout() {
                 onClick={async () => {
                   if (payment.id) {
                     const refreshed = await refreshPixQrCode(payment.id);
-                    if (refreshed) {
-                      toast.success("QR Code PIX atualizado!");
-                    } else {
+                    if (!refreshed) {
                       toast.error("Não foi possível atualizar o QR Code. Tente criar um novo pagamento.");
                     }
                   }

@@ -129,7 +129,6 @@ export default function Dashboard() {
         try {
           const { added } = await ensureScaleTrios(championshipId);
           if (added > 0) {
-            toast.success(`Adicionados ${added} times fictícios para completar as categorias.`);
             shouldRefresh = true;
           }
         } catch (error: any) {
@@ -440,7 +439,6 @@ export default function Dashboard() {
     }
 
     await loadChampionshipDays();
-    toast.success("Prova adicionada ao dia");
   };
 
   const removeWodFromDay = async (dayId: string, wodId: string) => {
@@ -1406,7 +1404,6 @@ export default function Dashboard() {
                                 
                                 if (!error) {
                                   await loadChampionshipDays();
-                                  toast.success("Horário de início atualizado!");
                                 } else {
                                   console.error("Erro ao atualizar horário:", error);
                                   toast.error("Erro ao atualizar horário");
@@ -1435,7 +1432,6 @@ export default function Dashboard() {
                                 
                                 if (!error) {
                                   await loadChampionshipDays();
-                                  toast.success("Intervalo entre baterias atualizado!");
                                 } else {
                                   console.error("Erro ao atualizar intervalo:", error);
                                   toast.error("Erro ao atualizar intervalo");
