@@ -239,14 +239,9 @@ export default function OrganizerDashboard() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <img 
-                src="/logo-antcamp.webp" 
+                src="/logo-antcamp.svg" 
                 alt="ANT Camp" 
                 className="h-12 sm:h-16 w-auto mb-2"
-                onError={(e) => {
-                  // Fallback para SVG se WebP não existir ainda
-                  const target = e.target as HTMLImageElement;
-                  target.src = '/logo-antcamp.svg';
-                }}
               />
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
