@@ -191,13 +191,7 @@ export default function Categories() {
         ensureRandomResults(selectedChampionship.id),
       ]);
 
-      if (scaleResult.added > 0) {
-        toast.success(`Adicionados ${scaleResult.added} times fictícios para completar as categorias.`);
-      }
-
-      if (randomResult.generated > 0) {
-        toast.success('Resultados aleatórios gerados para todas as categorias.');
-      }
+      // Development helpers removed - no need to show to end users
 
       // Load categories ordered by order_index
       const { data: cats, error: catsError } = await supabase

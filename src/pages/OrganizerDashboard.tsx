@@ -125,12 +125,11 @@ export default function OrganizerDashboard() {
 
       if (error) throw error;
 
-      toast.success("Campeonato excluído com sucesso!");
       setDeleteDialogOpen(false);
       setChampionshipToDelete(null);
       loadDashboard(); // Reload the dashboard
     } catch (error: any) {
-      toast.error("Erro ao excluir campeonato: " + error.message);
+      toast.error("Não foi possível excluir este campeonato");
       console.error(error);
     }
   };

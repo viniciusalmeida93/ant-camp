@@ -143,7 +143,6 @@ export default function Dashboard() {
         try {
           const { generated } = await ensureRandomResults(championshipId);
           if (generated > 0) {
-            toast.success('Resultados aleatórios gerados para todas as categorias.');
             shouldRefresh = true;
           }
         } catch (error: any) {
