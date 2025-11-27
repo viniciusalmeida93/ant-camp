@@ -4,6 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -17,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { 
   Trophy, Users, Calendar, DollarSign, Plus, 
-  BarChart3, Settings, LogOut, ExternalLink, CreditCard, Shield, Trash2
+  BarChart3, Settings, LogOut, ExternalLink, CreditCard, Shield, Trash2, Loader2
 } from "lucide-react";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
@@ -36,6 +40,14 @@ export default function OrganizerDashboard() {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [championshipToDelete, setChampionshipToDelete] = useState<any>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    date: '',
+    location: '',
+    description: '',
+  });
 
   useEffect(() => {
     checkAuth();
@@ -102,10 +114,89 @@ export default function OrganizerDashboard() {
         totalRevenue,
       });
     } catch (error: any) {
-      toast.error("Erro ao carregar dashboard");
-      console.error(error);
+      console.error("Error loading dashboard:", error);
+      // Silenciar erro para não mostrar toast ao usuário
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+  };
+
+  const handleCreateChampionship = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setCreating(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Você precisa estar logado");
+        navigate("/auth");
+        return;
+      }
+
+      const { name, date, location, description } = formData;
+      
+      if (!name || !date || !location) {
+        toast.error("Preencha todos os campos obrigatórios");
+        setCreating(false);
+        return;
+      }
+
+      // Generate unique slug
+      let slug = generateSlug(name);
+      let slugExists = true;
+      let attempts = 0;
+      
+      while (slugExists && attempts < 10) {
+        const { data: existing } = await supabase
+          .from("championships")
+          .select("id")
+          .eq("slug", slug)
+          .maybeSingle();
+        
+        if (!existing) {
+          slugExists = false;
+        } else {
+          slug = `${generateSlug(name)}-${Date.now()}`;
+          attempts++;
+        }
+      }
+
+      const { data: championship, error } = await supabase
+        .from("championships")
+        .insert({
+          name,
+          slug,
+          date,
+          location,
+          description: description || null,
+          organizer_id: session.user.id,
+          is_published: false,
+          is_indexable: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setIsCreateDialogOpen(false);
+      setFormData({ name: '', date: '', location: '', description: '' });
+      
+      // Reload dashboard
+      await loadDashboard();
+    } catch (error: any) {
+      console.error("Error creating championship:", error);
+      toast.error(error.message || "Erro ao criar campeonato");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -129,8 +220,8 @@ export default function OrganizerDashboard() {
       setChampionshipToDelete(null);
       loadDashboard(); // Reload the dashboard
     } catch (error: any) {
+      console.error("Error deleting championship:", error);
       toast.error("Não foi possível excluir este campeonato");
-      console.error(error);
     }
   };
 
@@ -226,12 +317,84 @@ export default function OrganizerDashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <Button asChild className="h-auto py-3 sm:py-4 text-sm sm:text-base">
-            <Link to="/championships/new">
-              <Plus className="w-4 h-4 mr-2" />
-              <span className="truncate">Novo Campeonato</span>
-            </Link>
-          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-auto py-3 sm:py-4 text-sm sm:text-base">
+                <Plus className="w-4 h-4 mr-2" />
+                <span className="truncate">Novo Campeonato</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Campeonato</DialogTitle>
+                <DialogDescription>
+                  Preencha os dados do seu campeonato. Você poderá editar depois.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateChampionship} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome do Campeonato *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Ex: Campeonato Regional 2024"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="date">Data *</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Local *</Label>
+                  <Input
+                    id="location"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Ex: São Paulo, SP"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descrição opcional do campeonato"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                    disabled={creating}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={creating}>
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      "Criar Campeonato"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Championships List */}
@@ -250,11 +413,9 @@ export default function OrganizerDashboard() {
                 <p className="text-muted-foreground mb-4">
                   Crie seu primeiro campeonato para começar
                 </p>
-                <Button asChild>
-                  <Link to="/championships/new">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Criar Campeonato
-                  </Link>
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Campeonato
                 </Button>
               </div>
             ) : (

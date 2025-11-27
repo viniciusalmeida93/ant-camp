@@ -221,7 +221,7 @@ export default function Categories() {
       setCategories(categoriesWithOrder);
     } catch (error: any) {
       console.error("Error loading categories:", error);
-      toast.error("Erro ao carregar categorias");
+      // Silenciar erro - não mostrar toast ao usuário
     } finally {
       setLoading(false);
     }

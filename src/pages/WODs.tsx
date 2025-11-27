@@ -159,7 +159,7 @@ export default function WODs() {
       setWODs(wodsData || []);
     } catch (error: any) {
       console.error("Error loading WODs:", error);
-      toast.error("Erro ao carregar WODs");
+      // Silenciar erro - não mostrar toast ao usuário
     } finally {
       setLoading(false);
     }
@@ -179,7 +179,7 @@ export default function WODs() {
       setCategories(data || []);
     } catch (error: any) {
       console.error("Error loading categories:", error);
-      toast.error("Erro ao carregar categorias");
+      // Silenciar erro - não mostrar toast ao usuário
     }
   };
 
