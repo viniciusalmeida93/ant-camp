@@ -54,11 +54,11 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-6">
             <img 
               src="/group_9.webp" 
               alt="ANT Camp" 
-              className="h-16 w-auto"
+              className="h-24 sm:h-32 w-auto"
             />
           </div>
         </CardHeader>
