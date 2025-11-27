@@ -5,9 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Trophy, Users, Calendar, DollarSign, Plus, 
-  BarChart3, Settings, LogOut, ExternalLink, CreditCard, Shield
+  BarChart3, Settings, LogOut, ExternalLink, CreditCard, Shield, Trash2
 } from "lucide-react";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
@@ -24,6 +34,8 @@ export default function OrganizerDashboard() {
     totalAthletes: 0,
     totalRevenue: 0,
   });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [championshipToDelete, setChampionshipToDelete] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -100,6 +112,27 @@ export default function OrganizerDashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/");
+  };
+
+  const handleDeleteChampionship = async () => {
+    if (!championshipToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("championships")
+        .delete()
+        .eq("id", championshipToDelete.id);
+
+      if (error) throw error;
+
+      toast.success("Campeonato excluído com sucesso!");
+      setDeleteDialogOpen(false);
+      setChampionshipToDelete(null);
+      loadDashboard(); // Reload the dashboard
+    } catch (error: any) {
+      toast.error("Erro ao excluir campeonato: " + error.message);
+      console.error(error);
+    }
   };
 
   const formatPrice = (cents: number) => {
@@ -284,6 +317,17 @@ export default function OrganizerDashboard() {
                           <CreditCard className="w-4 h-4 mr-1" />
                           Configurar Pagamento
                         </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            setChampionshipToDelete(champ);
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Excluir
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -293,6 +337,28 @@ export default function OrganizerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o campeonato <strong>{championshipToDelete?.name}</strong>?
+              <br /><br />
+              Esta ação não pode ser desfeita. Todos os dados relacionados (categorias, WODs, inscrições, resultados, etc.) serão perdidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteChampionship}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir Campeonato
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
