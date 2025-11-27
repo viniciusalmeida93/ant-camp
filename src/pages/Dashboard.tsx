@@ -1037,6 +1037,15 @@ export default function Dashboard() {
                 </form>
               </DialogContent>
             </Dialog>
+            <div className="mt-4">
+              <Button 
+                variant="outline" 
+                size="lg"
+                onClick={() => navigate("/dashboard")}
+              >
+                Painel do Organizador
+              </Button>
+            </div>
           </div>
         </div>
       </div>
