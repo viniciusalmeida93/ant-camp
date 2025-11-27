@@ -54,7 +54,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-2">
             <img 
               src="/group_9.webp" 
               alt="ANT Camp" 
@@ -63,7 +63,7 @@ export default function Auth() {
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4 mt-6">
+          <form onSubmit={handleSignIn} className="space-y-4 mt-2">
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
