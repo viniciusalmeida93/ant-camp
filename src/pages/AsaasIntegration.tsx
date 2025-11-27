@@ -159,77 +159,6 @@ export default function AsaasIntegration() {
     }
   };
 
-  const testCurrentConnection = async () => {
-    if (!integration) {
-      toast.error("Nenhuma integração encontrada para testar");
-      return;
-    }
-
-    setTesting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error("Sessão expirada. Faça login novamente.");
-        return;
-      }
-
-      console.log("Testando conexão do organizador:", session.user.id);
-
-      // Testar conexão usando supabase.functions.invoke (recomendado)
-      const { data, error } = await supabase.functions.invoke("test-organizer-connection", {
-        body: {
-          organizerId: session.user.id,
-        },
-      });
-
-      if (error) {
-        throw new Error(error.message || "Erro ao testar conexão");
-      }
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Erro ao testar conexão");
-      }
-
-      if (data.connectionWorking) {
-        const accountName = data.tests?.apiKey?.accountName || "Desconhecido";
-        const accountEmail = data.tests?.apiKey?.accountEmail || "";
-        const accountCnpj = data.tests?.apiKey?.accountCpfCnpj || "";
-        
-        toast.success("Conexão funcionando perfeitamente! API Key e Wallet ID estão válidos.");
-        toast.info(`Conta configurada: ${accountName} (${accountEmail})`);
-        
-        // Verificar se não é a conta do super admin
-        if (accountName.includes("Vinicius") || accountEmail.includes("vinicius")) {
-          toast.error("ATENÇÃO: Esta é a conta do super admin! O organizador precisa usar sua própria conta Asaas.");
-        }
-      } else {
-        const issues = [];
-        if (data.tests?.apiKey?.valid !== true) {
-          issues.push(`API Key: ${data.tests?.apiKey?.error || "inválida"}`);
-        }
-        if (data.tests?.walletId?.valid !== true) {
-          issues.push(`Wallet ID: ${data.tests?.walletId?.error || "inválido"}`);
-        }
-        toast.warning(`Conexão com problemas: ${issues.join(", ")}`);
-      }
-
-      // Atualizar status
-      setConnectionStatus({
-        connected: data.hasIntegration,
-        validated: data.connectionWorking,
-        lastValidated: new Date().toISOString(),
-      });
-
-      // Recarregar integração para atualizar dados
-      await loadIntegration();
-    } catch (error: any) {
-      console.error("Erro completo ao testar conexão:", error);
-      toast.error(error.message || "Erro ao testar conexão. Verifique o console para mais detalhes.");
-    } finally {
-      setTesting(false);
-    }
-  };
-
   const saveIntegration = async () => {
     if (!formData.apiKey || formData.apiKey.includes("•")) {
       toast.error("Por favor, insira uma chave de API válida");
@@ -595,16 +524,6 @@ export default function AsaasIntegration() {
                 {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Testar Nova Conexão
               </Button>
-              {integration && (
-                <Button
-                  onClick={testCurrentConnection}
-                  disabled={testing}
-                  variant="outline"
-                >
-                  {testing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Verificar Conexão Atual
-                </Button>
-              )}
               <Button
                 onClick={saveIntegration}
                 disabled={saving || !formData.apiKey || formData.apiKey.includes("•") || !connectionStatus.validated}
