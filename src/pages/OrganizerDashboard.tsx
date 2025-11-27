@@ -238,7 +238,16 @@ export default function OrganizerDashboard() {
         <div className="container mx-auto px-4 sm:px-6 py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold truncate">Painel do Organizador</h1>
+              <img 
+                src="/logo-antcamp.webp" 
+                alt="ANT Camp" 
+                className="h-12 sm:h-16 w-auto mb-2"
+                onError={(e) => {
+                  // Fallback para SVG se WebP não existir ainda
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/logo-antcamp.svg';
+                }}
+              />
               <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
             <div className="flex items-center gap-2">
