@@ -393,7 +393,7 @@ export default function Leaderboard() {
       await loadLeaderboard();
     } catch (error: any) {
       console.error("Error reprocessing:", error);
-      toast.error(error.message || "Erro ao reprocessar pontuação");
+      toast.error("Erro ao reprocessar pontuação");
     }
   };
 

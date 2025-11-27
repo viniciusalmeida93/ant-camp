@@ -194,7 +194,7 @@ export default function OrganizerDashboard() {
       await loadDashboard();
     } catch (error: any) {
       console.error("Error creating championship:", error);
-      toast.error(error.message || "Erro ao criar campeonato");
+      toast.error("Erro ao criar campeonato");
     } finally {
       setCreating(false);
     }

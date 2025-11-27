@@ -66,7 +66,7 @@ export default function TestAsaasConnections() {
         toast.warning(`Conexão do organizador ${organizerId.substring(0, 8)}... com problemas`);
       }
     } catch (error: any) {
-      toast.error(`Erro ao testar: ${error.message}`);
+      toast.error("Erro ao testar conexão");
       setTestResults((prev) => ({
         ...prev,
         [organizerId]: { success: false, error: error.message },

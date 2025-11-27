@@ -368,7 +368,7 @@ export default function Heats() {
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats:", error);
-      toast.error(error.message || "Erro ao gerar baterias");
+      toast.error("Erro ao gerar baterias");
     } finally {
       setGenerating(false);
     }
@@ -559,7 +559,7 @@ export default function Heats() {
       await loadHeats();
     } catch (error: any) {
       console.error("Error saving edits:", error);
-      toast.error(error.message || "Erro ao salvar alterações");
+      toast.error("Erro ao salvar alterações");
     } finally {
       setSavingEdits(false);
     }

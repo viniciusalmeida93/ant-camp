@@ -381,7 +381,7 @@ export default function WODs() {
       await loadWODs();
     } catch (error: any) {
       console.error("Error saving WOD:", error);
-      toast.error(error.message || "Erro ao salvar WOD");
+      toast.error("Erro ao salvar WOD");
     } finally {
       setSaving(false);
     }

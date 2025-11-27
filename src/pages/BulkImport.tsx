@@ -251,7 +251,7 @@ export default function BulkImport() {
       }, 1000);
     } catch (error: any) {
       console.error("Error importing:", error);
-      toast.error(error.message || "Erro ao importar dados");
+      toast.error("Erro ao importar dados");
     } finally {
       setImporting(false);
     }

@@ -148,7 +148,7 @@ export default function AsaasIntegration() {
 
       toast.success("Conexão validada com sucesso!");
     } catch (error: any) {
-      toast.error(error.message || "Erro ao validar conexão");
+      toast.error("Erro ao validar conexão");
       setConnectionStatus({
         connected: false,
         validated: false,
@@ -307,7 +307,7 @@ export default function AsaasIntegration() {
       await loadIntegration();
     } catch (error: any) {
       console.error("Error saving integration:", error);
-      toast.error(error.message || "Erro ao salvar integração");
+      toast.error("Erro ao salvar integração");
     } finally {
       setSaving(false);
     }

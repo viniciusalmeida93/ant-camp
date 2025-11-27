@@ -301,7 +301,7 @@ export default function Categories() {
       await loadChampionshipAndCategories();
     } catch (error: any) {
       console.error("Error saving category:", error);
-      toast.error(error.message || "Erro ao salvar categoria");
+      toast.error("Erro ao salvar categoria");
     } finally {
       setSaving(false);
     }

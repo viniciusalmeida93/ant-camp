@@ -183,7 +183,7 @@ export default function Scoring() {
       if (error.message?.includes('JSON')) {
         toast.error("Formato inválido da tabela de pontos. Use JSON válido.");
       } else {
-        toast.error(error.message || "Erro ao salvar configuração");
+        toast.error("Erro ao salvar configuração");
       }
     } finally {
       setSaving(false);

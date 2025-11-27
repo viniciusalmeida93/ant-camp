@@ -60,7 +60,7 @@ export default function AssignRoles() {
       setFormData({ userEmail: "", role: "admin" });
     } catch (error: any) {
       console.error("Erro ao atribuir role:", error);
-      toast.error(error.message || "Erro ao atribuir role");
+      toast.error("Erro ao atribuir role");
     } finally {
       setLoading(false);
     }

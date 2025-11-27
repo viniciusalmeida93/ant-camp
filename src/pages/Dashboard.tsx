@@ -108,7 +108,7 @@ export default function Dashboard() {
         ]);
       } catch (error: any) {
         console.error('Erro ao gerar dados de demonstração automaticamente:', error);
-        toast.error(error.message || 'Erro ao gerar dados de demonstração');
+        toast.error('Erro ao gerar dados de demonstração');
         autoSeededRef.current.add(championshipId);
       } finally {
         setSeedingDemo(false);
@@ -501,7 +501,7 @@ export default function Dashboard() {
       toast.success("Configuração atualizada!");
     } catch (error: any) {
       console.error("Error updating day break:", error);
-      toast.error(`Erro ao atualizar configuração: ${error.message || 'Erro desconhecido'}`);
+      toast.error('Erro ao atualizar configuração');
     }
   };
 
@@ -528,7 +528,7 @@ export default function Dashboard() {
       toast.success("Configuração salva e horários calculados automaticamente!");
     } catch (error: any) {
       console.error("Error saving schedule config:", error);
-      toast.error(error.message || "Erro ao salvar configuração");
+      toast.error("Erro ao salvar configuração");
     } finally {
       setSavingSchedule(false);
     }
@@ -836,7 +836,7 @@ export default function Dashboard() {
       toast.success("Horários calculados e aplicados automaticamente!");
     } catch (error: any) {
       console.error("Error calculating schedule:", error);
-      toast.error(error.message || "Erro ao calcular horários");
+      toast.error("Erro ao calcular horários");
     } finally {
       setLoadingSchedule(false);
     }
@@ -919,7 +919,7 @@ export default function Dashboard() {
       }
     } catch (error: any) {
       console.error("Error creating championship:", error);
-      toast.error(error.message || "Erro ao criar campeonato");
+      toast.error("Erro ao criar campeonato");
     } finally {
       setCreating(false);
     }

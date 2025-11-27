@@ -195,7 +195,7 @@ export default function Registrations() {
       await loadData();
     } catch (error: any) {
       console.error("Error deleting registration:", error);
-      toast.error(error.message || "Erro ao excluir inscrição");
+      toast.error("Erro ao excluir inscrição");
     }
   };
 
@@ -219,7 +219,7 @@ export default function Registrations() {
       await loadData();
     } catch (error: any) {
       console.error("Error approving payment:", error);
-      toast.error(error.message || "Erro ao aprovar pagamento");
+      toast.error("Erro ao aprovar pagamento");
     }
   };
 
