@@ -935,8 +935,8 @@ export default function Dashboard() {
     );
   }
 
-  // If no championships, show create screen
-  if (championships.length === 0) {
+  // If no championships and no selected championship, show create screen
+  if (championships.length === 0 && !selectedChampionship) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center py-12">
