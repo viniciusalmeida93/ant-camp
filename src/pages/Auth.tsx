@@ -56,16 +56,9 @@ export default function Auth() {
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img 
-              src="/logo-antcamp.webp" 
+              src="/group_9.webp" 
               alt="ANT Camp" 
               className="h-16 w-auto"
-              onError={(e) => {
-                // Fallback para SVG se WebP não existir ainda
-                const target = e.target as HTMLImageElement;
-                if (target.src.includes('.webp')) {
-                  target.src = '/logo-antcamp.svg';
-                }
-              }}
             />
           </div>
         </CardHeader>
