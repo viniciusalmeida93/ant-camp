@@ -212,8 +212,14 @@ export default function PublicRegistration() {
       toast.success("Inscrição criada! Redirecionando para pagamento...");
       navigate(`/checkout/${registration.id}?method=pix`);
     } catch (error: any) {
-      toast.error(error.message || "Erro ao criar inscrição");
-      console.error(error);
+      // Silenciar erros técnicos de desenvolvimento
+      console.error("Error creating registration:", error);
+      // Mostrar apenas mensagens amigáveis ao usuário
+      if (error.message?.includes("violates check constraint")) {
+        toast.error("Erro ao processar inscrição. Verifique os dados e tente novamente.");
+      } else {
+        toast.error("Erro ao criar inscrição. Tente novamente.");
+      }
     } finally {
       setSubmitting(false);
     }

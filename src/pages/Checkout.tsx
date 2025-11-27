@@ -285,24 +285,31 @@ export default function Checkout() {
           console.error("Error parsing error message:", e);
         }
         
-        toast.error(errorMessage, {
-          duration: 15000, // Mostrar por 15 segundos
-        });
+        // Silenciar erros técnicos de desenvolvimento
         console.error("Payment creation error - Full details:", {
           error,
           errorString: JSON.stringify(error, null, 2),
           data,
           dataString: JSON.stringify(data, null, 2)
         });
+        // Mostrar apenas mensagens amigáveis ao usuário
+        if (errorMessage?.includes("violates check constraint") || errorMessage?.includes("registrations_status_check")) {
+          toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
+        } else {
+          toast.error("Erro ao criar pagamento. Tente novamente.");
+        }
         return;
       }
 
       // Verificar se a resposta tem erro mesmo sem error object
       if (data?.error) {
-        toast.error(data.error, {
-          duration: 10000,
-        });
         console.error("Payment creation error in data:", data);
+        // Silenciar erros técnicos
+        if (data.error?.includes("violates check constraint") || data.error?.includes("registrations_status_check")) {
+          toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
+        } else {
+          toast.error("Erro ao criar pagamento. Tente novamente.");
+        }
         return;
       }
 
@@ -350,10 +357,13 @@ export default function Checkout() {
       }
     } catch (error: any) {
       console.error("Payment creation exception:", error);
-      const errorMessage = error.message || error.error || "Erro ao criar pagamento";
-      toast.error(errorMessage, {
-        duration: 10000,
-      });
+      const errorMessage = error.message || error.error || "";
+      // Silenciar erros técnicos de desenvolvimento
+      if (errorMessage.includes("violates check constraint") || errorMessage.includes("registrations_status_check")) {
+        toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
+      } else {
+        toast.error("Erro ao criar pagamento. Tente novamente.");
+      }
     } finally {
       setProcessing(false);
     }

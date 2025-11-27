@@ -321,7 +321,12 @@ export default function Registrations() {
       await loadData();
     } catch (error: any) {
       console.error("Error creating registration:", error);
-      toast.error(error.message || "Erro ao criar inscrição");
+      // Silenciar erros técnicos de desenvolvimento
+      if (error.message?.includes("violates check constraint")) {
+        toast.error("Erro ao processar inscrição. Verifique os dados e tente novamente.");
+      } else {
+        toast.error("Erro ao criar inscrição. Tente novamente.");
+      }
     } finally {
       setSaving(false);
     }
