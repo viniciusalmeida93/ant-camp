@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, X, Edit, Trash2, CheckCircle2 } from 'lucide-react';
+import { Plus, Loader2, X, Edit, Trash2, CheckCircle2, Mail, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -220,6 +220,60 @@ export default function Registrations() {
     } catch (error: any) {
       console.error("Error approving payment:", error);
       toast.error("Erro ao aprovar pagamento");
+    }
+  };
+
+  const handlePreviewEmail = async (reg: any) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Abrir preview em nova aba
+      const previewUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/preview-registration-email`;
+      
+      // Criar formulário para fazer POST em nova aba
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = previewUrl;
+      form.target = '_blank';
+      
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'registrationId';
+      input.value = reg.id;
+      form.appendChild(input);
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      
+      toast.success("Abrindo visualização do email...");
+    } catch (error: any) {
+      console.error("Error previewing email:", error);
+      toast.error("Erro ao visualizar email: " + error.message);
+    }
+  };
+
+  const handleSendEmail = async (reg: any) => {
+    const teamMembersCount = reg.team_members ? reg.team_members.length : 0;
+    const totalRecipients = 1 + teamMembersCount; // atleta principal + membros do time
+    
+    if (!confirm(`Enviar email de confirmação para ${reg.team_name || reg.athlete_name}?\n\nSerão enviados ${totalRecipients} email(s):\n- ${reg.athlete_email}${teamMembersCount > 0 ? `\n- + ${teamMembersCount} membro(s) do time` : ''}`)) {
+      return;
+    }
+
+    const toastId = toast.loading("Enviando email...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-registration-email', {
+        body: { registrationId: reg.id }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Email enviado com sucesso para ${data.recipients} destinatário(s)!`, { id: toastId });
+    } catch (error: any) {
+      console.error("Error sending email:", error);
+      toast.error("Erro ao enviar email: " + error.message, { id: toastId });
     }
   };
 
@@ -626,6 +680,24 @@ export default function Registrations() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handlePreviewEmail(reg)}
+                    title="👁️ Visualizar email (SEM enviar)"
+                    className="h-8 w-8"
+                  >
+                    <Eye className="w-4 h-4 text-purple-600" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => handleSendEmail(reg)}
+                    title="✉️ Enviar email de confirmação"
+                    className="h-8 w-8"
+                  >
+                    <Mail className="w-4 h-4 text-blue-600" />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

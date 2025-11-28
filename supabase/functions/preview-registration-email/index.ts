@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface EmailData {
+interface PreviewData {
   registrationId: string;
 }
 
@@ -21,16 +21,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      console.error("RESEND_API_KEY not configured");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { registrationId }: EmailData = await req.json();
+    const { registrationId }: PreviewData = await req.json();
 
     // Buscar dados completos da inscrição
     const { data: registration, error: regError } = await supabase
@@ -94,8 +85,21 @@ serve(async (req) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+    }
+  </style>
 </head>
 <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+  <div style="background-color: #fff3cd; padding: 15px; text-align: center; margin-bottom: 20px; border: 2px solid #ffc107; border-radius: 8px;">
+    <strong>🧪 VISUALIZAÇÃO DE TESTE</strong><br/>
+    <span style="font-size: 14px;">Este email NÃO foi enviado aos destinatários</span>
+  </div>
+  
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
     <tr>
       <td align="center">
@@ -228,63 +232,28 @@ serve(async (req) => {
 </html>
     `;
 
-    // Preparar lista de destinatários (todos os membros do time)
-    const recipients: string[] = [registration.athlete_email];
-    
-    // Se for time, adicionar emails de todos os membros
-    if (category.format !== "individual" && registration.team_members) {
-      const members = Array.isArray(registration.team_members)
-        ? registration.team_members
-        : [registration.team_members];
-      
-      members.forEach((member: any) => {
-        if (member.email && member.email !== registration.athlete_email) {
-          recipients.push(member.email);
-        }
-      });
-    }
-
-    console.log(`Enviando email para ${recipients.length} destinatário(s):`, recipients);
-
-    // Enviar email via Resend para todos os destinatários
-    const emailResponse = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "AntCamp <onboarding@resend.dev>", // Domínio de teste do Resend (funciona imediatamente)
-        to: recipients, // Envia para todos os membros do time
-        subject: `✅ Inscrição Confirmada - ${championship.name}`,
-        html: emailHtml,
-      }),
-    });
-
-    if (!emailResponse.ok) {
-      const errorData = await emailResponse.text();
-      console.error("Resend error:", errorData);
-      throw new Error(`Failed to send email: ${errorData}`);
-    }
-
-    const emailData = await emailResponse.json();
-    console.log("Email sent successfully:", emailData);
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      emailId: emailData.id,
-      recipients: recipients.length 
-    }), {
+    // Retornar HTML para visualização no navegador
+    return new Response(emailHtml, {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "text/html; charset=utf-8" 
+      },
     });
 
   } catch (error: any) {
-    console.error("Error in send-registration-email:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("Error in preview-registration-email:", error);
+    return new Response(
+      `<html><body style="font-family: Arial; padding: 40px; background-color: #fee;">
+        <h1 style="color: #c00;">❌ Erro ao gerar visualização</h1>
+        <p><strong>Mensagem:</strong> ${error.message}</p>
+        <p><a href="javascript:window.close()">Fechar</a></p>
+      </body></html>`, 
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
   }
 });
 
