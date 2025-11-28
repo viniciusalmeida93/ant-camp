@@ -22,9 +22,14 @@ serve(async (req) => {
     );
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    console.log("Checking RESEND_API_KEY:", resendApiKey ? `Found (${resendApiKey.substring(0, 10)}...)` : "NOT FOUND");
+    
     if (!resendApiKey) {
-      console.error("RESEND_API_KEY not configured");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+      console.error("RESEND_API_KEY not configured in Supabase secrets");
+      return new Response(JSON.stringify({ 
+        error: "Email service not configured",
+        details: "RESEND_API_KEY secret is missing. Please add it in Supabase dashboard." 
+      }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -263,8 +268,12 @@ serve(async (req) => {
 
     if (!emailResponse.ok) {
       const errorData = await emailResponse.text();
-      console.error("Resend error:", errorData);
-      throw new Error(`Failed to send email: ${errorData}`);
+      console.error("Resend API error:", {
+        status: emailResponse.status,
+        statusText: emailResponse.statusText,
+        error: errorData
+      });
+      throw new Error(`Failed to send email via Resend: ${errorData}`);
     }
 
     const emailData = await emailResponse.json();

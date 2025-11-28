@@ -687,49 +687,55 @@ export default function Registrations() {
             {filteredRegistrations.map((reg) => (
               <div
                 key={reg.id}
-                className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all"
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                        #{reg.registrationOrder || 0}
-                      </span>
-                      <p className="font-semibold">{reg.team_name || reg.athlete_name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="font-semibold">{reg.category?.name}</span>
-                    <span>•</span>
-                    <span>{reg.athlete_email}</span>
-                    <span>•</span>
-                    <span>{reg.athlete_phone}</span>
-                    {reg.team_members && reg.team_members.length > 0 && (
-                      <>
-                        <span>•</span>
-                        <span>{reg.team_members.length} integrante(s)</span>
-                      </>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      • Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                  {/* Header - Nome e Número */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded shrink-0">
+                      #{reg.registrationOrder || 0}
                     </span>
-                    <span className="font-semibold text-foreground ml-auto">
+                    <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
+                    <span className="font-semibold text-foreground ml-auto shrink-0">
                       R$ {(reg.total_cents / 100).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
+                  
+                  {/* Info - Layout Responsivo */}
+                  <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold">{reg.category?.name}</span>
+                      {reg.team_members && reg.team_members.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span>{reg.team_members.length} integrante(s)</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                      <span className="truncate max-w-[180px] sm:max-w-none">{reg.athlete_email}</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline">{reg.athlete_phone}</span>
+                    </div>
+                    <div className="text-xs">
+                      Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                
+                {/* Botões de Ação */}
+                <div className="flex gap-1 shrink-0 justify-end sm:justify-start">
                   <Button
                     size="icon"
                     variant="ghost"
                     onClick={() => handlePreviewEmail(reg)}
-                    title="👁️ Visualizar email (SEM enviar)"
+                    title="👁️ Visualizar email"
                     className="h-8 w-8"
                   >
                     <Eye className="w-4 h-4 text-purple-600" />
@@ -738,7 +744,7 @@ export default function Registrations() {
                     size="icon"
                     variant="ghost"
                     onClick={() => handleSendEmail(reg)}
-                    title="✉️ Enviar email de confirmação"
+                    title="✉️ Enviar email"
                     className="h-8 w-8"
                   >
                     <Mail className="w-4 h-4 text-blue-600" />
@@ -747,7 +753,7 @@ export default function Registrations() {
                     size="icon"
                     variant="ghost"
                     onClick={() => handleEdit(reg)}
-                    title="Editar inscrição"
+                    title="Editar"
                     className="h-8 w-8"
                   >
                     <Edit className="w-4 h-4" />
@@ -756,7 +762,7 @@ export default function Registrations() {
                     size="icon"
                     variant="ghost"
                     onClick={() => handleDelete(reg.id)}
-                    title="Excluir inscrição"
+                    title="Excluir"
                     className="h-8 w-8"
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />
