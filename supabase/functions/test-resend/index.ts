@@ -37,7 +37,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "AntSports <contato@antsports.com.br>",
+        from: "onboarding@resend.dev", // Domínio de teste - SEMPRE funciona
         to: ["viniciusalmeida93@gmail.com"], // Email de teste
         subject: "🧪 Teste de Email - AntCamp",
         html: "<h1>✅ Email funcionando!</h1><p>Se você recebeu isso, o sistema de email está configurado corretamente.</p>",

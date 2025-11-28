@@ -259,7 +259,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "AntCamp <onboarding@resend.dev>", // Domínio de teste do Resend (funciona imediatamente)
+        from: "onboarding@resend.dev", // Domínio de teste - SEMPRE funciona
         to: recipients, // Envia para todos os membros do time
         subject: `✅ Inscrição Confirmada - ${championship.name}`,
         html: emailHtml,

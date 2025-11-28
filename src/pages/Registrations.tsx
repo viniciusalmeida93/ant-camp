@@ -488,9 +488,11 @@ export default function Registrations() {
             variant="outline"
             onClick={handleTestEmail}
             className="gap-2"
+            title="Testar se o email está configurado corretamente"
           >
             🧪 Testar Email
           </Button>
+        </div>
         
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
