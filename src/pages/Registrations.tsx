@@ -120,13 +120,13 @@ export default function Registrations() {
     if (category.format === 'individual') {
       setFormData({
         teamName: '',
-        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M' }],
+        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
         boxName: '',
       });
     } else {
       setFormData({
         teamName: '',
-        members: Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M' })),
+        members: Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' })),
         boxName: '',
       });
     }
