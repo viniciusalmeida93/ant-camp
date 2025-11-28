@@ -371,18 +371,36 @@ export default function Registrations() {
       } else {
         // Create new registration
         // Inscrições manuais já são aprovadas (pagamento feito fora da plataforma)
+        console.log("=== CRIANDO INSCRIÇÃO ===");
+        console.log("Dados a serem salvos:", registrationData);
+        
+        const dataToInsert = {
+          ...registrationData,
+          status: 'approved',
+          payment_status: 'approved',
+          paid_at: new Date().toISOString(),
+        };
+        
+        console.log("Dados finais com status:", dataToInsert);
+        
         const { data: registration, error } = await supabase
           .from("registrations")
-          .insert({
-            ...registrationData,
-            status: 'approved',
-            payment_status: 'approved',
-            paid_at: new Date().toISOString(),
-          })
+          .insert(dataToInsert)
           .select()
           .single();
 
-        if (error) throw error;
+        console.log("Resultado do insert:", { registration, error });
+
+        if (error) {
+          console.error("ERRO AO SALVAR NO SUPABASE:", error);
+          throw error;
+        }
+        
+        if (!registration) {
+          throw new Error("Inscrição foi salva mas não retornou dados");
+        }
+        
+        console.log("✅ Inscrição salva com sucesso! ID:", registration.id);
         toast.success("Inscrição criada e aprovada com sucesso!");
       }
 
