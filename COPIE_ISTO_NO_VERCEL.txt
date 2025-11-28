@@ -1,0 +1,46 @@
+========================================
+COPIE E COLE NO VERCEL
+========================================
+
+1. Acesse: https://vercel.com/dashboard
+2. Clique no seu projeto
+3. Vá em: Settings → Environment Variables
+4. Adicione estas 2 variáveis:
+
+========================================
+VARIÁVEL 1:
+========================================
+Nome:
+VITE_SUPABASE_URL
+
+Valor:
+https://jxuhmqctiyeheamhviob.supabase.co
+
+Marque: Production, Preview, Development
+
+========================================
+VARIÁVEL 2:
+========================================
+Nome:
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+Valor:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4dWhtcWN0aXllaGVhbWh2aW9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0Mjc1NDEsImV4cCI6MjA3ODAwMzU0MX0.SXgw_idjdmaKmBZkYs9omG8A-WRt3HiTlnUZB-iP00s
+
+Marque: Production, Preview, Development
+
+========================================
+DEPOIS DE SALVAR:
+========================================
+5. Vá em Deployments
+6. Clique nos 3 pontinhos do último deploy
+7. Clique em "Redeploy"
+8. Aguarde 1-2 minutos
+9. Teste no site!
+
+========================================
+ISSO SÓ PRECISA SER FEITO 1 VEZ!
+Depois disso, todas as minhas mudanças de código
+vão automaticamente como antes.
+========================================
+

@@ -165,20 +165,57 @@ export default function PublicRegistration() {
     setSubmitting(true);
 
     try {
+      // Verificar se o cliente Supabase está configurado
+      if (!supabase) {
+        toast.error("Erro de configuração. Recarregue a página.");
+        setSubmitting(false);
+        return;
+      }
+
       // Calcular valores com taxa de plataforma de 5%
       const subtotalCents = selectedCategory.price_cents;
       const platformFeeCents = Math.round(subtotalCents * 0.05); // 5% de taxa de plataforma
       const totalCents = subtotalCents + platformFeeCents; // Valor total com taxa
 
+      // Validar dados antes de criar o objeto
+      if (!championship?.id) {
+        toast.error("Erro: Campeonato não encontrado. Recarregue a página.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!selectedCategory?.id) {
+        toast.error("Erro: Categoria não selecionada.");
+        setSubmitting(false);
+        return;
+      }
+
+      const athleteName = selectedCategory.format === "individual" 
+        ? (members[0]?.name?.trim() || "") 
+        : (teamName?.trim() || "");
+      
+      const athleteEmail = members[0]?.email?.trim() || "";
+
+      if (!athleteName) {
+        toast.error("Erro: Nome do atleta não pode estar vazio.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!athleteEmail) {
+        toast.error("Erro: Email do atleta não pode estar vazio.");
+        setSubmitting(false);
+        return;
+      }
+
       // Salvar o valor da inscrição com taxa de plataforma
       const registrationData: any = {
         championship_id: championship.id,
         category_id: selectedCategory.id,
-        athlete_name:
-          selectedCategory.format === "individual" ? members[0]?.name ?? "" : teamName,
-        athlete_email: members[0]?.email ?? "",
-        athlete_phone: members[0]?.whatsapp || null,
-        team_name: selectedCategory.format !== "individual" ? teamName : null,
+        athlete_name: athleteName,
+        athlete_email: athleteEmail,
+        athlete_phone: members[0]?.whatsapp?.trim() || null,
+        team_name: selectedCategory.format !== "individual" ? (teamName?.trim() || null) : null,
         subtotal_cents: subtotalCents,
         platform_fee_cents: platformFeeCents, // 5% de taxa de plataforma
         total_cents: totalCents, // Total com taxa de 5%
@@ -187,22 +224,36 @@ export default function PublicRegistration() {
         team_members:
           selectedCategory.format !== "individual"
             ? members.map((member) => ({
-                name: member.name,
-                email: member.email,
-                whatsapp: member.whatsapp,
+                name: member.name?.trim() || "",
+                email: member.email?.trim() || "",
+                whatsapp: member.whatsapp?.trim() || "",
                 shirtSize: member.shirtSize || "M",
                 cpf: member.cpf?.replace(/\D/g, "") || "",
                 birthDate: member.birthDate || "",
               }))
             : {
-                name: members[0]?.name || "",
-                email: members[0]?.email || "",
-                whatsapp: members[0]?.whatsapp || "",
+                name: members[0]?.name?.trim() || "",
+                email: members[0]?.email?.trim() || "",
+                whatsapp: members[0]?.whatsapp?.trim() || "",
                 shirtSize: members[0]?.shirtSize || "M",
                 cpf: members[0]?.cpf?.replace(/\D/g, "") || "",
                 birthDate: members[0]?.birthDate || "",
               },
       };
+
+      // Verificar se o cliente Supabase está funcionando
+      console.log("Tentando criar inscrição com dados:", {
+        championship_id: registrationData.championship_id,
+        category_id: registrationData.category_id,
+        athlete_name: registrationData.athlete_name,
+        athlete_email: registrationData.athlete_email,
+        subtotal_cents: registrationData.subtotal_cents,
+        total_cents: registrationData.total_cents,
+      });
+
+      // Verificar sessão (não é obrigatória para criar registrations, mas pode ajudar no debug)
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("Sessão atual:", session ? "Autenticado" : "Anônimo");
 
       const { data: registration, error } = await supabase
         .from("registrations")
@@ -210,18 +261,40 @@ export default function PublicRegistration() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro detalhado do Supabase:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+        throw error;
+      }
 
       toast.success("Inscrição criada! Redirecionando para pagamento...");
       navigate(`/checkout/${registration.id}?method=pix`);
     } catch (error: any) {
-      // Silenciar erros técnicos de desenvolvimento
       console.error("Error creating registration:", error);
-      // Mostrar apenas mensagens amigáveis ao usuário
-      if (error.message?.includes("violates check constraint")) {
+      // Mostrar mensagem de erro mais detalhada para debug
+      const errorMessage = error?.message || "Erro desconhecido";
+      console.error("Detalhes do erro:", {
+        message: errorMessage,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code
+      });
+      
+      // Mensagens amigáveis baseadas no tipo de erro
+      if (error?.message?.includes("violates check constraint")) {
         toast.error("Erro ao processar inscrição. Verifique os dados e tente novamente.");
+      } else if (error?.message?.includes("null value") || error?.message?.includes("NOT NULL")) {
+        toast.error("Por favor, preencha todos os campos obrigatórios.");
+      } else if (error?.message?.includes("foreign key") || error?.message?.includes("violates foreign key")) {
+        toast.error("Erro ao processar inscrição. Verifique se a categoria ainda está disponível.");
+      } else if (error?.code === "23505") { // Unique violation
+        toast.error("Esta inscrição já existe. Verifique seus dados.");
       } else {
-        toast.error("Erro ao criar inscrição. Tente novamente.");
+        toast.error(`Erro ao criar inscrição: ${errorMessage}. Tente novamente.`);
       }
     } finally {
       setSubmitting(false);
@@ -311,7 +384,7 @@ export default function PublicRegistration() {
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria *</Label>
-                  <Select value={selectedCategory?.id} onValueChange={handleSelectCategory}>
+                  <Select value={selectedCategory?.id || ""} onValueChange={handleSelectCategory}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma categoria" />
                     </SelectTrigger>
