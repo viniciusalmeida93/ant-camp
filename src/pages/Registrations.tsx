@@ -370,18 +370,20 @@ export default function Registrations() {
         toast.success("Inscrição atualizada com sucesso!");
       } else {
         // Create new registration
+        // Inscrições manuais já são aprovadas (pagamento feito fora da plataforma)
         const { data: registration, error } = await supabase
           .from("registrations")
           .insert({
             ...registrationData,
-            status: 'pending',
-            payment_status: 'pending',
+            status: 'approved',
+            payment_status: 'approved',
+            paid_at: new Date().toISOString(),
           })
           .select()
           .single();
 
         if (error) throw error;
-        toast.success("Inscrição criada com sucesso!");
+        toast.success("Inscrição criada e aprovada com sucesso!");
       }
 
       setIsDialogOpen(false);
