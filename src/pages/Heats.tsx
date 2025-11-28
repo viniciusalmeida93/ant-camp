@@ -261,13 +261,14 @@ export default function Heats() {
       let orderedParticipants: any[];
       
       if (!hasResults) {
-        // Primeira prova: ordem de inscrição (created_at) - mais antigas primeiro
-        // Isso garante que quem se inscreveu primeiro fica nas primeiras baterias
+        // Primeira prova: ordem de inscrição (created_at) - mais antigas por último
+        // Isso garante que quem se inscreveu primeiro fica nas ÚLTIMAS baterias
+        // (vantagem estratégica: pode ver os resultados dos outros antes de competir)
         orderedParticipants = categoryRegs
           .sort((a, b) => {
             const timeA = new Date(a.created_at).getTime();
             const timeB = new Date(b.created_at).getTime();
-            return timeA - timeB; // Ordem crescente: mais antigas primeiro
+            return timeB - timeA; // Ordem decrescente: mais antigas por último
           })
           .map(reg => ({
             registrationId: reg.id,
@@ -1055,7 +1056,7 @@ export default function Heats() {
       <Card className="mt-8 p-6 shadow-card bg-primary/5">
         <h3 className="font-bold mb-3">Sobre a Semeadura Automática</h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>Primeiro WOD:</strong> Distribuição por ordem de inscrição</li>
+          <li>• <strong>Primeiro WOD:</strong> Distribuição por ordem de inscrição (quem se inscreveu primeiro fica nas últimas baterias - vantagem estratégica)</li>
           <li>• <strong>WODs seguintes:</strong> Ordenação por pontuação acumulada</li>
           <li>• <strong>Líderes na última bateria:</strong> Atletas com mais pontos competem por último (vantagem estratégica)</li>
           <li>• <strong>Edição Manual:</strong> Clique em "Editar Baterias" para ativar o modo de edição. Arraste e solte participantes entre baterias ou dentro da mesma bateria para reorganizar</li>
