@@ -257,6 +257,36 @@ export default function Registrations() {
     }
   };
 
+  const handleTestEmail = async () => {
+    const toastId = toast.loading("Testando configuração de email...");
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('test-resend');
+      
+      console.log("Resultado do teste:", data, error);
+      
+      if (error) {
+        toast.error(`Erro no teste: ${error.message}`, { id: toastId });
+        console.error("Detalhes do erro:", error);
+        return;
+      }
+      
+      if (data?.success) {
+        toast.success("✅ Email de teste enviado! Verifique sua caixa de entrada.", { id: toastId });
+      } else {
+        toast.error(`Erro: ${data?.error || "Desconhecido"}`, { id: toastId });
+      }
+      
+      // Mostrar resultado completo no console
+      console.log("========= TESTE DE EMAIL =========");
+      console.log(JSON.stringify(data, null, 2));
+      console.log("==================================");
+    } catch (error: any) {
+      console.error("Erro ao testar email:", error);
+      toast.error(`Erro: ${error.message}`, { id: toastId });
+    }
+  };
+
   const handleSendEmail = async (reg: any) => {
     const teamMembersCount = reg.team_members ? reg.team_members.length : 0;
     const totalRecipients = 1 + teamMembersCount; // atleta principal + membros do time
@@ -452,6 +482,15 @@ export default function Registrations() {
           <h1 className="text-4xl font-bold mb-2">Inscrições</h1>
           <p className="text-muted-foreground">Gerencie as inscrições do campeonato</p>
         </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleTestEmail}
+            className="gap-2"
+          >
+            🧪 Testar Email
+          </Button>
         
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
