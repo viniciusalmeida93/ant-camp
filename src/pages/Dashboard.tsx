@@ -108,7 +108,8 @@ export default function Dashboard() {
         ]);
       } catch (error: any) {
         console.error('Erro ao gerar dados de demonstração automaticamente:', error);
-        toast.error('Erro ao gerar dados de demonstração');
+        // Não mostrar erro para o usuário - é apenas demonstração
+        // toast.error('Erro ao gerar dados de demonstração');
         autoSeededRef.current.add(championshipId);
       } finally {
         setSeedingDemo(false);

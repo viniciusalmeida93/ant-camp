@@ -25,7 +25,7 @@ export default function Registrations() {
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [formData, setFormData] = useState({
     teamName: '',
-    members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M' }],
+    members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
     boxName: '',
   });
 
@@ -312,6 +312,22 @@ export default function Registrations() {
           setSaving(false);
           return;
         }
+        if (!member.cpf.trim()) {
+          toast.error(`Digite o CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
+          setSaving(false);
+          return;
+        }
+        const cpfClean = member.cpf.replace(/\D/g, '');
+        if (cpfClean.length !== 11) {
+          toast.error(`CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`} deve ter 11 dígitos`);
+          setSaving(false);
+          return;
+        }
+        if (!member.birthDate.trim()) {
+          toast.error(`Digite a data de nascimento do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
+          setSaving(false);
+          return;
+        }
       }
 
       // Calcular valores com taxa de plataforma de 5%
@@ -326,12 +342,16 @@ export default function Registrations() {
         athlete_name: selectedCategory.format === 'individual' ? formData.members[0].name : formData.teamName,
         athlete_email: formData.members[0].email,
         athlete_phone: formData.members[0].whatsapp,
+        athlete_cpf: formData.members[0].cpf.replace(/\D/g, ''),
+        athlete_birth_date: formData.members[0].birthDate,
         team_name: selectedCategory.format !== 'individual' ? formData.teamName : null,
         team_members: selectedCategory.format !== 'individual' ? formData.members.map(m => ({
           name: m.name,
           email: m.email,
           whatsapp: m.whatsapp,
           shirtSize: m.shirtSize || 'M',
+          cpf: m.cpf.replace(/\D/g, ''),
+          birthDate: m.birthDate,
         })) : null,
         shirt_size: selectedCategory.format === 'individual' ? (formData.members[0].shirtSize || 'M') : null,
         subtotal_cents: subtotalCents,
@@ -369,17 +389,20 @@ export default function Registrations() {
       setEditingRegistration(null);
       setFormData({
         teamName: '',
-        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M' }],
+        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
         boxName: '',
       });
       await loadData();
     } catch (error: any) {
       console.error("Error creating registration:", error);
-      // Silenciar erros técnicos de desenvolvimento
+      console.error("Error details:", error.message, error.details, error.hint);
+      // Mostrar erro detalhado para debug
       if (error.message?.includes("violates check constraint")) {
         toast.error("Erro ao processar inscrição. Verifique os dados e tente novamente.");
+      } else if (error.message?.includes("null value")) {
+        toast.error("Erro: Todos os campos obrigatórios devem ser preenchidos.");
       } else {
-        toast.error("Erro ao criar inscrição. Tente novamente.");
+        toast.error(`Erro ao criar inscrição: ${error.message || "Tente novamente"}`);
       }
     } finally {
       setSaving(false);
@@ -424,7 +447,7 @@ export default function Registrations() {
             setEditingRegistration(null);
             setFormData({
               teamName: '',
-              members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M' }],
+              members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
               boxName: '',
             });
           }
@@ -531,6 +554,26 @@ export default function Registrations() {
                               value={member.whatsapp}
                               onChange={(e) => updateMember(index, 'whatsapp', e.target.value)}
                               placeholder="(11) 99999-9999"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>CPF *</Label>
+                            <Input
+                              value={member.cpf}
+                              onChange={(e) => updateMember(index, 'cpf', e.target.value)}
+                              placeholder="000.000.000-00"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label>Data de Nascimento *</Label>
+                            <Input
+                              type="date"
+                              value={member.birthDate}
+                              onChange={(e) => updateMember(index, 'birthDate', e.target.value)}
                               required
                             />
                           </div>
