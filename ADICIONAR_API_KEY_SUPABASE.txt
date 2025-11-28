@@ -1,0 +1,20 @@
+========================================
+ADICIONAR API KEY NO SUPABASE
+========================================
+
+1. Acesse: https://supabase.com/dashboard/project/jxuhmqctiyeheamhviob/settings/functions
+
+2. Vá em: "Edge Functions" → "Manage Secrets" (ou "Secrets")
+
+3. Clique em: "Add new secret"
+
+4. Preencha:
+   Name: RESEND_API_KEY
+   Value: re_7i4xRjuc_JaX5Uhs1rpZA9UfvDKsCuNKP
+
+5. Clique em "Save"
+
+========================================
+PRONTO! A chave está configurada.
+========================================
+

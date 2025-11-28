@@ -236,7 +236,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "AntCamp <noreply@seu-dominio.com>", // VOCÊ PRECISA CONFIGURAR SEU DOMÍNIO NO RESEND
+        from: "AntCamp <onboarding@resend.dev>", // Domínio de teste do Resend (funciona imediatamente)
         to: registration.athlete_email,
         subject: `✅ Inscrição Confirmada - ${championship.name}`,
         html: emailHtml,
