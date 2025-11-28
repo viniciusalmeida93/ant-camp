@@ -71,53 +71,14 @@ export default function Dashboard() {
     }
   }, [selectedChampionship]);
 
-  useEffect(() => {
-    const seedDemoData = async () => {
-      if (!selectedChampionship) return;
-
-      const championshipId = selectedChampionship.id;
-      if (autoSeededRef.current.has(championshipId) || seedingDemo) {
-        return;
-      }
-
-      try {
-        const { data: categoriesCheck, error: categoriesCheckError } = await supabase
-          .from("categories")
-          .select("id")
-          .eq("championship_id", championshipId)
-          .limit(1);
-
-        if (categoriesCheckError) {
-          console.error("Erro ao verificar categorias para dados demo:", categoriesCheckError);
-          return;
-        }
-
-        if (!categoriesCheck || categoriesCheck.length === 0) {
-          console.warn("Nenhuma categoria encontrada para gerar dados demo automaticamente.");
-          return;
-        }
-
-        setSeedingDemo(true);
-        await generateDemoData(championshipId);
-        autoSeededRef.current.add(championshipId);
-        toast.success('Dados de demonstração gerados automaticamente!');
-        await Promise.all([
-          loadStats(),
-          loadWODs(),
-          loadChampionshipDays(),
-        ]);
-      } catch (error: any) {
-        console.error('Erro ao gerar dados de demonstração automaticamente:', error);
-        // Não mostrar erro para o usuário - é apenas demonstração
-        // toast.error('Erro ao gerar dados de demonstração');
-        autoSeededRef.current.add(championshipId);
-      } finally {
-        setSeedingDemo(false);
-      }
-    };
-
-    seedDemoData();
-  }, [selectedChampionship]);
+  // DESABILITADO: Geração automática de dados demo
+  // useEffect(() => {
+  //   const seedDemoData = async () => {
+  //     if (!selectedChampionship) return;
+  //     // Código de demo desabilitado para evitar conflitos
+  //   };
+  //   seedDemoData();
+  // }, [selectedChampionship]);
 
   useEffect(() => {
     const ensureDemoConsistency = async () => {
