@@ -159,6 +159,8 @@ export default function Registrations() {
         email: m.email || '',
         whatsapp: m.whatsapp || '',
         shirtSize: m.shirtSize || 'M',
+        cpf: m.cpf || '',
+        birthDate: m.birthDate || '',
       }));
     } else if (category.format === 'individual') {
       members = [{
@@ -166,12 +168,14 @@ export default function Registrations() {
         email: reg.athlete_email || '',
         whatsapp: reg.athlete_phone || '',
         shirtSize: reg.shirt_size || 'M',
+        cpf: reg.athlete_cpf || '',
+        birthDate: reg.athlete_birth_date || '',
       }];
     }
 
     setFormData({
       teamName: reg.team_name || '',
-      members: members.length > 0 ? members : [{ name: '', email: '', whatsapp: '', shirtSize: 'M' }],
+      members: members.length > 0 ? members : [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
       boxName: '', // Box name não está na tabela ainda
     });
 
