@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 
@@ -17,6 +18,7 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [sendingReset, setSendingReset] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,6 +28,13 @@ export default function Auth() {
         navigate("/dashboard");
       }
     });
+
+    // Carregar email salvo do localStorage
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
   }, [navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -39,6 +48,13 @@ export default function Auth() {
       });
 
       if (error) throw error;
+
+      // Salvar ou remover email do localStorage baseado no checkbox
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", email);
+      } else {
+        localStorage.removeItem("rememberedEmail");
+      }
 
       // Check if password reset is required
       const { data: profile } = await supabase
@@ -125,6 +141,19 @@ export default function Auth() {
                       )}
                     </button>
                   </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="remember"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Lembrar meu email
+                  </label>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? (
