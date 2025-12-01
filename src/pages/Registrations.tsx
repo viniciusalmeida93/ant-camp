@@ -231,26 +231,43 @@ export default function Registrations() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // Abrir preview em nova aba
+      if (!session) {
+        toast.error("Você precisa estar logado");
+        return;
+      }
+      
+      toast.info("Carregando visualização do email...");
+      
+      // Fazer requisição com autorização
       const previewUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/preview-registration-email`;
       
-      // Criar formulário para fazer POST em nova aba
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = previewUrl;
-      form.target = '_blank';
+      const response = await fetch(previewUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          registrationId: reg.id,
+        }),
+      });
       
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'registrationId';
-      input.value = reg.id;
-      form.appendChild(input);
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+      }
       
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
+      // Pegar o HTML retornado
+      const htmlContent = await response.text();
       
-      toast.success("Abrindo visualização do email...");
+      // Abrir em nova aba e escrever o HTML
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(htmlContent);
+        newWindow.document.close();
+        toast.success("Email visualizado em nova aba!");
+      } else {
+        toast.error("Bloqueador de pop-up ativo. Permita pop-ups para este site.");
+      }
     } catch (error: any) {
       console.error("Error previewing email:", error);
       toast.error("Erro ao visualizar email: " + error.message);
