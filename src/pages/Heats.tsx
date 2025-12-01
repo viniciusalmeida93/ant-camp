@@ -658,12 +658,20 @@ export default function Heats() {
 
       // Criar novo horário base para a bateria sendo editada
       const [hours, minutes] = newScheduledTime.split(':');
-      const baseDate = editingHeat.scheduled_time 
-        ? new Date(editingHeat.scheduled_time) 
-        : new Date();
       
-      baseDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      let currentTime = new Date(baseDate);
+      // Obter a data atual da bateria ou usar hoje
+      let baseDate: Date;
+      if (editingHeat.scheduled_time) {
+        baseDate = new Date(editingHeat.scheduled_time);
+      } else {
+        baseDate = new Date();
+      }
+      
+      // Criar nova data em horário LOCAL
+      const year = baseDate.getFullYear();
+      const month = baseDate.getMonth();
+      const day = baseDate.getDate();
+      let currentTime = new Date(year, month, day, parseInt(hours), parseInt(minutes), 0, 0);
 
       // Atualizar a bateria sendo editada
       const { error: updateError } = await supabase

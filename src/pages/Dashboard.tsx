@@ -579,7 +579,10 @@ export default function Dashboard() {
           dayStartTime = scheduleConfig.startTime || '08:00';
         }
         
-        const startTime = new Date(`${day.date}T${dayStartTime}`);
+        // Criar data em horário LOCAL (não UTC)
+        const [hours, mins] = dayStartTime.split(':');
+        const [year, month, dayNum] = day.date.split('-');
+        const startTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum), parseInt(hours), parseInt(mins), 0, 0);
         let currentTime = new Date(startTime);
         
         console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
@@ -646,6 +649,7 @@ export default function Dashboard() {
             console.log(`Dia ${day.day_number}: Usando intervalo de ${dayBreakInterval} minutos (valor do dia: ${day.break_interval_minutes})`);
             
             for (const heat of sortedHeats) {
+              // Salvar horário usando toISOString (converte para UTC automaticamente)
               const scheduledTime = currentTime.toISOString();
               const timeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -711,8 +715,18 @@ export default function Dashboard() {
         // Usar o primeiro dia ou criar um horário base
         const firstDay = championshipDays.length > 0 ? championshipDays[0] : null;
         const baseDate = firstDay?.date || selectedChampionship.date;
-        const baseStartTime = firstDay?.start_time || scheduleConfig.startTime || '08:00';
-        let currentTime = new Date(`${baseDate}T${baseStartTime}`);
+        let baseStartTime = firstDay?.start_time || scheduleConfig.startTime || '08:00';
+        
+        // Garantir formato HH:MM
+        if (typeof baseStartTime === 'string' && baseStartTime.includes(':')) {
+          const parts = baseStartTime.split(':');
+          baseStartTime = `${parts[0]}:${parts[1]}`;
+        }
+        
+        // Criar data em horário LOCAL (não UTC)
+        const [hours, mins] = baseStartTime.split(':');
+        const [year, month, dayNum] = baseDate.split('-');
+        let currentTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum), parseInt(hours), parseInt(mins), 0, 0);
 
         // Agrupar por WOD
         const heatsByWod = new Map<string, any[]>();
