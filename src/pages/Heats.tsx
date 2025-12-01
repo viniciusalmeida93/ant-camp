@@ -725,22 +725,26 @@ export default function Heats() {
         return;
       }
 
+      // Horário antigo da bateria
+      const oldHeatTime = editingHeat.scheduled_time ? new Date(editingHeat.scheduled_time) : null;
+      if (!oldHeatTime) {
+        toast.error("Bateria não tem horário definido");
+        return;
+      }
+
       // Criar novo horário base para a bateria sendo editada
       const [hours, minutes] = newScheduledTime.split(':');
       
-      // Obter a data atual da bateria ou usar hoje
-      let baseDate: Date;
-      if (editingHeat.scheduled_time) {
-        baseDate = new Date(editingHeat.scheduled_time);
-      } else {
-        baseDate = new Date();
-      }
-      
       // Criar nova data em horário LOCAL
-      const year = baseDate.getFullYear();
-      const month = baseDate.getMonth();
-      const day = baseDate.getDate();
+      const year = oldHeatTime.getFullYear();
+      const month = oldHeatTime.getMonth();
+      const day = oldHeatTime.getDate();
       const newHeatTime = new Date(year, month, day, parseInt(hours), parseInt(minutes), 0, 0);
+
+      // Calcular a DIFERENÇA em milissegundos (pode ser positiva ou negativa)
+      const timeDifference = newHeatTime.getTime() - oldHeatTime.getTime();
+      
+      console.log(`Diferença de tempo: ${timeDifference / 60000} minutos`);
 
       // Atualizar a bateria sendo editada
       const { error: updateError } = await supabase
@@ -753,85 +757,41 @@ export default function Heats() {
       // Buscar TODAS as baterias do campeonato ordenadas por horário
       const { data: allHeatsData, error: heatsError } = await supabase
         .from("heats")
-        .select("*, wods(estimated_duration_minutes)")
+        .select("*")
         .eq("championship_id", selectedChampionship.id)
         .not("scheduled_time", "is", null)
         .order("scheduled_time", { ascending: true });
 
       if (heatsError) throw heatsError;
 
-      // Filtrar baterias que vêm DEPOIS da editada (mesmo dia, horário posterior ou igual)
-      const editedTimeMs = newHeatTime.getTime();
+      // Filtrar baterias que vêm DEPOIS da editada (mesmo dia, horário posterior ao ANTIGO)
       const subsequentHeats = (allHeatsData || []).filter(h => {
         if (h.id === editingTimeHeatId) return false; // Pular a própria bateria editada
         const heatTime = new Date(h.scheduled_time);
-        // Verificar se é do mesmo dia e horário posterior OU IGUAL (para recalcular baterias sobrepostas)
-        return heatTime.toDateString() === newHeatTime.toDateString() && 
-               heatTime.getTime() >= editedTimeMs; // Mudado de > para >= para incluir horários iguais
+        // Pegar baterias do mesmo dia que vinham DEPOIS do horário ANTIGO
+        return heatTime.toDateString() === oldHeatTime.toDateString() && 
+               heatTime.getTime() > oldHeatTime.getTime();
       }).sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
 
       if (subsequentHeats.length === 0) {
-        toast.success("Horário atualizado! (Nenhuma bateria subsequente para recalcular)");
+        toast.success("Horário atualizado! (Nenhuma bateria subsequente para ajustar)");
         await loadHeats();
         setEditingTimeHeatId(null);
         setNewScheduledTime('');
         return;
       }
 
-      // Buscar intervalo entre baterias configurado
-      const { data: daysData } = await supabase
-        .from("championship_days")
-        .select("break_interval_minutes")
-        .eq("championship_id", selectedChampionship.id)
-        .limit(1)
-        .maybeSingle();
-
-      const breakInterval = daysData?.break_interval_minutes || 5;
-
-      // Buscar todas as variações de WOD por categoria
-      const wodIds = [...new Set(subsequentHeats.map(h => h.wod_id))];
-      const { data: variationsData } = await supabase
-        .from("wod_category_variations")
-        .select("*")
-        .in("wod_id", wodIds);
-
-      // Criar mapa de variações: wod_id -> category_id -> duration
-      const variationsMap = new Map();
-      (variationsData || []).forEach(v => {
-        if (!variationsMap.has(v.wod_id)) {
-          variationsMap.set(v.wod_id, new Map());
-        }
-        variationsMap.get(v.wod_id).set(v.category_id, v.estimated_duration_minutes);
-      });
-
-      // Recalcular horários de todas as baterias subsequentes
-      let currentTime = new Date(newHeatTime);
+      // Aplicar a MESMA DIFERENÇA em TODAS as baterias seguintes
       let updatedCount = 1; // Conta a bateria editada
       
       for (const heat of subsequentHeats) {
-        // Buscar duração do WOD (variação por categoria ou padrão)
-        let wodDuration = 15; // Padrão
-        
-        if (heat.wods?.estimated_duration_minutes) {
-          wodDuration = heat.wods.estimated_duration_minutes;
-        }
-        
-        // Verificar se há variação para esta categoria
-        if (variationsMap.has(heat.wod_id)) {
-          const categoryVariation = variationsMap.get(heat.wod_id).get(heat.category_id);
-          if (categoryVariation) {
-            wodDuration = categoryVariation;
-          }
-        }
-
-        // Avançar o tempo: duração do WOD anterior + intervalo
-        currentTime = new Date(currentTime.getTime() + (wodDuration * 60000));
-        currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
+        const oldTime = new Date(heat.scheduled_time);
+        const newTime = new Date(oldTime.getTime() + timeDifference); // Aplica a diferença
 
         // Atualizar horário desta bateria
         const { error: updateErr } = await supabase
           .from("heats")
-          .update({ scheduled_time: currentTime.toISOString() })
+          .update({ scheduled_time: newTime.toISOString() })
           .eq("id", heat.id);
 
         if (updateErr) {
@@ -841,7 +801,9 @@ export default function Heats() {
         }
       }
 
-      toast.success(`Horários recalculados! ${updatedCount} bateria(s) atualizada(s) em todas as categorias.`);
+      const diffMinutes = Math.round(timeDifference / 60000);
+      const diffSign = diffMinutes >= 0 ? '+' : '';
+      toast.success(`Horários ajustados! ${updatedCount} bateria(s) ${diffSign}${diffMinutes} minutos.`);
       
       // Recarregar dados
       await loadHeats();
@@ -849,7 +811,7 @@ export default function Heats() {
       setNewScheduledTime('');
     } catch (error: any) {
       console.error("Erro ao recalcular horários:", error);
-      toast.error("Erro ao recalcular horários das baterias");
+      toast.error("Erro ao ajustar horários das baterias");
     } finally {
       setRecalculatingTimes(false);
     }
