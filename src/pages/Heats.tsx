@@ -368,7 +368,119 @@ export default function Heats() {
         newHeats.push(newHeat);
       }
 
-      toast.success(`${totalHeats} baterias geradas com sucesso!`);
+      toast.success(`${totalHeats} baterias geradas! Calculando horários...`);
+      
+      // Calcular horários automaticamente para as baterias recém-criadas
+      try {
+        // Buscar configurações de dia e horários
+        const { data: daysData } = await supabase
+          .from("championship_days")
+          .select("*")
+          .eq("championship_id", selectedChampionship.id)
+          .order("day_number");
+
+        if (daysData && daysData.length > 0) {
+          // Buscar qual dia este WOD pertence
+          const { data: dayWodData } = await supabase
+            .from("championship_day_wods")
+            .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes)")
+            .eq("wod_id", selectedWOD)
+            .single();
+
+          let targetDay = daysData[0]; // Padrão: primeiro dia
+          if (dayWodData && dayWodData.championship_days) {
+            targetDay = dayWodData.championship_days;
+          }
+
+          // Buscar duração do WOD
+          const { data: wodData } = await supabase
+            .from("wods")
+            .select("estimated_duration_minutes")
+            .eq("id", selectedWOD)
+            .single();
+
+          const wodDuration = wodData?.estimated_duration_minutes || 15;
+          const breakInterval = targetDay.break_interval_minutes || 5;
+
+          // Buscar variação de categoria se existir
+          const { data: variationData } = await supabase
+            .from("wod_category_variations")
+            .select("estimated_duration_minutes")
+            .eq("wod_id", selectedWOD)
+            .eq("category_id", selectedCategory)
+            .maybeSingle();
+
+          const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
+
+          // Buscar TODAS as baterias do mesmo dia para calcular o horário inicial correto
+          const { data: allDayHeats } = await supabase
+            .from("heats")
+            .select("*, wods(*)")
+            .eq("championship_id", selectedChampionship.id)
+            .not("scheduled_time", "is", null)
+            .order("scheduled_time", { ascending: true });
+
+          // Filtrar baterias do mesmo dia
+          const sameDayHeats = (allDayHeats || []).filter(h => {
+            if (!h.scheduled_time) return false;
+            const heatDate = new Date(h.scheduled_time);
+            const targetDate = new Date(targetDay.date);
+            return heatDate.toDateString() === targetDate.toDateString();
+          });
+
+          // Determinar horário inicial
+          let currentTime: Date;
+          
+          if (sameDayHeats.length > 0) {
+            // Se já existem baterias neste dia, começar após a última
+            const lastHeat = sameDayHeats[sameDayHeats.length - 1];
+            const lastHeatTime = new Date(lastHeat.scheduled_time);
+            const lastWodDuration = lastHeat.wods?.estimated_duration_minutes || 15;
+            
+            // Próximo horário = último horário + duração + intervalo
+            currentTime = new Date(lastHeatTime.getTime() + (lastWodDuration * 60000) + (breakInterval * 60000));
+          } else {
+            // Primeira bateria do dia - usar horário de início
+            let startTimeStr = targetDay.start_time || "09:00";
+            if (typeof startTimeStr === 'string' && startTimeStr.includes(':')) {
+              const parts = startTimeStr.split(':');
+              startTimeStr = `${parts[0]}:${parts[1]}`;
+            }
+            
+            const [hours, mins] = startTimeStr.split(':');
+            const [year, month, dayNum] = targetDay.date.split('-');
+            currentTime = new Date(
+              parseInt(year), 
+              parseInt(month) - 1, 
+              parseInt(dayNum), 
+              parseInt(hours), 
+              parseInt(mins), 
+              0, 
+              0
+            );
+          }
+
+          // Atualizar horários das novas baterias
+          for (const heat of newHeats) {
+            await supabase
+              .from("heats")
+              .update({ scheduled_time: currentTime.toISOString() })
+              .eq("id", heat.id);
+
+            // Avançar tempo para próxima bateria
+            currentTime = new Date(currentTime.getTime() + (finalWodDuration * 60000));
+            currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
+          }
+
+          toast.success(`${totalHeats} baterias geradas com horários calculados!`);
+        } else {
+          toast.success(`${totalHeats} baterias geradas! Configure os dias no Dashboard para calcular horários.`);
+        }
+      } catch (scheduleError) {
+        console.error("Erro ao calcular horários:", scheduleError);
+        toast.warning(`${totalHeats} baterias geradas, mas erro ao calcular horários. Calcule manualmente no Dashboard.`);
+      }
+      
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats:", error);
