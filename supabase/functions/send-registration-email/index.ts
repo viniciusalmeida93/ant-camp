@@ -108,7 +108,7 @@ serve(async (req) => {
           
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+            <td style="background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%); padding: 40px 30px; text-align: center;">
               <h1 style="margin: 0; color: white; font-size: 28px;">✅ Inscrição Confirmada!</h1>
               <p style="margin: 10px 0 0 0; color: #f0f0f0; font-size: 16px;">Sua inscrição foi registrada com sucesso</p>
             </td>
@@ -120,7 +120,7 @@ serve(async (req) => {
               
               <!-- Informações do Evento -->
               <div style="margin-bottom: 30px;">
-                <h2 style="margin: 0 0 15px 0; color: #333; font-size: 22px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">
+                <h2 style="margin: 0 0 15px 0; color: #333; font-size: 22px; border-bottom: 2px solid #DC2626; padding-bottom: 10px;">
                   ${championship.name}
                 </h2>
                 <p style="margin: 8px 0; color: #666; font-size: 15px;">
@@ -137,7 +137,7 @@ serve(async (req) => {
                 
                 <p style="margin: 8px 0; color: #495057;">
                   <strong>Número da Inscrição:</strong><br/>
-                  <span style="font-size: 18px; color: #667eea; font-family: monospace;">#${registration.id.substring(0, 8).toUpperCase()}</span>
+                  <span style="font-size: 18px; color: #DC2626; font-family: monospace;">#${registration.id.substring(0, 8).toUpperCase()}</span>
                 </p>
                 
                 <p style="margin: 8px 0; color: #495057;">
@@ -172,8 +172,8 @@ serve(async (req) => {
               ${membersHtml}
 
               <!-- Valores -->
-              <div style="background-color: #e7f3ff; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 15px 0; color: #0066cc; font-size: 18px;">Valor da Inscrição</h3>
+              <div style="background-color: #FEE2E2; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #DC2626; font-size: 18px;">Valor da Inscrição</h3>
                 
                 <table width="100%" cellpadding="5" cellspacing="0" style="color: #495057;">
                   <tr>
@@ -184,9 +184,9 @@ serve(async (req) => {
                     <td>Taxa de serviço:</td>
                     <td align="right">${formatPrice(registration.platform_fee_cents)}</td>
                   </tr>
-                  <tr style="border-top: 2px solid #0066cc;">
+                  <tr style="border-top: 2px solid #DC2626;">
                     <td style="padding-top: 10px;"><strong>Total:</strong></td>
-                    <td align="right" style="padding-top: 10px;"><strong style="font-size: 20px; color: #0066cc;">${formatPrice(registration.total_cents)}</strong></td>
+                    <td align="right" style="padding-top: 10px;"><strong style="font-size: 20px; color: #DC2626;">${formatPrice(registration.total_cents)}</strong></td>
                   </tr>
                 </table>
               </div>
