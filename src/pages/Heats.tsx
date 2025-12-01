@@ -760,14 +760,14 @@ export default function Heats() {
 
       if (heatsError) throw heatsError;
 
-      // Filtrar baterias que vêm DEPOIS da editada (mesmo dia, horário posterior)
+      // Filtrar baterias que vêm DEPOIS da editada (mesmo dia, horário posterior ou igual)
       const editedTimeMs = newHeatTime.getTime();
       const subsequentHeats = (allHeatsData || []).filter(h => {
         if (h.id === editingTimeHeatId) return false; // Pular a própria bateria editada
         const heatTime = new Date(h.scheduled_time);
-        // Verificar se é do mesmo dia e horário posterior
+        // Verificar se é do mesmo dia e horário posterior OU IGUAL (para recalcular baterias sobrepostas)
         return heatTime.toDateString() === newHeatTime.toDateString() && 
-               heatTime.getTime() > editedTimeMs;
+               heatTime.getTime() >= editedTimeMs; // Mudado de > para >= para incluir horários iguais
       }).sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
 
       if (subsequentHeats.length === 0) {
