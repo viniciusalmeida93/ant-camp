@@ -53,6 +53,9 @@ export default function Heats() {
   const [savingEdits, setSavingEdits] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingHeatsOrder, setEditingHeatsOrder] = useState<any[]>([]);
+  const [editingTimeHeatId, setEditingTimeHeatId] = useState<string | null>(null);
+  const [newScheduledTime, setNewScheduledTime] = useState<string>('');
+  const [recalculatingTimes, setRecalculatingTimes] = useState(false);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -586,6 +589,125 @@ export default function Heats() {
     setActiveId(null);
   };
 
+  const handleOpenEditTime = (heatId: string, currentTime: string | null) => {
+    setEditingTimeHeatId(heatId);
+    if (currentTime) {
+      const time = new Date(currentTime);
+      const hours = time.getHours().toString().padStart(2, '0');
+      const minutes = time.getMinutes().toString().padStart(2, '0');
+      setNewScheduledTime(`${hours}:${minutes}`);
+    } else {
+      setNewScheduledTime('08:00');
+    }
+  };
+
+  const handleRecalculateHeatsTime = async () => {
+    if (!editingTimeHeatId || !newScheduledTime || !selectedChampionship || !selectedWOD) return;
+
+    setRecalculatingTimes(true);
+    try {
+      // Buscar o heat sendo editado
+      const editingHeat = heats.find(h => h.id === editingTimeHeatId);
+      if (!editingHeat) {
+        toast.error("Bateria não encontrada");
+        return;
+      }
+
+      // Buscar todas as baterias do mesmo WOD e categoria, ordenadas
+      const sameWodCategoryHeats = heats
+        .filter(h => h.wod_id === selectedWOD && h.category_id === selectedCategory)
+        .sort((a, b) => a.heat_number - b.heat_number);
+
+      // Encontrar o índice da bateria sendo editada
+      const editingIndex = sameWodCategoryHeats.findIndex(h => h.id === editingTimeHeatId);
+      if (editingIndex === -1) {
+        toast.error("Bateria não encontrada na lista");
+        return;
+      }
+
+      // Buscar informações do WOD para pegar a duração
+      const { data: wodData, error: wodError } = await supabase
+        .from("wods")
+        .select("estimated_duration_minutes, championship_id")
+        .eq("id", selectedWOD)
+        .single();
+
+      if (wodError) throw wodError;
+
+      const wodDuration = wodData?.estimated_duration_minutes || 15;
+
+      // Buscar o intervalo entre baterias configurado para este dia
+      const { data: daysData } = await supabase
+        .from("championship_days")
+        .select("break_interval_minutes")
+        .eq("championship_id", selectedChampionship.id)
+        .limit(1)
+        .single();
+
+      const breakInterval = daysData?.break_interval_minutes || 5;
+
+      // Buscar variação de categoria se existir
+      const { data: variationData } = await supabase
+        .from("wod_category_variations")
+        .select("estimated_duration_minutes")
+        .eq("wod_id", selectedWOD)
+        .eq("category_id", selectedCategory)
+        .maybeSingle();
+
+      const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
+
+      // Criar novo horário base para a bateria sendo editada
+      const [hours, minutes] = newScheduledTime.split(':');
+      const baseDate = editingHeat.scheduled_time 
+        ? new Date(editingHeat.scheduled_time) 
+        : new Date();
+      
+      baseDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      let currentTime = new Date(baseDate);
+
+      // Atualizar a bateria sendo editada
+      const { error: updateError } = await supabase
+        .from("heats")
+        .update({ scheduled_time: currentTime.toISOString() })
+        .eq("id", editingTimeHeatId);
+
+      if (updateError) throw updateError;
+
+      // Recalcular horários das baterias subsequentes
+      let updatedCount = 1;
+      for (let i = editingIndex + 1; i < sameWodCategoryHeats.length; i++) {
+        const previousHeat = sameWodCategoryHeats[i - 1];
+        
+        // Avançar o tempo: duração do WOD + intervalo entre baterias
+        currentTime = new Date(currentTime.getTime() + (finalWodDuration * 60000));
+        currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
+
+        const { error: updateErr } = await supabase
+          .from("heats")
+          .update({ scheduled_time: currentTime.toISOString() })
+          .eq("id", sameWodCategoryHeats[i].id);
+
+        if (updateErr) {
+          console.error(`Erro ao atualizar bateria ${sameWodCategoryHeats[i].heat_number}:`, updateErr);
+        } else {
+          updatedCount++;
+        }
+      }
+
+      toast.success(`Horários recalculados! ${updatedCount} bateria(s) atualizada(s).`);
+      
+      // Recarregar dados
+      await loadHeats();
+      setEditingTimeHeatId(null);
+      setNewScheduledTime('');
+    } catch (error: any) {
+      console.error("Erro ao recalcular horários:", error);
+      toast.error("Erro ao recalcular horários das baterias");
+    } finally {
+      setRecalculatingTimes(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -976,12 +1098,22 @@ export default function Heats() {
                   </span>
                 </div>
                 
-                {scheduledTime && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    <span className="text-sm">{scheduledTime}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  {scheduledTime && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-sm">{scheduledTime}</span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                    title="Editar horário"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
 
               <Table>
@@ -1062,6 +1194,56 @@ export default function Heats() {
           <li>• <strong>Edição Manual:</strong> Clique em "Editar Baterias" para ativar o modo de edição. Arraste e solte participantes entre baterias ou dentro da mesma bateria para reorganizar</li>
         </ul>
       </Card>
+
+      {/* Modal de Edição de Horário */}
+      <Dialog open={!!editingTimeHeatId} onOpenChange={(open) => !open && setEditingTimeHeatId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Horário da Bateria</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="scheduled_time">Novo Horário</Label>
+              <Input
+                id="scheduled_time"
+                type="time"
+                value={newScheduledTime}
+                onChange={(e) => setNewScheduledTime(e.target.value)}
+                disabled={recalculatingTimes}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ao alterar este horário, todas as baterias seguintes serão recalculadas automaticamente
+                considerando a duração do WOD e o intervalo entre baterias.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setEditingTimeHeatId(null)}
+                disabled={recalculatingTimes}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleRecalculateHeatsTime}
+                disabled={recalculatingTimes || !newScheduledTime}
+              >
+                {recalculatingTimes ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Recalculando...
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-4 h-4 mr-2" />
+                    Aplicar e Recalcular
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
