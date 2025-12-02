@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2, CopyPlus } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2, CopyPlus, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,23 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 type CategoryVariationForm = {
   displayName: string;
@@ -19,6 +36,96 @@ type CategoryVariationForm = {
   notes: string;
   estimatedDuration: string;
 };
+
+// Componente SortableWODItem para drag and drop
+function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => void; onDelete: () => void }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: wod.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  // Converter tipo do banco para exibição
+  const getTypeDisplay = (type: string) => {
+    const typeMap: Record<string, string> = {
+      'tempo': 'For Time',
+      'amrap': 'AMRAP',
+      'reps': 'Max Reps',
+      'carga': 'Carga Máxima',
+    };
+    return typeMap[type] || type;
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1"
+          title="Arrastar para reorganizar"
+        >
+          <GripVertical className="w-5 h-5" />
+        </button>
+        
+        <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+          <Dumbbell className="w-5 h-5 text-primary" />
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-2">
+            <h3 className="font-semibold">{wod.name}</h3>
+            <Badge variant="outline" className="text-xs">
+              {getTypeDisplay(wod.type)}
+            </Badge>
+            {wod.estimated_duration_minutes && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Time Cap: {wod.estimated_duration_minutes} min
+              </span>
+            )}
+          </div>
+          <div className="p-2 rounded bg-muted/50 mb-2">
+            <pre className="text-sm whitespace-pre-wrap font-mono">{wod.description}</pre>
+          </div>
+          {wod.notes && (
+            <p className="text-xs text-muted-foreground">{wod.notes}</p>
+          )}
+        </div>
+        
+        <div className="flex gap-1 shrink-0">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onEdit}
+            title="Editar WOD"
+            className="h-8 w-8"
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onDelete}
+            title="Excluir WOD"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function WODs() {
   const navigate = useNavigate();
@@ -34,6 +141,14 @@ export default function WODs() {
   const [variationsLoading, setVariationsLoading] = useState(false);
   const [applyToAllCategories, setApplyToAllCategories] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+
+  // Configurar sensores para drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const isMissingVariationTable = (error: any) => {
     if (!error) return false;
@@ -123,6 +238,51 @@ export default function WODs() {
     setCategoryVariations(createEmptyVariations());
     setVariationCategoriesWithData([]);
     setApplyToAllCategories(false);
+  };
+
+  const handleWodDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = wods.findIndex((w) => w.id === active.id);
+    const newIndex = wods.findIndex((w) => w.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newWods = arrayMove(wods, oldIndex, newIndex);
+    setWODs(newWods);
+
+    // Atualizar order_num no banco de dados
+    try {
+      const updates = newWods.map((wod, index) => ({
+        id: wod.id,
+        order_num: index + 1,
+      }));
+
+      // Atualizar todos os WODs em batch
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("wods")
+          .update({ order_num: update.order_num })
+          .eq("id", update.id);
+
+        if (error) {
+          console.error(`Erro ao atualizar order_num do WOD ${update.id}:`, error);
+        }
+      }
+
+      toast.success("Ordem dos WODs atualizada!");
+    } catch (error: any) {
+      console.error("Erro ao atualizar ordem dos WODs:", error);
+      toast.error("Erro ao salvar nova ordem dos WODs");
+      // Reverter para ordem original em caso de erro
+      await loadWODs();
+    }
   };
 
   const handleOpenEdit = async (wod: any) => {
@@ -769,67 +929,27 @@ export default function WODs() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {wods.map((wod) => {
-            return (
-              <div
-                key={wod.id}
-                className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all"
-              >
-                <div className="p-2 rounded-lg bg-primary/10 shrink-0">
-                  <Dumbbell className="w-5 h-5 text-primary" />
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold">{wod.name}</h3>
-                    <Badge variant="outline" className="text-xs">
-                      {wod.type === 'for-time' ? 'For Time' :
-                       wod.type === 'amrap' ? 'AMRAP' :
-                       wod.type === 'emom' ? 'EMOM' :
-                       wod.type === 'tonelagem' ? 'Tonelagem' :
-                       wod.type === 'carga-maxima' ? 'Carga Máxima' :
-                       wod.type}
-                    </Badge>
-                    {wod.estimated_duration_minutes && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Time Cap: {wod.estimated_duration_minutes} min
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-2 rounded bg-muted/50 mb-2">
-                    <pre className="text-sm whitespace-pre-wrap font-mono">{wod.description}</pre>
-                  </div>
-                  {wod.notes && (
-                    <p className="text-xs text-muted-foreground">{wod.notes}</p>
-                  )}
-                </div>
-                
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleOpenEdit(wod)}
-                    title="Editar WOD"
-                    className="h-8 w-8"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleDelete(wod.id)}
-                    title="Excluir WOD"
-                    className="h-8 w-8"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleWodDragEnd}
+        >
+          <SortableContext
+            items={wods.map(w => w.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {wods.map((wod) => (
+                <SortableWODItem
+                  key={wod.id}
+                  wod={wod}
+                  onEdit={() => handleOpenEdit(wod)}
+                  onDelete={() => handleDelete(wod.id)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
     </div>
   );

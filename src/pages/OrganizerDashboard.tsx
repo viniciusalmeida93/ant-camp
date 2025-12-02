@@ -461,6 +461,42 @@ export default function OrganizerDashboard() {
                           </Link>
                         </Button>
                         <Button
+                          variant={champ.is_published ? "default" : "outline"}
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from("championships")
+                                .update({ is_published: !champ.is_published })
+                                .eq("id", champ.id);
+                              
+                              if (error) throw error;
+                              
+                              toast.success(
+                                champ.is_published 
+                                  ? "Campeonato despublicado com sucesso" 
+                                  : "Campeonato publicado com sucesso!"
+                              );
+                              await loadDashboard();
+                            } catch (error: any) {
+                              console.error("Error updating publication status:", error);
+                              toast.error("Erro ao alterar status de publicação");
+                            }
+                          }}
+                        >
+                          {champ.is_published ? (
+                            <>
+                              <Shield className="w-4 h-4 mr-1" />
+                              Despublicar
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              Publicar
+                            </>
+                          )}
+                        </Button>
+                        <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
