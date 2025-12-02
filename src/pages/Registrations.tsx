@@ -608,6 +608,17 @@ export default function Registrations() {
                   </div>
                 )}
 
+                <div>
+                  <Label htmlFor="boxName">Nome do Box *</Label>
+                  <Input
+                    id="boxName"
+                    value={formData.boxName}
+                    onChange={(e) => setFormData({ ...formData, boxName: e.target.value })}
+                    placeholder="Ex: CrossFit SP"
+                    required
+                  />
+                </div>
+
                 <div className="space-y-4">
                   <Label>
                     {selectedCategory.format === 'individual' ? 'Dados do Atleta' : 'Integrantes'}
@@ -692,17 +703,6 @@ export default function Registrations() {
                       </div>
                     </Card>
                   ))}
-                </div>
-
-                <div>
-                  <Label htmlFor="boxName">Nome do Box *</Label>
-                  <Input
-                    id="boxName"
-                    value={formData.boxName}
-                    onChange={(e) => setFormData({ ...formData, boxName: e.target.value })}
-                    placeholder="Ex: CrossFit SP"
-                    required
-                  />
                 </div>
 
                 <div className="flex gap-4 pt-4">
