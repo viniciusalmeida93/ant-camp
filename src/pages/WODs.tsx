@@ -82,6 +82,36 @@ export default function WODs() {
     }));
   };
 
+  // Mapear tipos do banco para tipos do frontend
+  // Banco usa: 'tempo', 'reps', 'carga', 'amrap'
+  const mapDatabaseTypeToFrontend = (databaseType: string): string => {
+    const typeMap: Record<string, string> = {
+      'tempo': 'for-time',
+      'amrap': 'amrap',
+      'reps': 'max-reps',
+      'carga': 'carga-maxima',
+    };
+    return typeMap[databaseType] || 'for-time'; // Default para 'for-time' se não encontrar
+  };
+
+  // Mapear tipos do frontend para tipos do banco de dados
+  // Banco aceita: 'tempo', 'reps', 'carga', 'amrap'
+  const mapWodTypeToDatabase = (frontendType: string): string => {
+    const typeMap: Record<string, string> = {
+      'for-time': 'tempo',
+      'amrap': 'amrap',
+      'emom': 'tempo', // EMOM também é tempo
+      'tonelagem': 'carga', // Tonelagem é carga
+      'carga-maxima': 'carga', // Carga máxima é carga
+      'max-reps': 'reps',
+      'max-weight': 'carga',
+      'tempo': 'tempo',
+      'reps': 'reps',
+      'carga': 'carga',
+    };
+    return typeMap[frontendType] || 'tempo'; // Default para 'tempo' se não encontrar
+  };
+
   const handleOpenCreate = () => {
     setEditingWOD(null);
     setWodType('for-time');
@@ -92,7 +122,9 @@ export default function WODs() {
 
   const handleOpenEdit = async (wod: any) => {
     setEditingWOD(wod);
-    setWodType(wod.type || 'for-time');
+    // Converter tipo do banco para tipo do frontend
+    const frontendType = mapDatabaseTypeToFrontend(wod.type || 'tempo');
+    setWodType(frontendType);
     setIsDialogOpen(true);
     setCategoryVariations(createEmptyVariations());
     setVariationCategoriesWithData([]);
@@ -236,7 +268,9 @@ export default function WODs() {
 
   useEffect(() => {
     if (editingWOD) {
-      setWodType(editingWOD.type || 'for-time');
+      // Converter tipo do banco para tipo do frontend
+      const frontendType = mapDatabaseTypeToFrontend(editingWOD.type || 'tempo');
+      setWodType(frontendType);
     } else {
       setWodType('for-time');
     }
@@ -261,10 +295,13 @@ export default function WODs() {
         ? Math.max(...wods.map(w => w.order_num || 0))
         : 0;
 
+      // Mapear o tipo do frontend para o tipo do banco
+      const databaseType = mapWodTypeToDatabase(wodType || 'for-time');
+
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
-        type: wodType || 'for-time',
+        type: databaseType,
         description: formData.get('description') as string,
         time_cap: null,
         tiebreaker: null, // Removed
