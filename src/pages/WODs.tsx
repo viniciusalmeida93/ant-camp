@@ -806,15 +806,19 @@ export default function WODs() {
                           categories.forEach(cat => {
                             const current = prev[cat.id] || emptyVariation();
                             // Copiar todos os dados padrão para todas as categorias
-                            // Se já houver valores editados (não vazios), mantê-los; caso contrário, usar os valores padrão
+                            // Se já houver valores editados (não vazios), mantê-los; caso contrário, copiar os valores padrão
+                            const hasExistingDescription = current.description && current.description.trim().length > 0;
+                            const hasExistingNotes = current.notes && current.notes.trim().length > 0;
+                            const hasExistingDuration = current.estimatedDuration && current.estimatedDuration.trim().length > 0;
+                            
                             updated[cat.id] = {
-                              displayName: current.displayName?.trim() || '',
-                              // Se já tem descrição editada, manter; senão, copiar do padrão
-                              description: current.description?.trim() || descriptionValue,
-                              // Se já tem notas editadas, manter; senão, copiar do padrão
-                              notes: current.notes?.trim() || notesValue,
-                              // Se já tem time cap editado, manter; senão, copiar do padrão
-                              estimatedDuration: current.estimatedDuration?.trim() || estimatedDurationValue,
+                              displayName: current.displayName || '',
+                              // Se já tem descrição editada (não vazia), manter; senão, copiar do padrão
+                              description: hasExistingDescription ? current.description : descriptionValue,
+                              // Se já tem notas editadas (não vazias), manter; senão, copiar do padrão
+                              notes: hasExistingNotes ? current.notes : notesValue,
+                              // Se já tem time cap editado (não vazio), manter; senão, copiar do padrão
+                              estimatedDuration: hasExistingDuration ? current.estimatedDuration : estimatedDurationValue,
                             };
                           });
                           return updated;
