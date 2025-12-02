@@ -171,13 +171,21 @@ export default function WODs() {
   };
 
   const updateVariationField = (categoryId: string, field: keyof CategoryVariationForm, value: string) => {
-    setCategoryVariations(prev => ({
-      ...prev,
-      [categoryId]: {
-        ...(prev[categoryId] || emptyVariation()),
-        [field]: value,
-      },
-    }));
+    setCategoryVariations(prev => {
+      const currentVariation = prev[categoryId] || emptyVariation();
+      return {
+        ...prev,
+        [categoryId]: {
+          ...currentVariation,
+          [field]: value, // Sempre usar o valor exato que foi digitado
+        },
+      };
+    });
+
+    // Marcar categoria como tendo dados personalizados
+    if (!variationCategoriesWithData.includes(categoryId)) {
+      setVariationCategoriesWithData(prev => [...prev, categoryId]);
+    }
   };
 
   const hasVariationData = (variation?: CategoryVariationForm) => {
@@ -854,6 +862,7 @@ export default function WODs() {
                 ) : (
                   <Accordion type="multiple" className="mt-4 space-y-2">
                     {categories.map(category => {
+                      // Garantir que sempre temos uma variação válida do estado
                       const variation = categoryVariations[category.id] || emptyVariation();
                       const hasCustomData = hasVariationData(variation);
 
@@ -871,7 +880,7 @@ export default function WODs() {
                             <div>
                               <Label className="text-sm">Nome exibido</Label>
                               <Input
-                                value={variation.displayName}
+                                value={variation.displayName ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'displayName', event.target.value)}
                                 placeholder={`Nome opcional para ${category.name}`}
                               />
@@ -879,28 +888,28 @@ export default function WODs() {
                             <div>
                               <Label className="text-sm">Descrição personalizada</Label>
                               <Textarea
-                                value={variation.description || ''}
+                                value={variation.description ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
-                                placeholder={!variation.description ? (editingWOD?.description || 'Descrição específica desta categoria') : ''}
+                                placeholder={!variation.description || variation.description.trim() === '' ? (editingWOD?.description || 'Descrição específica desta categoria') : ''}
                                 rows={4}
                               />
                             </div>
                             <div>
                               <Label className="text-sm">Time Cap (min)</Label>
                               <Input
-                                type="number"
+                                type="text"
                                 min="1"
-                                value={variation.estimatedDuration || ''}
+                                value={variation.estimatedDuration ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
-                                placeholder={!variation.estimatedDuration ? (editingWOD?.estimated_duration_minutes || 15).toString() : ''}
+                                placeholder={!variation.estimatedDuration || variation.estimatedDuration.trim() === '' ? (editingWOD?.estimated_duration_minutes || 15).toString() : ''}
                               />
                             </div>
                             <div>
                               <Label className="text-sm">Notas específicas</Label>
                               <Textarea
-                                value={variation.notes || ''}
+                                value={variation.notes ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
-                                placeholder={!variation.notes ? (editingWOD?.notes || 'Observações ou padrões específicos desta categoria') : ''}
+                                placeholder={!variation.notes || variation.notes.trim() === '' ? (editingWOD?.notes || 'Observações ou padrões específicos desta categoria') : ''}
                                 rows={3}
                               />
                             </div>
