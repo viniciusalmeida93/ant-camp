@@ -806,12 +806,15 @@ export default function WODs() {
                           categories.forEach(cat => {
                             const current = prev[cat.id] || emptyVariation();
                             // Copiar todos os dados padrão para todas as categorias
-                            // Se já houver valores editados, mantê-los; caso contrário, usar os valores padrão
+                            // Se já houver valores editados (não vazios), mantê-los; caso contrário, usar os valores padrão
                             updated[cat.id] = {
-                              displayName: current.displayName || '',
-                              description: current.description || descriptionValue,
-                              notes: current.notes || notesValue,
-                              estimatedDuration: current.estimatedDuration || estimatedDurationValue,
+                              displayName: current.displayName?.trim() || '',
+                              // Se já tem descrição editada, manter; senão, copiar do padrão
+                              description: current.description?.trim() || descriptionValue,
+                              // Se já tem notas editadas, manter; senão, copiar do padrão
+                              notes: current.notes?.trim() || notesValue,
+                              // Se já tem time cap editado, manter; senão, copiar do padrão
+                              estimatedDuration: current.estimatedDuration?.trim() || estimatedDurationValue,
                             };
                           });
                           return updated;
@@ -872,9 +875,9 @@ export default function WODs() {
                             <div>
                               <Label className="text-sm">Descrição personalizada</Label>
                               <Textarea
-                                value={variation.description}
+                                value={variation.description || ''}
                                 onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
-                                placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
+                                placeholder={!variation.description ? (editingWOD?.description || 'Descrição específica desta categoria') : ''}
                                 rows={4}
                               />
                             </div>
@@ -883,17 +886,17 @@ export default function WODs() {
                               <Input
                                 type="number"
                                 min="1"
-                                value={variation.estimatedDuration}
+                                value={variation.estimatedDuration || ''}
                                 onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
-                                placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
+                                placeholder={!variation.estimatedDuration ? (editingWOD?.estimated_duration_minutes || 15).toString() : ''}
                               />
                             </div>
                             <div>
                               <Label className="text-sm">Notas específicas</Label>
                               <Textarea
-                                value={variation.notes}
+                                value={variation.notes || ''}
                                 onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
-                                placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
+                                placeholder={!variation.notes ? (editingWOD?.notes || 'Observações ou padrões específicos desta categoria') : ''}
                                 rows={3}
                               />
                             </div>
