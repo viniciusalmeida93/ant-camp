@@ -153,29 +153,32 @@ export default function Registrations() {
 
     // Parse team_members if exists
     let members: any[] = [];
-    if (reg.team_members && Array.isArray(reg.team_members)) {
-      members = reg.team_members.map((m: any) => ({
-        name: m.name || '',
-        email: m.email || '',
-        whatsapp: m.whatsapp || '',
-        shirtSize: m.shirtSize || 'M',
-        cpf: m.cpf || '',
-        birthDate: m.birthDate || '',
-      }));
-    } else if (category.format === 'individual') {
-      members = [{
-        name: reg.athlete_name || '',
-        email: reg.athlete_email || '',
-        whatsapp: reg.athlete_phone || '',
-        shirtSize: reg.shirt_size || 'M',
-        cpf: reg.athlete_cpf || '',
-        birthDate: reg.athlete_birth_date || '',
-      }];
+    if (reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0) {
+      // Só usar team_members se tiver dados reais (não apenas objetos vazios)
+      const validMembers = reg.team_members.filter((m: any) => 
+        m && (m.name || m.email || m.whatsapp || m.cpf || m.birthDate)
+      );
+      if (validMembers.length > 0) {
+        members = validMembers.map((m: any) => ({
+          name: m.name || '',
+          email: m.email || '',
+          whatsapp: m.whatsapp || '',
+          shirtSize: m.shirtSize || 'M',
+          cpf: m.cpf || '',
+          birthDate: m.birthDate || '',
+        }));
+      }
+    }
+    
+    // Se não encontrou membros válidos, inicializar vazio baseado no formato
+    if (members.length === 0) {
+      const teamSize = category.team_size || (category.format === 'dupla' ? 2 : category.format === 'trio' ? 3 : category.format === 'time' ? 4 : 1);
+      members = Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }));
     }
 
     setFormData({
       teamName: reg.team_name || reg.athlete_name || '',
-      members: members.length > 0 ? members : [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+      members: members,
       boxName: reg.box_name || '',
     });
 
@@ -392,17 +395,22 @@ export default function Registrations() {
         athlete_name: athleteName,
         athlete_email: formData.members[0]?.email?.trim() || null,
         athlete_phone: formData.members[0]?.whatsapp?.trim() || null,
-        athlete_cpf: formData.members[0]?.cpf?.replace(/\D/g, '') || null,
+        athlete_cpf: (formData.members[0]?.cpf?.replace(/\D/g, '') || '').length > 0 
+          ? formData.members[0].cpf.replace(/\D/g, '') 
+          : null,
         athlete_birth_date: formData.members[0]?.birthDate?.trim() || null,
         team_name: selectedCategory.format !== 'individual' ? formData.teamName.trim() : null,
-        team_members: selectedCategory.format !== 'individual' ? formData.members.map(m => ({
-          name: m.name?.trim() || '',
-          email: m.email?.trim() || '',
-          whatsapp: m.whatsapp?.trim() || '',
-          shirtSize: m.shirtSize || 'M',
-          cpf: m.cpf?.replace(/\D/g, '') || '',
-          birthDate: m.birthDate?.trim() || '',
-        })) : null,
+        team_members: selectedCategory.format !== 'individual' ? formData.members.map(m => {
+          // Retornar apenas campos preenchidos, campos vazios não devem aparecer
+          const member: any = {};
+          if (m.name?.trim()) member.name = m.name.trim();
+          if (m.email?.trim()) member.email = m.email.trim();
+          if (m.whatsapp?.trim()) member.whatsapp = m.whatsapp.trim();
+          if (m.shirtSize) member.shirtSize = m.shirtSize;
+          if (m.cpf?.replace(/\D/g, '')) member.cpf = m.cpf.replace(/\D/g, '');
+          if (m.birthDate?.trim()) member.birthDate = m.birthDate.trim();
+          return member;
+        }).filter(m => Object.keys(m).length > 0) : null,
         shirt_size: selectedCategory.format === 'individual' ? (formData.members[0]?.shirtSize || 'M') : null,
         box_name: formData.boxName.trim() || null,
         subtotal_cents: subtotalCents,
