@@ -97,6 +97,8 @@ export default function WODs() {
   // Mapear tipos do frontend para tipos do banco de dados
   // Banco aceita: 'tempo', 'reps', 'carga', 'amrap'
   const mapWodTypeToDatabase = (frontendType: string): string => {
+    if (!frontendType) return 'tempo';
+    
     const typeMap: Record<string, string> = {
       'for-time': 'tempo',
       'amrap': 'amrap',
@@ -109,7 +111,10 @@ export default function WODs() {
       'reps': 'reps',
       'carga': 'carga',
     };
-    return typeMap[frontendType] || 'tempo'; // Default para 'tempo' se não encontrar
+    
+    const mapped = typeMap[frontendType.toLowerCase()] || 'tempo';
+    console.log(`Mapeando "${frontendType}" para "${mapped}"`);
+    return mapped;
   };
 
   const handleOpenCreate = () => {
@@ -296,7 +301,18 @@ export default function WODs() {
         : 0;
 
       // Mapear o tipo do frontend para o tipo do banco
+      // Banco aceita apenas: 'tempo', 'reps', 'carga', 'amrap'
       const databaseType = mapWodTypeToDatabase(wodType || 'for-time');
+      
+      // Validação extra: garantir que o tipo está na lista permitida
+      const validTypes = ['tempo', 'reps', 'carga', 'amrap'];
+      if (!validTypes.includes(databaseType)) {
+        console.error('Tipo inválido após mapeamento:', databaseType, 'Tipo original:', wodType);
+        throw new Error(`Tipo de WOD inválido: ${databaseType}. Tipos permitidos: ${validTypes.join(', ')}`);
+      }
+      
+      console.log('Tipo do frontend:', wodType);
+      console.log('Tipo mapeado para banco:', databaseType);
 
       const wodData = {
         championship_id: selectedChampionship.id,
