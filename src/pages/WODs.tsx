@@ -805,7 +805,8 @@ export default function WODs() {
                           const updated: Record<string, CategoryVariationForm> = {};
                           categories.forEach(cat => {
                             const current = prev[cat.id] || emptyVariation();
-                            // Copiar todos os dados padrão, mas manter valores já editados se existirem
+                            // Copiar todos os dados padrão para todas as categorias
+                            // Se já houver valores editados, mantê-los; caso contrário, usar os valores padrão
                             updated[cat.id] = {
                               displayName: current.displayName || '',
                               description: current.description || descriptionValue,
@@ -816,8 +817,12 @@ export default function WODs() {
                           return updated;
                         });
                         
-                        // Marcar todas as categorias como tendo dados
-                        setVariationCategoriesWithData(categories.map(cat => cat.id));
+                        // Marcar todas as categorias como tendo dados (para que sejam salvas)
+                        const allCategoryIds = categories.map(cat => cat.id);
+                        setVariationCategoriesWithData(prev => {
+                          const combined = new Set([...prev, ...allCategoryIds]);
+                          return Array.from(combined);
+                        });
                       }
                       setApplyToAllCategories(prev => !prev);
                     }}
