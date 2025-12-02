@@ -539,14 +539,20 @@ export default function WODs() {
               ? parsedVariationDuration
               : baseEstimatedDuration;
 
-            // Quando applyAll está ativo mas não há dados personalizados, usar valores padrão do WOD
+            // Quando applyAll está ativo, usar os valores da variação (que foram copiados do padrão)
+            // Se não houver valores na variação, usar os valores padrão do formulário
+            const form = formRef.current;
+            const formData = form ? new FormData(form) : null;
+            const baseDescription = formData?.get('description') as string || '';
+            const baseNotes = formData?.get('notes') as string || '';
+            
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
-              description: variation?.description?.trim() || null,
-              notes: variation?.notes?.trim() || null,
-              estimated_duration_minutes: hasData && estimatedDurationMinutes > 0 
+              description: variation?.description?.trim() || (applyAll && !hasData ? baseDescription : null),
+              notes: variation?.notes?.trim() || (applyAll && !hasData ? baseNotes : null),
+              estimated_duration_minutes: estimatedDurationMinutes > 0 
                 ? estimatedDurationMinutes 
                 : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
             };
@@ -789,19 +795,29 @@ export default function WODs() {
                     className="ml-auto flex items-center gap-1"
                     onClick={() => {
                       if (!applyToAllCategories && formRef.current) {
+                        // Quando ativando, copiar TODOS os dados padrão para todas as categorias
                         const data = new FormData(formRef.current);
+                        const descriptionValue = (data.get('description') as string) || '';
+                        const notesValue = (data.get('notes') as string) || '';
                         const estimatedDurationValue = (data.get('estimatedDuration') as string) || '';
+                        
                         setCategoryVariations(prev => {
                           const updated: Record<string, CategoryVariationForm> = {};
                           categories.forEach(cat => {
                             const current = prev[cat.id] || emptyVariation();
+                            // Copiar todos os dados padrão, mas manter valores já editados se existirem
                             updated[cat.id] = {
-                              ...current,
+                              displayName: current.displayName || '',
+                              description: current.description || descriptionValue,
+                              notes: current.notes || notesValue,
                               estimatedDuration: current.estimatedDuration || estimatedDurationValue,
                             };
                           });
                           return updated;
                         });
+                        
+                        // Marcar todas as categorias como tendo dados
+                        setVariationCategoriesWithData(categories.map(cat => cat.id));
                       }
                       setApplyToAllCategories(prev => !prev);
                     }}
