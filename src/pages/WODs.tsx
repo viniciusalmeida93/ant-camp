@@ -314,37 +314,56 @@ export default function WODs() {
           .map(cat => {
             const variation = categoryVariations[cat.id];
             const hasData = hasVariationData(variation);
+            
+            // Se applyAll está ativo, criar variação para todas as categorias (mesmo sem dados personalizados)
+            // Se applyAll está desativado, só criar se houver dados personalizados
             if (!hasData && !applyAll) return null;
 
-            const parsedVariationDuration = variation?.estimatedDuration.trim()
+            const parsedVariationDuration = variation?.estimatedDuration?.trim()
               ? parseInt(variation.estimatedDuration, 10)
               : NaN;
             const estimatedDurationMinutes = Number.isFinite(parsedVariationDuration) && parsedVariationDuration > 0
               ? parsedVariationDuration
               : baseEstimatedDuration;
 
+            // Quando applyAll está ativo mas não há dados personalizados, usar valores padrão do WOD
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
               description: variation?.description?.trim() || null,
               notes: variation?.notes?.trim() || null,
-              estimated_duration_minutes: estimatedDurationMinutes || null,
+              estimated_duration_minutes: hasData && estimatedDurationMinutes > 0 
+                ? estimatedDurationMinutes 
+                : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
             };
           })
           .filter(Boolean);
 
         if (variationsToUpsert.length > 0) {
-          const { error: variationError } = await supabase
-            .from("wod_category_variations")
-            .upsert(variationsToUpsert as any[], { onConflict: "wod_id,category_id" });
+          try {
+            const { error: variationError } = await supabase
+              .from("wod_category_variations")
+              .upsert(variationsToUpsert as any[], { onConflict: "wod_id,category_id" });
 
-          if (variationError && !isMissingVariationTable(variationError)) {
-            throw variationError;
-          }
-
-          if (variationError && isMissingVariationTable(variationError)) {
-            console.warn('Tabela wod_category_variations ausente durante upsert; prosseguindo sem variações específicas.');
+            if (variationError) {
+              // Se a tabela não existe, apenas logar e continuar
+              if (isMissingVariationTable(variationError)) {
+                console.warn('Tabela wod_category_variations ausente durante upsert; prosseguindo sem variações específicas.');
+              } else {
+                // Para outros erros, logar detalhes e lançar
+                console.error("Erro ao salvar variações:", variationError);
+                throw variationError;
+              }
+            }
+          } catch (variationError: any) {
+            // Se for erro de tabela ausente, apenas logar
+            if (isMissingVariationTable(variationError)) {
+              console.warn('Tabela wod_category_variations ausente; prosseguindo sem variações específicas.');
+            } else {
+              // Para outros erros, lançar para ser capturado pelo catch externo
+              throw variationError;
+            }
           }
         }
 
@@ -381,7 +400,14 @@ export default function WODs() {
       await loadWODs();
     } catch (error: any) {
       console.error("Error saving WOD:", error);
-      toast.error("Erro ao salvar WOD");
+      const errorMessage = error?.message || error?.details || "Erro desconhecido";
+      console.error("Detalhes do erro:", {
+        message: errorMessage,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint
+      });
+      toast.error(`Erro ao salvar WOD: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
