@@ -174,9 +174,9 @@ export default function Registrations() {
     }
 
     setFormData({
-      teamName: reg.team_name || '',
+      teamName: reg.team_name || reg.athlete_name || '',
       members: members.length > 0 ? members : [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
-      boxName: '', // Box name não está na tabela ainda
+      boxName: reg.box_name || '',
     });
 
     setIsDialogOpen(true);
@@ -330,6 +330,7 @@ export default function Registrations() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     setSaving(true);
 
     try {
@@ -339,45 +340,32 @@ export default function Registrations() {
         return;
       }
 
-      // Validate all required fields
-      if (selectedCategory.format !== 'individual' && !formData.teamName.trim()) {
-        toast.error("Digite o nome do time");
+      // Validar apenas campos obrigatórios: nome do time/atleta e box
+      if (!formData.teamName.trim()) {
+        const errorMsg = selectedCategory.format === 'individual' 
+          ? "Digite o nome do atleta" 
+          : "Digite o nome do time";
+        toast.error(errorMsg);
         setSaving(false);
         return;
       }
 
+      if (!formData.boxName.trim()) {
+        toast.error("Digite o nome do box");
+        setSaving(false);
+        return;
+      }
+
+      // Validar CPF apenas se foi preenchido (não obrigatório, mas se preenchido deve ser válido)
       for (let i = 0; i < formData.members.length; i++) {
         const member = formData.members[i];
-        if (!member.name.trim()) {
-          toast.error(`Digite o nome completo do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
-          setSaving(false);
-          return;
-        }
-        if (!member.email.trim()) {
-          toast.error(`Digite o email do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
-          setSaving(false);
-          return;
-        }
-        if (!member.whatsapp.trim()) {
-          toast.error(`Digite o WhatsApp do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
-          setSaving(false);
-          return;
-        }
-        if (!member.cpf.trim()) {
-          toast.error(`Digite o CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
-          setSaving(false);
-          return;
-        }
-        const cpfClean = member.cpf.replace(/\D/g, '');
-        if (cpfClean.length !== 11) {
-          toast.error(`CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`} deve ter 11 dígitos`);
-          setSaving(false);
-          return;
-        }
-        if (!member.birthDate.trim()) {
-          toast.error(`Digite a data de nascimento do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`}`);
-          setSaving(false);
-          return;
+        if (member.cpf.trim()) {
+          const cpfClean = member.cpf.replace(/\D/g, '');
+          if (cpfClean.length !== 11) {
+            toast.error(`CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`} deve ter 11 dígitos`);
+            setSaving(false);
+            return;
+          }
         }
       }
 
@@ -387,24 +375,36 @@ export default function Registrations() {
       const totalCents = subtotalCents + platformFeeCents; // Valor total com taxa
 
       // Create or update registration
-      const registrationData = {
+      // Campos opcionais podem ser vazios/null, mas athlete_name é obrigatório (NOT NULL)
+      const athleteName = selectedCategory.format === 'individual' 
+        ? (formData.members[0]?.name?.trim() || formData.teamName.trim() || 'Sem nome')
+        : formData.teamName.trim();
+      
+      if (!athleteName || athleteName.trim() === '') {
+        toast.error("Nome do time/atleta é obrigatório");
+        setSaving(false);
+        return;
+      }
+
+      const registrationData: any = {
         championship_id: selectedChampionship.id,
         category_id: selectedCategory.id,
-        athlete_name: selectedCategory.format === 'individual' ? formData.members[0].name : formData.teamName,
-        athlete_email: formData.members[0].email,
-        athlete_phone: formData.members[0].whatsapp,
-        athlete_cpf: formData.members[0].cpf.replace(/\D/g, ''),
-        athlete_birth_date: formData.members[0].birthDate,
-        team_name: selectedCategory.format !== 'individual' ? formData.teamName : null,
+        athlete_name: athleteName,
+        athlete_email: formData.members[0]?.email?.trim() || null,
+        athlete_phone: formData.members[0]?.whatsapp?.trim() || null,
+        athlete_cpf: formData.members[0]?.cpf?.replace(/\D/g, '') || null,
+        athlete_birth_date: formData.members[0]?.birthDate?.trim() || null,
+        team_name: selectedCategory.format !== 'individual' ? formData.teamName.trim() : null,
         team_members: selectedCategory.format !== 'individual' ? formData.members.map(m => ({
-          name: m.name,
-          email: m.email,
-          whatsapp: m.whatsapp,
+          name: m.name?.trim() || '',
+          email: m.email?.trim() || '',
+          whatsapp: m.whatsapp?.trim() || '',
           shirtSize: m.shirtSize || 'M',
-          cpf: m.cpf.replace(/\D/g, ''),
-          birthDate: m.birthDate,
+          cpf: m.cpf?.replace(/\D/g, '') || '',
+          birthDate: m.birthDate?.trim() || '',
         })) : null,
-        shirt_size: selectedCategory.format === 'individual' ? (formData.members[0].shirtSize || 'M') : null,
+        shirt_size: selectedCategory.format === 'individual' ? (formData.members[0]?.shirtSize || 'M') : null,
+        box_name: formData.boxName.trim() || null,
         subtotal_cents: subtotalCents,
         platform_fee_cents: platformFeeCents,
         total_cents: totalCents,
@@ -554,7 +554,15 @@ export default function Registrations() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+              <form 
+                onSubmit={handleSubmit} 
+                className="space-y-4 mt-4" 
+                noValidate
+                onInvalid={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >
                 <div className="p-3 bg-primary/10 rounded-lg mb-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -587,6 +595,19 @@ export default function Registrations() {
                   </div>
                 )}
 
+                {selectedCategory.format === 'individual' && (
+                  <div>
+                    <Label htmlFor="teamName">Nome do Atleta *</Label>
+                    <Input
+                      id="teamName"
+                      value={formData.teamName}
+                      onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
+                      placeholder="Nome do atleta"
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <Label>
                     {selectedCategory.format === 'individual' ? 'Dados do Atleta' : 'Integrantes'}
@@ -600,57 +621,57 @@ export default function Registrations() {
                           </p>
                         )}
                         <div>
-                          <Label>Nome Completo *</Label>
+                          <Label>Nome Completo</Label>
                           <Input
                             value={member.name}
                             onChange={(e) => updateMember(index, 'name', e.target.value)}
-                            placeholder="Nome completo"
-                            required
+                            placeholder="Nome completo (opcional)"
+                            required={false}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label>Email *</Label>
+                            <Label>Email</Label>
                             <Input
-                              type="email"
+                              type="text"
                               value={member.email}
                               onChange={(e) => updateMember(index, 'email', e.target.value)}
-                              placeholder="email@exemplo.com"
-                              required
+                              placeholder="email@exemplo.com (opcional)"
+                              required={false}
                             />
                           </div>
                           <div>
-                            <Label>WhatsApp *</Label>
+                            <Label>WhatsApp</Label>
                             <Input
                               value={member.whatsapp}
                               onChange={(e) => updateMember(index, 'whatsapp', e.target.value)}
-                              placeholder="(11) 99999-9999"
-                              required
+                              placeholder="(11) 99999-9999 (opcional)"
+                              required={false}
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label>CPF *</Label>
+                            <Label>CPF</Label>
                             <Input
                               value={member.cpf}
                               onChange={(e) => updateMember(index, 'cpf', e.target.value)}
-                              placeholder="000.000.000-00"
-                              required
+                              placeholder="000.000.000-00 (opcional)"
+                              required={false}
                             />
                           </div>
                           <div>
-                            <Label>Data de Nascimento *</Label>
+                            <Label>Data de Nascimento</Label>
                             <Input
                               type="date"
                               value={member.birthDate}
                               onChange={(e) => updateMember(index, 'birthDate', e.target.value)}
-                              required
+                              required={false}
                             />
                           </div>
                         </div>
                         <div>
-                          <Label>Tamanho da Camisa *</Label>
+                          <Label>Tamanho da Camisa</Label>
                           <Select
                             value={member.shirtSize || 'M'}
                             onValueChange={(value) => updateMember(index, 'shirtSize', value)}
@@ -674,12 +695,13 @@ export default function Registrations() {
                 </div>
 
                 <div>
-                  <Label htmlFor="boxName">Nome do Box</Label>
+                  <Label htmlFor="boxName">Nome do Box *</Label>
                   <Input
                     id="boxName"
                     value={formData.boxName}
                     onChange={(e) => setFormData({ ...formData, boxName: e.target.value })}
-                    placeholder="Ex: CrossFit SP (opcional)"
+                    placeholder="Ex: CrossFit SP"
+                    required
                   />
                 </div>
 

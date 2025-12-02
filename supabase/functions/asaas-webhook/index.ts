@@ -88,10 +88,38 @@ serve(async (req) => {
       throw updateRegistrationError;
     }
 
-    // If approved, check waitlist
+    // If approved, send confirmation email
     if (registrationStatus === "approved") {
-      // TODO: Send confirmation email
       console.log("Payment approved for registration:", paymentRecord.registration_id);
+      
+      // Enviar email de confirmação automaticamente
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        
+        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            registrationId: paymentRecord.registration_id,
+          }),
+        });
+
+        if (emailResponse.ok) {
+          const emailData = await emailResponse.json();
+          console.log("Confirmation email sent successfully:", emailData);
+        } else {
+          const errorData = await emailResponse.text();
+          console.error("Failed to send confirmation email:", errorData);
+          // Não falhar o webhook se o email falhar
+        }
+      } catch (emailError: any) {
+        console.error("Error sending confirmation email:", emailError);
+        // Não falhar o webhook se o email falhar
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {
