@@ -1052,7 +1052,7 @@ export default function Heats() {
               <Button 
                 onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
                 variant={isGlobalEditMode ? "default" : "outline"}
-                className="flex-1"
+                className="flex-1 h-12"
               >
                 <Edit2 className="w-4 h-4 mr-2" />
                 {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
@@ -1060,7 +1060,7 @@ export default function Heats() {
             )}
             <Button 
               onClick={handleGenerateHeats} 
-              className={filteredHeats.length > 0 ? "flex-1 shadow-glow" : "flex-1 shadow-glow md:col-span-2"} 
+              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
               disabled={generating || isGlobalEditMode}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
