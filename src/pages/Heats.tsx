@@ -1121,114 +1121,96 @@ export default function Heats() {
       </div>
 
       <Card className="p-6 shadow-card mb-6">
-        {!selectedCategory && !selectedWOD ? (
-          // Modo: Gerar todas as baterias
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div className="md:col-span-2">
-              <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria (padrão para todas as categorias)</Label>
-              <Input
-                id="athletesPerHeat"
-                type="number"
-                value={athletesPerHeat}
-                onChange={(e) => {
-                  const newValue = parseInt(e.target.value) || 10;
-                  setAthletesPerHeat(newValue);
-                }}
-                min={1}
-                max={30}
-              />
-            </div>
-            <div>
-              <Button 
-                onClick={handleGenerateAllHeats} 
-                className="w-full shadow-glow h-12" 
-                disabled={generating}
-                size="lg"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                {generating ? 'Gerando Todas...' : 'GERAR TODAS AS BATERIAS'}
-              </Button>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
+          <div>
+            <Label htmlFor="category">Categoria</Label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : (
-          // Modo: Seleção específica de categoria e WOD
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
-            <div>
-              <Label htmlFor="category">Categoria</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div>
-              <Label htmlFor="wod">WOD</Label>
-              <Select value={selectedWOD} onValueChange={setSelectedWOD}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {wods.map(wod => (
-                    <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label htmlFor="wod">WOD</Label>
+            <Select value={selectedWOD} onValueChange={setSelectedWOD}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {wods.map(wod => (
+                  <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div>
-              <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria</Label>
-              <Input
-                id="athletesPerHeat"
-                type="number"
-                value={athletesPerHeat}
-                onChange={async (e) => {
-                  const newValue = parseInt(e.target.value) || 10;
-                  setAthletesPerHeat(newValue);
-                  // Salvar automaticamente na categoria
-                  if (selectedCategory) {
-                    try {
-                      await supabase
-                        .from("categories")
-                        .update({ athletes_per_heat: newValue })
-                        .eq("id", selectedCategory);
-                    } catch (error) {
-                      console.error("Erro ao salvar athletes_per_heat:", error);
-                    }
+          <div>
+            <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria</Label>
+            <Input
+              id="athletesPerHeat"
+              type="number"
+              value={athletesPerHeat}
+              onChange={async (e) => {
+                const newValue = parseInt(e.target.value) || 10;
+                setAthletesPerHeat(newValue);
+                // Salvar automaticamente na categoria
+                if (selectedCategory) {
+                  try {
+                    await supabase
+                      .from("categories")
+                      .update({ athletes_per_heat: newValue })
+                      .eq("id", selectedCategory);
+                  } catch (error) {
+                    console.error("Erro ao salvar athletes_per_heat:", error);
                   }
-                }}
-                min={1}
-                max={30}
-              />
-            </div>
-
-            <div className="flex gap-2">
-              {filteredHeats.length > 0 && (
-                <Button 
-                  onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
-                  variant={isGlobalEditMode ? "default" : "outline"}
-                  className="flex-1 h-12"
-                >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
-                </Button>
-              )}
-              <Button 
-                onClick={handleGenerateHeats} 
-                className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
-                disabled={generating || isGlobalEditMode}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                {generating ? 'Gerando...' : 'Gerar Baterias'}
-              </Button>
-            </div>
+                }
+              }}
+              min={1}
+              max={30}
+            />
           </div>
-        )}
+
+          <div className="flex gap-2">
+            {filteredHeats.length > 0 && (
+              <Button 
+                onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
+                variant={isGlobalEditMode ? "default" : "outline"}
+                className="flex-1 h-12"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
+              </Button>
+            )}
+            <Button 
+              onClick={handleGenerateHeats} 
+              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
+              disabled={generating || isGlobalEditMode}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Gerando...' : 'Gerar Baterias'}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Botão para gerar todas as baterias */}
+        <div className="pt-4 border-t">
+          <Button 
+            onClick={handleGenerateAllHeats} 
+            className="w-full shadow-glow h-12" 
+            disabled={generating || isGlobalEditMode}
+            variant="destructive"
+            size="lg"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+            {generating ? 'Gerando Todas as Baterias...' : 'GERAR TODAS AS BATERIAS'}
+          </Button>
+        </div>
         {isGlobalEditMode && filteredHeats.length > 0 && (
           <div className="flex gap-2 mt-4 pt-4 border-t">
             <Button 
