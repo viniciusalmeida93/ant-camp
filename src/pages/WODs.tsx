@@ -860,7 +860,7 @@ export default function WODs() {
                   <Button
                     type="button"
                     size="sm"
-                    variant={applyToAllCategories ? 'default' : 'outline'}
+                    variant={applyToAllCategories ? 'default' : 'destructive'}
                     className="ml-auto flex items-center gap-1"
                     onClick={() => {
                       if (!applyToAllCategories && formRef.current) {
