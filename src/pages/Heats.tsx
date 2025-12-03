@@ -78,10 +78,10 @@ export default function Heats() {
   }, [selectedChampionship, selectedCategory]);
 
   useEffect(() => {
-    if (selectedCategory && selectedWOD) {
+    if (selectedChampionship) {
       loadHeats();
     }
-  }, [selectedCategory, selectedWOD]);
+  }, [selectedChampionship, selectedCategory, selectedWOD]);
 
   // Carregar athletes_per_heat da categoria quando ela for selecionada
   useEffect(() => {
@@ -169,15 +169,25 @@ export default function Heats() {
   };
 
   const loadHeats = async () => {
-    if (!selectedCategory || !selectedWOD) return;
+    if (!selectedChampionship) return;
 
     try {
-      const { data: heatsData, error: heatsError } = await supabase
+      let query = supabase
         .from("heats")
         .select("*")
-        .eq("category_id", selectedCategory)
-        .eq("wod_id", selectedWOD)
-        .order("heat_number");
+        .eq("championship_id", selectedChampionship.id);
+
+      // Se categoria e WOD estão selecionados, filtrar por eles
+      if (selectedCategory && selectedWOD) {
+        query = query.eq("category_id", selectedCategory).eq("wod_id", selectedWOD);
+      } else if (selectedCategory) {
+        query = query.eq("category_id", selectedCategory);
+      } else if (selectedWOD) {
+        query = query.eq("wod_id", selectedWOD);
+      }
+      // Se nenhum está selecionado, carregar todas as baterias do campeonato
+
+      const { data: heatsData, error: heatsError } = await query.order("heat_number");
 
       if (heatsError) throw heatsError;
 
@@ -194,20 +204,24 @@ export default function Heats() {
         if (!entriesError) {
           setHeatEntries(entriesData || []);
         }
+      } else {
+        setHeatEntries([]);
       }
     } catch (error: any) {
       console.error("Error loading heats:", error);
     }
   };
 
-  const calculateLeaderboard = () => {
-    if (!selectedCategory) return [];
+  const calculateLeaderboard = (categoryId?: string) => {
+    // Se não há categoria selecionada, retornar vazio (não há como calcular ranking sem categoria)
+    const targetCategory = categoryId || selectedCategory;
+    if (!targetCategory) return [];
 
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any>();
     
     wodResults
-      .filter(r => r.category_id === selectedCategory)
+      .filter(r => r.category_id === targetCategory)
       .forEach(result => {
         const regId = result.registration_id;
         if (!regId) return;
@@ -969,10 +983,29 @@ export default function Heats() {
     );
   }
 
-  const filteredHeats = selectedCategory && selectedWOD
-    ? heats.filter(h => h.category_id === selectedCategory && h.wod_id === selectedWOD)
-        .sort((a, b) => a.heat_number - b.heat_number)
-    : [];
+  // Filtrar baterias baseado nas seleções (ou mostrar todas se não houver seleção)
+  const filteredHeats = heats.filter(h => {
+    if (selectedCategory && selectedWOD) {
+      return h.category_id === selectedCategory && h.wod_id === selectedWOD;
+    } else if (selectedCategory) {
+      return h.category_id === selectedCategory;
+    } else if (selectedWOD) {
+      return h.wod_id === selectedWOD;
+    }
+    // Se nenhum filtro está selecionado, mostrar todas
+    return true;
+  }).sort((a, b) => {
+    // Ordenar por categoria, depois WOD, depois número da bateria
+    const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+    const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+    if (categoryA !== categoryB) return categoryA - categoryB;
+    
+    const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+    const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+    if (wodA !== wodB) return wodA - wodB;
+    
+    return a.heat_number - b.heat_number;
+  });
 
   // Componente Sortable para bateria
   function SortableHeat({ heat, isEditing, children }: { heat: any; isEditing: boolean; children: any }) {
@@ -1031,9 +1064,9 @@ export default function Heats() {
   }
 
   // Componente Sortable para participante
-  function SortableParticipant({ entry, heatId, isEditing }: { entry: any; heatId: string; isEditing: boolean }) {
+  function SortableParticipant({ entry, heatId, isEditing, categoryId }: { entry: any; heatId: string; isEditing: boolean; categoryId: string }) {
     const reg = registrations.find(r => r.id === entry.registration_id);
-    const lbEntry = calculateLeaderboard().find(l => l.registrationId === entry.registration_id);
+    const lbEntry = calculateLeaderboard(categoryId).find(l => l.registrationId === entry.registration_id);
     const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
     
     const {
@@ -1234,7 +1267,7 @@ export default function Heats() {
         )}
       </Card>
 
-      {filteredHeats.length > 0 && (
+      {filteredHeats.length > 0 ? (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -1314,6 +1347,7 @@ export default function Heats() {
                                       entry={entry}
                                       heatId={heat.id}
                                       isEditing={isGlobalEditMode}
+                                      categoryId={heat.category_id}
                                     />
                                   ))
                                 )}
@@ -1335,13 +1369,26 @@ export default function Heats() {
                   ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                   : '';
 
+                const categoryName = categories.find(c => c.id === heat.category_id)?.name || 'Categoria';
+                const wodName = wods.find(w => w.id === heat.wod_id)?.name || 'WOD';
+
                 return (
             <Card key={heat.id} className="p-6 shadow-card animate-fade-in">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Badge variant="default" className="text-lg px-4 py-2">
                           Bateria {heat.heat_number}
                   </Badge>
+                  {(!selectedCategory || !selectedWOD) && (
+                    <>
+                      <Badge variant="outline" className="text-sm">
+                        {categoryName}
+                      </Badge>
+                      <Badge variant="outline" className="text-sm">
+                        {wodName}
+                      </Badge>
+                    </>
+                  )}
                   <span className="text-muted-foreground">
                           {currentEntries.length} atletas/times
                   </span>
@@ -1387,7 +1434,8 @@ export default function Heats() {
                         ) : (
                           currentEntries.map(entry => {
                             const reg = registrations.find(r => r.id === entry.registration_id);
-                            const lbEntry = calculateLeaderboard().find(l => l.registrationId === entry.registration_id);
+                            const heatCategoryId = heat.category_id;
+                            const lbEntry = calculateLeaderboard(heatCategoryId).find(l => l.registrationId === entry.registration_id);
                             const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
                             
                             return (
@@ -1422,14 +1470,20 @@ export default function Heats() {
         </DndContext>
       )}
 
-      {selectedCategory && selectedWOD && filteredHeats.length === 0 && (
+      {filteredHeats.length === 0 && (
         <Card className="p-12 text-center shadow-card">
           <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground mb-4">
-            Nenhuma bateria gerada para este WOD ainda.
+            {selectedCategory && selectedWOD 
+              ? "Nenhuma bateria gerada para este WOD ainda."
+              : "Nenhuma bateria gerada ainda."
+            }
           </p>
           <p className="text-sm text-muted-foreground">
-            Clique em "Gerar Baterias" para organizar automaticamente.
+            {selectedCategory && selectedWOD
+              ? 'Clique em "Gerar Baterias" para organizar automaticamente.'
+              : 'Selecione uma categoria e WOD ou clique em "GERAR TODAS AS BATERIAS" para gerar todas de uma vez.'
+            }
           </p>
         </Card>
       )}
