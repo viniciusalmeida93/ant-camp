@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, RefreshCw, Download, Clock, Loader2, Edit2, GripVertical } from 'lucide-react';
+import { Users, RefreshCw, Download, Clock, Loader2, Edit2, GripVertical, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -991,6 +991,115 @@ export default function Heats() {
   };
 
 
+  const handleIntercalateHeats = async () => {
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    setSavingEdits(true);
+    try {
+      // Pegar todas as baterias filtradas (mesma categoria e WOD, ou todas se não filtrado)
+      // Usar editingHeatsOrder que já está filtrado e ordenado
+      const heatsToIntercalate = [...editingHeatsOrder].sort((a, b) => {
+        // Ordenar por WOD primeiro, depois categoria, depois número da bateria
+        const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+        const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+        if (wodA !== wodB) return wodA - wodB;
+        
+        const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+        const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+        if (categoryA !== categoryB) return categoryA - categoryB;
+        
+        return a.heat_number - b.heat_number;
+      });
+
+      if (heatsToIntercalate.length === 0) {
+        toast.error("Nenhuma bateria encontrada para intercalar");
+        return;
+      }
+
+      // Criar um mapa de todas as entries por bateria
+      const entriesByHeat = new Map<string, any[]>();
+      heatsToIntercalate.forEach(heat => {
+        const entries = allHeatEntries.get(heat.id) || [];
+        entriesByHeat.set(heat.id, [...entries]);
+      });
+
+      // Intercalar baterias
+      for (let i = 0; i < heatsToIntercalate.length; i++) {
+        const currentHeat = heatsToIntercalate[i];
+        const currentEntries = entriesByHeat.get(currentHeat.id) || [];
+        
+        // Buscar athletes_per_heat da categoria ou do heat
+        const category = categories.find(c => c.id === currentHeat.category_id);
+        const maxAthletes = currentHeat.athletes_per_heat || category?.athletes_per_heat || athletesPerHeat;
+        
+        if (currentEntries.length < maxAthletes) {
+          // Esta bateria precisa de mais atletas
+          const needed = maxAthletes - currentEntries.length;
+          
+          // Procurar atletas nas próximas baterias
+          for (let j = i + 1; j < heatsToIntercalate.length && needed > 0; j++) {
+            const nextHeat = heatsToIntercalate[j];
+            const nextEntries = entriesByHeat.get(nextHeat.id) || [];
+            
+            // Verificar se é da mesma categoria e WOD (só intercalar dentro do mesmo contexto)
+            if (currentHeat.category_id === nextHeat.category_id && currentHeat.wod_id === nextHeat.wod_id) {
+              // Pegar atletas da próxima bateria
+              const toMove = nextEntries.splice(0, needed);
+              currentEntries.push(...toMove);
+              entriesByHeat.set(currentHeat.id, currentEntries);
+              entriesByHeat.set(nextHeat.id, nextEntries);
+              needed -= toMove.length;
+            }
+          }
+        }
+      }
+
+      // Atualizar lane_numbers e salvar no banco
+      const allEntriesToUpdate: any[] = [];
+      
+      // Deletar todas as entries das baterias afetadas
+      const affectedHeatIds = Array.from(entriesByHeat.keys());
+      const { error: deleteError } = await supabase
+        .from("heat_entries")
+        .delete()
+        .in("heat_id", affectedHeatIds);
+
+      if (deleteError) throw deleteError;
+
+      // Inserir todas as entries atualizadas
+      entriesByHeat.forEach((entries, heatId) => {
+        entries.forEach((entry, index) => {
+          if (entry.registration_id) {
+            allEntriesToUpdate.push({
+              heat_id: heatId,
+              registration_id: entry.registration_id,
+              lane_number: index + 1,
+            });
+          }
+        });
+      });
+
+      if (allEntriesToUpdate.length > 0) {
+        const { error: insertError } = await supabase
+          .from("heat_entries")
+          .insert(allEntriesToUpdate);
+
+        if (insertError) throw insertError;
+      }
+
+      toast.success("Baterias intercaladas com sucesso!");
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error intercalating heats:", error);
+      toast.error("Erro ao intercalar baterias");
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   const handleOpenEditTime = (heatId: string, currentTime: string | null) => {
     setEditingTimeHeatId(heatId);
     if (currentTime) {
@@ -1155,7 +1264,7 @@ export default function Heats() {
   });
 
   // Componente Sortable para bateria
-  function SortableHeat({ heat, children }: { heat: any; children: any }) {
+  function SortableHeat({ heat, children }: { heat: any; children: (props: { dragAttributes: any; dragListeners: any }) => any }) {
     const {
       attributes,
       listeners,
@@ -1179,13 +1288,7 @@ export default function Heats() {
         style={style}
         className={isDragging ? 'opacity-50 z-50' : ''}
       >
-        <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded">
-            <GripVertical className="w-5 h-5 text-muted-foreground" />
-          </div>
-          <span className="text-sm text-muted-foreground">Arraste para reordenar as baterias</span>
-        </div>
-        {children}
+        {children({ dragAttributes: attributes, dragListeners: listeners })}
       </div>
     );
   }
@@ -1386,58 +1489,88 @@ export default function Heats() {
                 const categoryName = categories.find(c => c.id === heat.category_id)?.name || 'Categoria';
                 const wodName = wods.find(w => w.id === heat.wod_id)?.name || 'WOD';
 
+                const category = categories.find(c => c.id === heat.category_id);
+                const maxAthletes = heat.athletes_per_heat || category?.athletes_per_heat || athletesPerHeat;
+                const needsIntercalation = currentEntries.length < maxAthletes;
+
                 return (
                   <SortableHeat key={heat.id} heat={heat}>
-                    <Card className="p-6 shadow-card animate-fade-in">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Badge variant="default" className="text-lg px-4 py-2">
-                            Bateria {heat.heat_number}
-                          </Badge>
-                          {(!selectedCategory || !selectedWOD) && (
-                            <>
-                              <Badge variant="outline" className="text-sm">
-                                {categoryName}
-                              </Badge>
-                              <Badge variant="outline" className="text-sm">
-                                {wodName}
-                              </Badge>
-                            </>
-                          )}
-                          <span className="text-muted-foreground">
-                            {currentEntries.length} atletas/times
-                          </span>
+                    {({ dragAttributes, dragListeners }) => (
+                      <Card className="p-6 shadow-card animate-fade-in relative">
+                        {/* Ícone de arraste no canto superior direito */}
+                        <div 
+                          {...dragAttributes} 
+                          {...dragListeners} 
+                          className="absolute top-4 right-4 cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded z-10"
+                          title="Arraste para reordenar"
+                        >
+                          <GripVertical className="w-5 h-5 text-muted-foreground" />
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          {scheduledTime ? (
-                            <>
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="w-4 h-4" />
-                                <span className="text-sm">{scheduledTime}</span>
-                              </div>
+
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <Badge variant="default" className="text-lg px-4 py-2">
+                              Bateria {heat.heat_number}
+                            </Badge>
+                            {(!selectedCategory || !selectedWOD) && (
+                              <>
+                                <Badge variant="outline" className="text-sm">
+                                  {categoryName}
+                                </Badge>
+                                <Badge variant="outline" className="text-sm">
+                                  {wodName}
+                                </Badge>
+                              </>
+                            )}
+                            <span className="text-muted-foreground">
+                              {currentEntries.length} atletas/times
+                            </span>
+                            {needsIntercalation && (
+                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-600">
+                                Precisa intercalar ({currentEntries.length}/{maxAthletes})
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {scheduledTime ? (
+                              <>
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <Clock className="w-4 h-4" />
+                                  <span className="text-sm">{scheduledTime}</span>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                                  title="Editar horário"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                              </>
+                            ) : (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
-                                title="Editar horário"
+                                title="Definir horário"
                               >
-                                <Edit2 className="w-4 h-4" />
+                                <Clock className="w-4 h-4 mr-2" />
+                                Definir Horário
                               </Button>
-                            </>
-                          ) : (
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
-                              title="Definir horário"
+                              onClick={handleIntercalateHeats}
+                              disabled={savingEdits}
+                              title="Intercalar baterias para preencher baterias incompletas"
                             >
-                              <Clock className="w-4 h-4 mr-2" />
-                              Definir Horário
+                              <Shuffle className="w-4 h-4 mr-2" />
+                              Intercalar
                             </Button>
-                          )}
+                          </div>
                         </div>
-                      </div>
 
                       <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
                         <HeatDropZone heatId={heat.id} isEmpty={currentEntries.length === 0}>
@@ -1474,7 +1607,8 @@ export default function Heats() {
                           </Table>
                         </HeatDropZone>
                       </SortableContext>
-                    </Card>
+                      </Card>
+                    )}
                   </SortableHeat>
                 );
               })}
