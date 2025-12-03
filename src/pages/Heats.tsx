@@ -992,7 +992,7 @@ export default function Heats() {
       </div>
 
       <Card className="p-6 shadow-card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
           <div>
             <Label htmlFor="category">Categoria</Label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
