@@ -83,26 +83,12 @@ function SortableRegistrationItem({
               #{reg.registrationOrder || 0}
             </span>
             <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
-            <span className="font-semibold text-foreground ml-auto shrink-0">
-              R$ {(reg.total_cents / 100).toFixed(2).replace('.', ',')}
-            </span>
           </div>
           
-          {/* Info - Layout Responsivo */}
+          {/* Info Simplificada - Apenas Categoria e Data */}
           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold">{reg.category?.name}</span>
-              {hasMembers && (
-                <>
-                  <span>•</span>
-                  <span>{reg.team_members.length} integrante(s)</span>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap text-xs">
-              <span className="truncate max-w-[180px] sm:max-w-none">{reg.athlete_email}</span>
-              <span className="hidden sm:inline">•</span>
-              <span className="hidden sm:inline">{reg.athlete_phone}</span>
             </div>
             <div className="text-xs">
               Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
@@ -115,49 +101,61 @@ function SortableRegistrationItem({
             </div>
           </div>
 
-          {/* Dropdown de Integrantes */}
-          {hasMembers && (
-            <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="mt-3">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-between text-xs h-8"
-                >
-                  <span className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Ver integrantes ({reg.team_members.length})
-                  </span>
-                  {isExpanded ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <div className="bg-muted/50 rounded-sm p-3 space-y-2">
-                  {reg.team_members.map((member: any, index: number) => (
-                    <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                      <div className="font-semibold mb-1">
-                        Integrante {index + 1}
-                        {member.name && ` - ${member.name}`}
-                      </div>
-                      <div className="space-y-1 text-muted-foreground">
-                        {member.email && <div>📧 {member.email}</div>}
-                        {member.whatsapp && <div>📱 {member.whatsapp}</div>}
-                        {member.cpf && <div>🆔 CPF: {member.cpf}</div>}
-                        {member.birthDate && (
-                          <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
-                        )}
-                        {member.shirtSize && <div>👕 Tamanho: {member.shirtSize}</div>}
-                      </div>
-                    </div>
-                  ))}
+          {/* Dropdown de Integrantes - Sempre disponível para ver detalhes */}
+          <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="mt-3">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-between text-xs h-8"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Ver integrantes{hasMembers ? ` (${reg.team_members.length + 1})` : ''}
+                </span>
+                {isExpanded ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <div className="bg-muted/50 rounded-sm p-3 space-y-2">
+                {/* Atleta Principal */}
+                <div className="text-xs border-b border-border/50 pb-2">
+                  <div className="font-semibold mb-1">
+                    Atleta Principal
+                    {reg.athlete_name && ` - ${reg.athlete_name}`}
+                  </div>
+                  <div className="space-y-1 text-muted-foreground">
+                    {reg.athlete_email && <div>📧 {reg.athlete_email}</div>}
+                    {reg.athlete_phone && <div>📱 {reg.athlete_phone}</div>}
+                    {reg.box_name && <div>🏋️ Box: {reg.box_name}</div>}
+                  </div>
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+                
+                {/* Integrantes do Time */}
+                {hasMembers && reg.team_members.map((member: any, index: number) => (
+                  <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    <div className="font-semibold mb-1">
+                      Integrante {index + 1}
+                      {member.name && ` - ${member.name}`}
+                    </div>
+                    <div className="space-y-1 text-muted-foreground">
+                      {member.email && <div>📧 {member.email}</div>}
+                      {member.whatsapp && <div>📱 {member.whatsapp}</div>}
+                      {member.cpf && <div>🆔 CPF: {member.cpf}</div>}
+                      {member.birthDate && (
+                        <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
+                      )}
+                      {member.shirtSize && <div>👕 Tamanho: {member.shirtSize}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         
         {/* Botões de Ação */}
