@@ -804,23 +804,27 @@ export default function WODs() {
                     onClick={() => {
                       if (!applyToAllCategories && formRef.current) {
                         // Quando ativando, copiar TODOS os dados padrão para todas as categorias
-                        const data = new FormData(formRef.current);
-                        // Garantir que os valores sejam sempre strings válidas
-                        const descriptionValue = String(data.get('description') || '').trim();
-                        const notesValue = String(data.get('notes') || '').trim();
-                        const estimatedDurationValue = String(data.get('estimatedDuration') || '').trim();
+                        // Ler valores diretamente dos elementos do formulário para garantir valores reais
+                        const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
+                        const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
+                        const estimatedDurationInput = formRef.current.querySelector('[name="estimatedDuration"]') as HTMLInputElement;
+                        
+                        // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
+                        const descriptionValue = descriptionInput?.value || '';
+                        const notesValue = notesInput?.value || '';
+                        const estimatedDurationValue = estimatedDurationInput?.value || '';
                         
                         setCategoryVariations(prev => {
                           const updated: Record<string, CategoryVariationForm> = {};
                           categories.forEach(cat => {
                             const current = prev[cat.id] || emptyVariation();
-                            // SEMPRE copiar os valores padrão quando ativando o botão
-                            // Os valores serão salvos no estado como strings reais, não placeholders
+                            // Copiar os valores reais dos campos do formulário
+                            // Garantir que sejam strings reais (mesmo que vazias) para poder editar
                             updated[cat.id] = {
                               displayName: current.displayName || '',
-                              description: descriptionValue, // Sempre copiar como string real
-                              notes: notesValue, // Sempre copiar como string real
-                              estimatedDuration: estimatedDurationValue, // Sempre copiar como string real
+                              description: descriptionValue, // Valor real copiado do campo
+                              notes: notesValue, // Valor real copiado do campo
+                              estimatedDuration: estimatedDurationValue, // Valor real copiado do campo
                             };
                           });
                           return updated;
@@ -884,7 +888,7 @@ export default function WODs() {
                               <Textarea
                                 value={variation.description ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
-                                placeholder={variation.description && variation.description.trim() !== '' ? '' : (editingWOD?.description || 'Descrição específica desta categoria')}
+                                placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
                                 rows={4}
                               />
                             </div>
@@ -895,7 +899,7 @@ export default function WODs() {
                                 min="1"
                                 value={variation.estimatedDuration ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
-                                placeholder={variation.estimatedDuration && variation.estimatedDuration.trim() !== '' ? '' : (editingWOD?.estimated_duration_minutes || 15).toString()}
+                                placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
                               />
                             </div>
                             <div>
@@ -903,7 +907,7 @@ export default function WODs() {
                               <Textarea
                                 value={variation.notes ?? ''}
                                 onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
-                                placeholder={variation.notes && variation.notes.trim() !== '' ? '' : (editingWOD?.notes || 'Observações ou padrões específicos desta categoria')}
+                                placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
                                 rows={3}
                               />
                             </div>
