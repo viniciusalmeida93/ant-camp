@@ -992,7 +992,7 @@ export default function Heats() {
       </div>
 
       <Card className="p-6 shadow-card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
           <div>
             <Label htmlFor="category">Categoria</Label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -1060,7 +1060,7 @@ export default function Heats() {
             )}
             <Button 
               onClick={handleGenerateHeats} 
-              className="flex-1 shadow-glow" 
+              className={filteredHeats.length > 0 ? "flex-1 shadow-glow" : "flex-1 shadow-glow md:col-span-2"} 
               disabled={generating || isGlobalEditMode}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
