@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, RefreshCw, Download, Clock, Loader2, Edit2, X, Plus, ArrowUp, ArrowDown, Save, GripVertical } from 'lucide-react';
+import { Users, RefreshCw, Download, Clock, Loader2, Edit2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,6 @@ export default function Heats() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [athletesPerHeat, setAthletesPerHeat] = useState<number>(10);
-  const [isGlobalEditMode, setIsGlobalEditMode] = useState(false);
   const [allHeatEntries, setAllHeatEntries] = useState<Map<string, any[]>>(new Map());
   const [savingEdits, setSavingEdits] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -95,10 +94,27 @@ export default function Heats() {
 
   // Inicializar entries quando heats são carregados
   useEffect(() => {
-    const filteredHeats = selectedCategory && selectedWOD
-      ? heats.filter(h => h.category_id === selectedCategory && h.wod_id === selectedWOD)
-          .sort((a, b) => a.heat_number - b.heat_number)
-      : [];
+    // Sempre usar todas as baterias filtradas (mesma lógica do filteredHeats)
+    const filteredHeats = heats.filter(h => {
+      if (selectedCategory && selectedWOD) {
+        return h.category_id === selectedCategory && h.wod_id === selectedWOD;
+      } else if (selectedCategory) {
+        return h.category_id === selectedCategory;
+      } else if (selectedWOD) {
+        return h.wod_id === selectedWOD;
+      }
+      return true;
+    }).sort((a, b) => {
+      const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+      const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+      if (categoryA !== categoryB) return categoryA - categoryB;
+      
+      const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+      const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+      if (wodA !== wodB) return wodA - wodB;
+      
+      return a.heat_number - b.heat_number;
+    });
       
     if (filteredHeats.length > 0 && heatEntries.length > 0) {
       const entriesMap = new Map<string, any[]>();
@@ -109,13 +125,17 @@ export default function Heats() {
         entriesMap.set(heat.id, entries);
       });
       setAllHeatEntries(entriesMap);
+    } else {
+      setAllHeatEntries(new Map());
     }
     
     // Inicializar ordem das baterias
     if (filteredHeats.length > 0) {
       setEditingHeatsOrder([...filteredHeats]);
+    } else {
+      setEditingHeatsOrder([]);
     }
-  }, [heats, heatEntries, selectedCategory, selectedWOD]);
+  }, [heats, heatEntries, selectedCategory, selectedWOD, categories, wods]);
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -781,7 +801,7 @@ export default function Heats() {
     setActiveId(event.active.id as string);
   };
 
-  const handleHeatDragEnd = (event: DragEndEvent) => {
+  const handleHeatDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) {
       return;
@@ -798,10 +818,25 @@ export default function Heats() {
         heat_number: index + 1,
       }));
       setEditingHeatsOrder(updatedHeats);
+
+      // Salvar automaticamente
+      try {
+        for (const heat of updatedHeats) {
+          await supabase
+            .from("heats")
+            .update({ heat_number: heat.heat_number })
+            .eq("id", heat.id);
+        }
+        toast.success("Ordem das baterias atualizada!");
+        await loadHeats();
+      } catch (error: any) {
+        console.error("Error saving heat order:", error);
+        toast.error("Erro ao salvar ordem das baterias");
+      }
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) {
       setActiveId(null);
@@ -884,42 +919,23 @@ export default function Heats() {
 
     setAllHeatEntries(newEntriesMap);
     setActiveId(null);
-  };
 
-  const handleSaveAllEdits = async () => {
-    const filteredHeats = selectedCategory && selectedWOD
-      ? heats.filter(h => h.category_id === selectedCategory && h.wod_id === selectedWOD)
-          .sort((a, b) => a.heat_number - b.heat_number)
-      : [];
-
-    if (filteredHeats.length === 0) return;
-
-    setSavingEdits(true);
+    // Salvar automaticamente
     try {
-      // Atualizar ordem das baterias (heat_number)
-      const heatUpdatePromises = editingHeatsOrder.map(heat => 
-        supabase
-          .from("heats")
-          .update({ heat_number: heat.heat_number })
-          .eq("id", heat.id)
-      );
+      setSavingEdits(true);
       
-      await Promise.all(heatUpdatePromises);
-
-      // Deletar todas as entries das baterias filtradas
-      const heatIds = filteredHeats.map(h => h.id);
-      
+      // Deletar todas as entries das baterias afetadas
+      const affectedHeatIds = Array.from(newEntriesMap.keys());
       const { error: deleteError } = await supabase
         .from("heat_entries")
         .delete()
-        .in("heat_id", heatIds);
+        .in("heat_id", affectedHeatIds);
 
       if (deleteError) throw deleteError;
 
       // Inserir todas as entries atualizadas
       const allEntriesToInsert: any[] = [];
-      
-      allHeatEntries.forEach((entries, heatId) => {
+      newEntriesMap.forEach((entries, heatId) => {
         entries.forEach(entry => {
           if (entry.registration_id) {
             allEntriesToInsert.push({
@@ -939,8 +955,7 @@ export default function Heats() {
         if (insertError) throw insertError;
       }
 
-      toast.success("Todas as baterias foram atualizadas com sucesso!");
-      setIsGlobalEditMode(false);
+      toast.success("Baterias atualizadas!");
       await loadHeats();
     } catch (error: any) {
       console.error("Error saving edits:", error);
@@ -950,25 +965,6 @@ export default function Heats() {
     }
   };
 
-  const handleCancelEdit = () => {
-    // Recarregar entries originais
-    const filteredHeats = selectedCategory && selectedWOD
-      ? heats.filter(h => h.category_id === selectedCategory && h.wod_id === selectedWOD)
-          .sort((a, b) => a.heat_number - b.heat_number)
-      : [];
-    
-    const entriesMap = new Map<string, any[]>();
-    filteredHeats.forEach(heat => {
-      const entries = heatEntries
-        .filter(e => e.heat_id === heat.id)
-        .sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0));
-      entriesMap.set(heat.id, entries);
-    });
-    setAllHeatEntries(entriesMap);
-    setEditingHeatsOrder([...filteredHeats]);
-    setIsGlobalEditMode(false);
-    setActiveId(null);
-  };
 
   const handleOpenEditTime = (heatId: string, currentTime: string | null) => {
     setEditingTimeHeatId(heatId);
@@ -1134,7 +1130,7 @@ export default function Heats() {
   });
 
   // Componente Sortable para bateria
-  function SortableHeat({ heat, isEditing, children }: { heat: any; isEditing: boolean; children: any }) {
+  function SortableHeat({ heat, children }: { heat: any; children: any }) {
     const {
       attributes,
       listeners,
@@ -1144,7 +1140,6 @@ export default function Heats() {
       isDragging,
     } = useSortable({
       id: heat.id,
-      disabled: !isEditing,
     });
 
     const style = {
@@ -1159,24 +1154,21 @@ export default function Heats() {
         style={style}
         className={isDragging ? 'opacity-50 z-50' : ''}
       >
-        {isEditing && (
-          <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded">
-              <GripVertical className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <span className="text-sm text-muted-foreground">Arraste para reordenar as baterias</span>
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b">
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded">
+            <GripVertical className="w-5 h-5 text-muted-foreground" />
           </div>
-        )}
+          <span className="text-sm text-muted-foreground">Arraste para reordenar as baterias</span>
+        </div>
         {children}
       </div>
     );
   }
 
   // Componente Droppable para bateria
-  function HeatDropZone({ heatId, isEmpty, isEditing, children }: { heatId: string; isEmpty: boolean; isEditing: boolean; children: any }) {
+  function HeatDropZone({ heatId, isEmpty, children }: { heatId: string; isEmpty: boolean; children: any }) {
     const { setNodeRef, isOver } = useDroppable({
       id: `heat-drop-${heatId}`,
-      disabled: !isEditing,
     });
 
     return (
@@ -1190,7 +1182,7 @@ export default function Heats() {
   }
 
   // Componente Sortable para participante
-  function SortableParticipant({ entry, heatId, isEditing, categoryId }: { entry: any; heatId: string; isEditing: boolean; categoryId: string }) {
+  function SortableParticipant({ entry, heatId, categoryId }: { entry: any; heatId: string; categoryId: string }) {
     const reg = registrations.find(r => r.id === entry.registration_id);
     const lbEntry = calculateLeaderboard(categoryId).find(l => l.registrationId === entry.registration_id);
     const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
@@ -1204,7 +1196,6 @@ export default function Heats() {
       isDragging,
     } = useSortable({
       id: `heat-${heatId}-entry-${entry.id}`,
-      disabled: !isEditing,
     });
 
     const style = {
@@ -1212,29 +1203,6 @@ export default function Heats() {
       transition,
       opacity: isDragging ? 0.5 : 1,
     };
-
-    if (!isEditing) {
-      return (
-        <TableRow>
-          <TableCell className="font-semibold">{entry.lane_number}</TableCell>
-          <TableCell className="font-semibold">{participantName}</TableCell>
-          <TableCell>
-            {lbEntry?.position ? (
-              <span className="text-sm font-semibold">{lbEntry.position}º</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Sem ranking</span>
-            )}
-          </TableCell>
-          <TableCell>
-            {lbEntry?.totalPoints && lbEntry.totalPoints > 0 ? (
-              <span className="font-bold text-primary">{lbEntry.totalPoints} pts</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
-          </TableCell>
-        </TableRow>
-      );
-    }
 
     return (
       <TableRow
@@ -1336,20 +1304,10 @@ export default function Heats() {
           </div>
 
           <div className="flex gap-2">
-            {filteredHeats.length > 0 && (
-              <Button 
-                onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
-                variant={isGlobalEditMode ? "default" : "outline"}
-                className="flex-1 h-12"
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
-              </Button>
-            )}
             <Button 
               onClick={handleGenerateHeats} 
-              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow h-12"} 
-              disabled={generating || isGlobalEditMode}
+              className="flex-1 shadow-glow h-12" 
+              disabled={generating || savingEdits}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Gerando...' : 'Gerar Baterias'}
@@ -1357,7 +1315,7 @@ export default function Heats() {
             <Button 
               onClick={handleGenerateAllHeats} 
               className="flex-1 shadow-glow h-12" 
-              disabled={generating || isGlobalEditMode}
+              disabled={generating || savingEdits}
               variant="destructive"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
@@ -1365,30 +1323,14 @@ export default function Heats() {
             </Button>
           </div>
         </div>
-        {isGlobalEditMode && filteredHeats.length > 0 && (
-          <div className="flex gap-2 mt-4 pt-4 border-t">
-            <Button 
-              onClick={handleSaveAllEdits}
-              disabled={savingEdits}
-              className="flex-1"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {savingEdits ? 'Salvando...' : 'Salvar Todas as Alterações'}
-            </Button>
-            <Button
-              onClick={handleCancelEdit}
-              variant="outline"
-              className="flex-1"
-              disabled={savingEdits}
-            >
-              <X className="w-4 h-4 mr-2" />
-              Cancelar
-            </Button>
+        {savingEdits && (
+          <div className="mt-4 pt-4 border-t text-center text-sm text-muted-foreground">
+            Salvando alterações...
           </div>
         )}
       </Card>
 
-      {filteredHeats.length > 0 ? (
+      {filteredHeats.length > 0 && (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -1404,202 +1346,115 @@ export default function Heats() {
             }
           }}
         >
-          {isGlobalEditMode ? (
-            <SortableContext 
-              items={editingHeatsOrder.map(h => h.id)} 
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-4">
-                {editingHeatsOrder.map(heat => {
-                  const currentEntries = allHeatEntries.get(heat.id) || [];
-                  const scheduledTime = heat.scheduled_time 
-                    ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
-                    : '';
-                  const allItemIds = currentEntries.map(e => `heat-${heat.id}-entry-${e.id}`);
-                  
-                  return (
-                    <SortableHeat key={heat.id} heat={heat} isEditing={isGlobalEditMode}>
-                      <Card className="p-6 shadow-card animate-fade-in">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <Badge variant="default" className="text-lg px-4 py-2">
-                              Bateria {heat.heat_number}
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              {currentEntries.length} atletas/times
-                            </span>
-                            {scheduledTime && (
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="w-4 h-4" />
-                                <span className="text-sm">{scheduledTime}</span>
-                              </div>
-                            )}
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                              Arraste participantes para reorganizar
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
-                          <HeatDropZone heatId={heat.id} isEmpty={currentEntries.length === 0} isEditing={isGlobalEditMode}>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Raia</TableHead>
-                                  <TableHead>Atleta/Time</TableHead>
-                                  <TableHead>Posição Atual</TableHead>
-                                  <TableHead>Pontos Totais</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {currentEntries.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell 
-                                      colSpan={4} 
-                                      className="text-center text-muted-foreground py-8"
-                                    >
-                                      Arraste participantes aqui
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  currentEntries.map(entry => (
-                                    <SortableParticipant
-                                      key={entry.id}
-                                      entry={entry}
-                                      heatId={heat.id}
-                                      isEditing={isGlobalEditMode}
-                                      categoryId={heat.category_id}
-                                    />
-                                  ))
-                                )}
-                              </TableBody>
-                            </Table>
-                          </HeatDropZone>
-                        </SortableContext>
-                      </Card>
-                    </SortableHeat>
-                  );
-                })}
-              </div>
-            </SortableContext>
-          ) : (
-        <div className="space-y-4">
-              {filteredHeats.map(heat => {
-                const currentEntries = heatEntries.filter(e => e.heat_id === heat.id).sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0));
+          <SortableContext 
+            items={editingHeatsOrder.map(h => h.id)} 
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {editingHeatsOrder.map(heat => {
+                const currentEntries = allHeatEntries.get(heat.id) || [];
                 const scheduledTime = heat.scheduled_time 
                   ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                   : '';
-
+                const allItemIds = currentEntries.map(e => `heat-${heat.id}-entry-${e.id}`);
+                
                 const categoryName = categories.find(c => c.id === heat.category_id)?.name || 'Categoria';
                 const wodName = wods.find(w => w.id === heat.wod_id)?.name || 'WOD';
 
                 return (
-            <Card key={heat.id} className="p-6 shadow-card animate-fade-in">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Badge variant="default" className="text-lg px-4 py-2">
-                          Bateria {heat.heat_number}
-                  </Badge>
-                  {(!selectedCategory || !selectedWOD) && (
-                    <>
-                      <Badge variant="outline" className="text-sm">
-                        {categoryName}
-                      </Badge>
-                      <Badge variant="outline" className="text-sm">
-                        {wodName}
-                      </Badge>
-                    </>
-                  )}
-                  <span className="text-muted-foreground">
-                          {currentEntries.length} atletas/times
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {scheduledTime ? (
-                    <>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="w-4 h-4" />
-                        <span className="text-sm">{scheduledTime}</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
-                        title="Editar horário"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
-                      title="Definir horário"
-                    >
-                      <Clock className="w-4 h-4 mr-2" />
-                      Definir Horário
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                          <TableHead>Raia</TableHead>
-                    <TableHead>Atleta/Time</TableHead>
-                    <TableHead>Posição Atual</TableHead>
-                    <TableHead>Pontos Totais</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                        {currentEntries.length === 0 ? (
-                          <TableRow>
-                            <TableCell 
-                              colSpan={4} 
-                              className="text-center text-muted-foreground py-8"
+                  <SortableHeat key={heat.id} heat={heat}>
+                    <Card className="p-6 shadow-card animate-fade-in">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Badge variant="default" className="text-lg px-4 py-2">
+                            Bateria {heat.heat_number}
+                          </Badge>
+                          {(!selectedCategory || !selectedWOD) && (
+                            <>
+                              <Badge variant="outline" className="text-sm">
+                                {categoryName}
+                              </Badge>
+                              <Badge variant="outline" className="text-sm">
+                                {wodName}
+                              </Badge>
+                            </>
+                          )}
+                          <span className="text-muted-foreground">
+                            {currentEntries.length} atletas/times
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {scheduledTime ? (
+                            <>
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Clock className="w-4 h-4" />
+                                <span className="text-sm">{scheduledTime}</span>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                                title="Editar horário"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                              title="Definir horário"
                             >
-                              Nenhum participante
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          currentEntries.map(entry => {
-                            const reg = registrations.find(r => r.id === entry.registration_id);
-                            const heatCategoryId = heat.category_id;
-                            const lbEntry = calculateLeaderboard(heatCategoryId).find(l => l.registrationId === entry.registration_id);
-                            const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
-                            
-                            return (
-                              <TableRow key={entry.id}>
-                                <TableCell className="font-semibold">{entry.lane_number}</TableCell>
-                                <TableCell className="font-semibold">{participantName}</TableCell>
-                      <TableCell>
-                                  {lbEntry?.position ? (
-                                    <span className="text-sm font-semibold">{lbEntry.position}º</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sem ranking</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                                  {lbEntry?.totalPoints && lbEntry.totalPoints > 0 ? (
-                                    <span className="font-bold text-primary">{lbEntry.totalPoints} pts</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                            );
-                          })
-                        )}
-                </TableBody>
-              </Table>
-            </Card>
+                              <Clock className="w-4 h-4 mr-2" />
+                              Definir Horário
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
+                        <HeatDropZone heatId={heat.id} isEmpty={currentEntries.length === 0}>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Raia</TableHead>
+                                <TableHead>Atleta/Time</TableHead>
+                                <TableHead>Posição Atual</TableHead>
+                                <TableHead>Pontos Totais</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {currentEntries.length === 0 ? (
+                                <TableRow>
+                                  <TableCell 
+                                    colSpan={4} 
+                                    className="text-center text-muted-foreground py-8"
+                                  >
+                                    Arraste participantes aqui
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                currentEntries.map(entry => (
+                                  <SortableParticipant
+                                    key={entry.id}
+                                    entry={entry}
+                                    heatId={heat.id}
+                                    categoryId={heat.category_id}
+                                  />
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </HeatDropZone>
+                      </SortableContext>
+                    </Card>
+                  </SortableHeat>
                 );
               })}
-        </div>
-          )}
+            </div>
+          </SortableContext>
         </DndContext>
       )}
 
