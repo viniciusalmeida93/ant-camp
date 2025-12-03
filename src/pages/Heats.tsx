@@ -239,6 +239,212 @@ export default function Heats() {
     return sorted;
   };
 
+  const generateHeatsForCategoryAndWod = async (
+    categoryId: string,
+    wodId: string,
+    athletesPerHeatValue: number
+  ) => {
+    // Buscar registrações da categoria
+    const categoryRegs = registrations.filter(r => r.category_id === categoryId);
+    
+    if (categoryRegs.length === 0) {
+      return { success: false, message: `Nenhuma inscrição na categoria` };
+    }
+
+    // Buscar resultados do WOD para esta categoria (se necessário)
+    const { data: categoryWodResultsData } = await supabase
+      .from("wod_results")
+      .select("*")
+      .eq("category_id", categoryId);
+
+    const categoryWodResults = categoryWodResultsData || [];
+    const participantMap = new Map<string, any>();
+    
+    categoryWodResults.forEach(result => {
+      const regId = result.registration_id;
+      if (!regId) return;
+      
+      if (!participantMap.has(regId)) {
+        participantMap.set(regId, {
+          registrationId: regId,
+          totalPoints: 0,
+          results: [],
+        });
+      }
+      
+      const participant = participantMap.get(regId)!;
+      participant.totalPoints += result.points || 0;
+      participant.results.push(result);
+    });
+
+    const leaderboard = Array.from(participantMap.values())
+      .sort((a, b) => {
+        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+        return 0;
+      })
+      .map((p, index) => ({
+        ...p,
+        position: index + 1,
+      }));
+
+    const hasResults = leaderboard.length > 0 && leaderboard.some(l => l.totalPoints > 0);
+
+    // Ordenar participantes
+    let orderedParticipants: any[];
+    
+    if (!hasResults) {
+      orderedParticipants = categoryRegs
+        .sort((a, b) => {
+          const timeA = new Date(a.created_at).getTime();
+          const timeB = new Date(b.created_at).getTime();
+          return timeB - timeA;
+        })
+        .map(reg => ({
+          registrationId: reg.id,
+          name: reg.team_name || reg.athlete_name,
+          totalPoints: 0,
+          position: undefined,
+        }));
+    } else {
+      const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
+      
+      orderedParticipants = categoryRegs.map(reg => {
+        const lbEntry = leaderboardMap.get(reg.id);
+        return {
+          registrationId: reg.id,
+          name: reg.team_name || reg.athlete_name,
+          totalPoints: lbEntry?.totalPoints || 0,
+          position: lbEntry?.position,
+        };
+      }).sort((a, b) => {
+        if (a.totalPoints !== b.totalPoints) {
+          return a.totalPoints - b.totalPoints;
+        }
+        return 0;
+      });
+    }
+
+    // Calcular número de baterias
+    const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeatValue);
+
+    // Deletar baterias existentes
+    const existingHeats = heats.filter(
+      h => h.category_id === categoryId && h.wod_id === wodId
+    );
+
+    if (existingHeats.length > 0) {
+      const heatIds = existingHeats.map(h => h.id);
+      
+      await supabase
+        .from("heat_entries")
+        .delete()
+        .in("heat_id", heatIds);
+
+      await supabase
+        .from("heats")
+        .delete()
+        .in("id", heatIds);
+    }
+
+    // Criar novas baterias
+    const newHeats: any[] = [];
+    
+    for (let i = 0; i < totalHeats; i++) {
+      const startIndex = i * athletesPerHeatValue;
+      const endIndex = Math.min(startIndex + athletesPerHeatValue, orderedParticipants.length);
+      const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
+
+      const { data: newHeat, error: heatError } = await supabase
+        .from("heats")
+        .insert({
+          championship_id: selectedChampionship!.id,
+          category_id: categoryId,
+          wod_id: wodId,
+          heat_number: i + 1,
+          athletes_per_heat: athletesPerHeatValue,
+        })
+        .select()
+        .single();
+
+      if (heatError) throw heatError;
+
+      const entries = heatParticipants.map((participant, index) => ({
+        heat_id: newHeat.id,
+        registration_id: participant.registrationId,
+        lane_number: index + 1,
+      }));
+
+      if (entries.length > 0) {
+        const { error: entriesError } = await supabase
+          .from("heat_entries")
+          .insert(entries);
+
+        if (entriesError) throw entriesError;
+      }
+
+      newHeats.push(newHeat);
+    }
+
+    return { success: true, totalHeats, categoryId, wodId };
+  };
+
+  const handleGenerateAllHeats = async () => {
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      let totalGenerated = 0;
+      let totalErrors = 0;
+      const errors: string[] = [];
+
+      // Iterar sobre todas as categorias
+      for (const category of categories) {
+        const athletesPerHeatValue = category.athletes_per_heat || athletesPerHeat;
+
+        // Iterar sobre todos os WODs
+        for (const wod of wods) {
+          try {
+            const result = await generateHeatsForCategoryAndWod(
+              category.id,
+              wod.id,
+              athletesPerHeatValue
+            );
+
+            if (result.success) {
+              totalGenerated += result.totalHeats || 0;
+            } else {
+              totalErrors++;
+              errors.push(`${category.name} - ${wod.name}: ${result.message}`);
+            }
+          } catch (error: any) {
+            totalErrors++;
+            errors.push(`${category.name} - ${wod.name}: ${error.message}`);
+            console.error(`Erro ao gerar baterias para ${category.name} - ${wod.name}:`, error);
+          }
+        }
+      }
+
+      await loadHeats();
+
+      if (totalErrors === 0) {
+        toast.success(`Todas as baterias geradas com sucesso! Total: ${totalGenerated} baterias`);
+      } else {
+        toast.warning(
+          `${totalGenerated} baterias geradas, mas ${totalErrors} combinações falharam. Verifique o console.`
+        );
+        console.error("Erros:", errors);
+      }
+    } catch (error: any) {
+      console.error("Error generating all heats:", error);
+      toast.error("Erro ao gerar todas as baterias");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleGenerateHeats = async () => {
     if (!selectedChampionship || !selectedCategory || !selectedWOD) {
       toast.error("Selecione categoria e WOD");
@@ -247,126 +453,32 @@ export default function Heats() {
 
     setGenerating(true);
     try {
-      // Buscar registrações da categoria
-      const categoryRegs = registrations.filter(r => r.category_id === selectedCategory);
-      
-      if (categoryRegs.length === 0) {
-        toast.error("Nenhuma inscrição nesta categoria");
+      const category = categories.find(c => c.id === selectedCategory);
+      const athletesPerHeatValue = category?.athletes_per_heat || athletesPerHeat;
+
+      const result = await generateHeatsForCategoryAndWod(
+        selectedCategory,
+        selectedWOD,
+        athletesPerHeatValue
+      );
+
+      if (!result.success) {
+        toast.error(result.message || "Erro ao gerar baterias");
         setGenerating(false);
         return;
       }
-    
-    // Calcular leaderboard atual
-      const leaderboard = calculateLeaderboard();
-      const hasResults = leaderboard.length > 0 && leaderboard.some(l => l.totalPoints > 0);
 
-      // Ordenar participantes
-      let orderedParticipants: any[];
+      const totalHeats = result.totalHeats || 0;
       
-      if (!hasResults) {
-        // Primeira prova: ordem de inscrição (created_at) - mais antigas por último
-        // Isso garante que quem se inscreveu primeiro fica nas ÚLTIMAS baterias
-        // (vantagem estratégica: pode ver os resultados dos outros antes de competir)
-        orderedParticipants = categoryRegs
-          .sort((a, b) => {
-            const timeA = new Date(a.created_at).getTime();
-            const timeB = new Date(b.created_at).getTime();
-            return timeB - timeA; // Ordem decrescente: mais antigas por último
-          })
-          .map(reg => ({
-            registrationId: reg.id,
-            name: reg.team_name || reg.athlete_name,
-            totalPoints: 0,
-            position: undefined,
-          }));
-    } else {
-        // Próximas provas: ordenar por pontos (menos pontos primeiro, mais pontos por último)
-        // Quem tem mais pontos fica na última bateria
-        const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
-        
-        orderedParticipants = categoryRegs.map(reg => {
-          const lbEntry = leaderboardMap.get(reg.id);
-          return {
-            registrationId: reg.id,
-            name: reg.team_name || reg.athlete_name,
-            totalPoints: lbEntry?.totalPoints || 0,
-            position: lbEntry?.position,
-          };
-        }).sort((a, b) => {
-          // Ordenar por pontos (menos pontos primeiro, mais pontos por último)
-          // Isso faz com que os líderes fiquem na última bateria
-          if (a.totalPoints !== b.totalPoints) {
-            return a.totalPoints - b.totalPoints;
-          }
-          // Se empate, manter ordem de inscrição
-          return 0;
-        });
-      }
+      // Buscar as baterias recém-criadas para calcular horários
+      const { data: newHeatsData } = await supabase
+        .from("heats")
+        .select("*")
+        .eq("category_id", selectedCategory)
+        .eq("wod_id", selectedWOD)
+        .order("heat_number", { ascending: true });
 
-      // Calcular número de baterias
-      const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
-
-      // Deletar baterias existentes
-      const existingHeats = heats.filter(
-        h => h.category_id === selectedCategory && h.wod_id === selectedWOD
-      );
-
-      if (existingHeats.length > 0) {
-        const heatIds = existingHeats.map(h => h.id);
-        
-        // Deletar entries primeiro
-        await supabase
-          .from("heat_entries")
-          .delete()
-          .in("heat_id", heatIds);
-
-        // Deletar heats
-        await supabase
-          .from("heats")
-          .delete()
-          .in("id", heatIds);
-      }
-
-      // Criar novas baterias
-      const newHeats: any[] = [];
-      
-      for (let i = 0; i < totalHeats; i++) {
-        const startIndex = i * athletesPerHeat;
-        const endIndex = Math.min(startIndex + athletesPerHeat, orderedParticipants.length);
-        const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
-
-        // Criar heat
-        const { data: newHeat, error: heatError } = await supabase
-          .from("heats")
-          .insert({
-            championship_id: selectedChampionship.id,
-            category_id: selectedCategory,
-            wod_id: selectedWOD,
-            heat_number: i + 1,
-            athletes_per_heat: athletesPerHeat,
-          })
-          .select()
-          .single();
-
-        if (heatError) throw heatError;
-
-        // Criar entries para cada participante
-        const entries = heatParticipants.map((participant, index) => ({
-          heat_id: newHeat.id,
-          registration_id: participant.registrationId,
-          lane_number: index + 1,
-        }));
-
-        if (entries.length > 0) {
-          const { error: entriesError } = await supabase
-            .from("heat_entries")
-            .insert(entries);
-
-          if (entriesError) throw entriesError;
-        }
-
-        newHeats.push(newHeat);
-      }
+      const newHeats = newHeatsData || [];
 
       toast.success(`${totalHeats} baterias geradas! Calculando horários...`);
       
@@ -992,82 +1104,114 @@ export default function Heats() {
       </div>
 
       <Card className="p-6 shadow-card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
-          <div>
-            <Label htmlFor="category">Categoria</Label>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="wod">WOD</Label>
-            <Select value={selectedWOD} onValueChange={setSelectedWOD}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {wods.map(wod => (
-                  <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria</Label>
-            <Input
-              id="athletesPerHeat"
-              type="number"
-              value={athletesPerHeat}
-              onChange={async (e) => {
-                const newValue = parseInt(e.target.value) || 10;
-                setAthletesPerHeat(newValue);
-                // Salvar automaticamente na categoria
-                if (selectedCategory) {
-                  try {
-                    await supabase
-                      .from("categories")
-                      .update({ athletes_per_heat: newValue })
-                      .eq("id", selectedCategory);
-                  } catch (error) {
-                    console.error("Erro ao salvar athletes_per_heat:", error);
-                  }
-                }
-              }}
-              min={1}
-              max={30}
-            />
-          </div>
-
-          <div className="flex gap-2">
-            {filteredHeats.length > 0 && (
+        {!selectedCategory && !selectedWOD ? (
+          // Modo: Gerar todas as baterias
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="md:col-span-2">
+              <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria (padrão para todas as categorias)</Label>
+              <Input
+                id="athletesPerHeat"
+                type="number"
+                value={athletesPerHeat}
+                onChange={(e) => {
+                  const newValue = parseInt(e.target.value) || 10;
+                  setAthletesPerHeat(newValue);
+                }}
+                min={1}
+                max={30}
+              />
+            </div>
+            <div>
               <Button 
-                onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
-                variant={isGlobalEditMode ? "default" : "outline"}
-                className="flex-1 h-12"
+                onClick={handleGenerateAllHeats} 
+                className="w-full shadow-glow h-12" 
+                disabled={generating}
+                size="lg"
               >
-                <Edit2 className="w-4 h-4 mr-2" />
-                {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
+                <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                {generating ? 'Gerando Todas...' : 'GERAR TODAS AS BATERIAS'}
               </Button>
-            )}
-            <Button 
-              onClick={handleGenerateHeats} 
-              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
-              disabled={generating || isGlobalEditMode}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-              {generating ? 'Gerando...' : 'Gerar Baterias'}
-            </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          // Modo: Seleção específica de categoria e WOD
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
+            <div>
+              <Label htmlFor="category">Categoria</Label>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="wod">WOD</Label>
+              <Select value={selectedWOD} onValueChange={setSelectedWOD}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {wods.map(wod => (
+                    <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria</Label>
+              <Input
+                id="athletesPerHeat"
+                type="number"
+                value={athletesPerHeat}
+                onChange={async (e) => {
+                  const newValue = parseInt(e.target.value) || 10;
+                  setAthletesPerHeat(newValue);
+                  // Salvar automaticamente na categoria
+                  if (selectedCategory) {
+                    try {
+                      await supabase
+                        .from("categories")
+                        .update({ athletes_per_heat: newValue })
+                        .eq("id", selectedCategory);
+                    } catch (error) {
+                      console.error("Erro ao salvar athletes_per_heat:", error);
+                    }
+                  }
+                }}
+                min={1}
+                max={30}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {filteredHeats.length > 0 && (
+                <Button 
+                  onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
+                  variant={isGlobalEditMode ? "default" : "outline"}
+                  className="flex-1 h-12"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  {isGlobalEditMode ? 'Sair da Edição' : 'Editar Baterias'}
+                </Button>
+              )}
+              <Button 
+                onClick={handleGenerateHeats} 
+                className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
+                disabled={generating || isGlobalEditMode}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                {generating ? 'Gerando...' : 'Gerar Baterias'}
+              </Button>
+            </div>
+          </div>
+        )}
         {isGlobalEditMode && filteredHeats.length > 0 && (
           <div className="flex gap-2 mt-4 pt-4 border-t">
             <Button 
