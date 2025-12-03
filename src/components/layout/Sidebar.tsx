@@ -80,7 +80,6 @@ export const Sidebar = () => {
                         ? "bg-primary text-primary-foreground font-semibold" 
                         : "hover:bg-secondary text-muted-foreground hover:text-foreground"
                     )}
-                    style={{ borderRadius: '0.125rem' }}
                   >
                     <Icon className="w-5 h-5 shrink-0" />
                     <span>{item.label}</span>
