@@ -47,7 +47,7 @@ export default function Heats() {
   
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
-  const [athletesPerHeat, setAthletesPerHeat] = useState<number>(10);
+  const [athletesPerHeat, setAthletesPerHeat] = useState<number | ''>('');
   const [allHeatEntries, setAllHeatEntries] = useState<Map<string, any[]>>(new Map());
   const [savingEdits, setSavingEdits] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -88,7 +88,11 @@ export default function Heats() {
       const category = categories.find(c => c.id === selectedCategory);
       if (category && category.athletes_per_heat) {
         setAthletesPerHeat(category.athletes_per_heat);
+      } else {
+        setAthletesPerHeat('');
       }
+    } else {
+      setAthletesPerHeat('');
     }
   }, [selectedCategory, categories]);
 
@@ -999,9 +1003,17 @@ export default function Heats() {
 
     setSavingEdits(true);
     try {
-      // Pegar todas as baterias filtradas (mesma categoria e WOD, ou todas se não filtrado)
-      // Usar editingHeatsOrder que já está filtrado e ordenado
-      const heatsToIntercalate = [...editingHeatsOrder].sort((a, b) => {
+      // Filtrar baterias baseado nas seleções (ou mostrar todas se não houver seleção)
+      const filteredHeatsList = heats.filter(h => {
+        if (selectedCategory && selectedWOD) {
+          return h.category_id === selectedCategory && h.wod_id === selectedWOD;
+        } else if (selectedCategory) {
+          return h.category_id === selectedCategory;
+        } else if (selectedWOD) {
+          return h.wod_id === selectedWOD;
+        }
+        return true;
+      }).sort((a, b) => {
         // Ordenar por WOD primeiro, depois categoria, depois número da bateria
         const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
         const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
@@ -1014,47 +1026,79 @@ export default function Heats() {
         return a.heat_number - b.heat_number;
       });
 
-      if (heatsToIntercalate.length === 0) {
+      if (filteredHeatsList.length === 0) {
         toast.error("Nenhuma bateria encontrada para intercalar");
         return;
       }
 
-      // Criar um mapa de todas as entries por bateria
+      // Criar um mapa de todas as entries por bateria usando heatEntries diretamente
       const entriesByHeat = new Map<string, any[]>();
-      heatsToIntercalate.forEach(heat => {
-        const entries = allHeatEntries.get(heat.id) || [];
+      filteredHeatsList.forEach(heat => {
+        // Buscar entries diretamente de heatEntries (dados do banco)
+        const entries = heatEntries
+          .filter(e => e.heat_id === heat.id)
+          .sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0));
         entriesByHeat.set(heat.id, [...entries]);
       });
 
-      // Intercalar baterias
-      for (let i = 0; i < heatsToIntercalate.length; i++) {
-        const currentHeat = heatsToIntercalate[i];
-        const currentEntries = entriesByHeat.get(currentHeat.id) || [];
+      let totalMoved = 0;
+
+      // Intercalar baterias - agrupar por categoria e WOD primeiro
+      const heatsByContext = new Map<string, any[]>();
+      filteredHeatsList.forEach(heat => {
+        const key = `${heat.category_id}-${heat.wod_id}`;
+        if (!heatsByContext.has(key)) {
+          heatsByContext.set(key, []);
+        }
+        heatsByContext.get(key)!.push(heat);
+      });
+
+      // Processar cada grupo de categoria/WOD separadamente
+      for (const [contextKey, contextHeats] of heatsByContext.entries()) {
+        // Ordenar baterias deste contexto por número
+        const sortedContextHeats = [...contextHeats].sort((a, b) => a.heat_number - b.heat_number);
         
-        // Buscar athletes_per_heat da categoria ou do heat
-        const category = categories.find(c => c.id === currentHeat.category_id);
-        const maxAthletes = currentHeat.athletes_per_heat || category?.athletes_per_heat || athletesPerHeat;
+        // Buscar athletes_per_heat da primeira categoria deste contexto
+        const firstHeat = sortedContextHeats[0];
+        const category = categories.find(c => c.id === firstHeat.category_id);
+        const maxAthletes = firstHeat.athletes_per_heat || category?.athletes_per_heat || (typeof athletesPerHeat === 'number' ? athletesPerHeat : 10);
         
-        if (currentEntries.length < maxAthletes) {
-          // Esta bateria precisa de mais atletas
-          const needed = maxAthletes - currentEntries.length;
+        if (!maxAthletes || maxAthletes <= 0) {
+          console.warn(`Categoria ${category?.name} não tem athletes_per_heat definido`);
+          continue;
+        }
+
+        // Intercalar baterias deste contexto
+        for (let i = 0; i < sortedContextHeats.length; i++) {
+          const currentHeat = sortedContextHeats[i];
+          const currentEntries = entriesByHeat.get(currentHeat.id) || [];
           
-          // Procurar atletas nas próximas baterias
-          for (let j = i + 1; j < heatsToIntercalate.length && needed > 0; j++) {
-            const nextHeat = heatsToIntercalate[j];
-            const nextEntries = entriesByHeat.get(nextHeat.id) || [];
+          if (currentEntries.length < maxAthletes) {
+            // Esta bateria precisa de mais atletas
+            const needed = maxAthletes - currentEntries.length;
             
-            // Verificar se é da mesma categoria e WOD (só intercalar dentro do mesmo contexto)
-            if (currentHeat.category_id === nextHeat.category_id && currentHeat.wod_id === nextHeat.wod_id) {
-              // Pegar atletas da próxima bateria
-              const toMove = nextEntries.splice(0, needed);
-              currentEntries.push(...toMove);
-              entriesByHeat.set(currentHeat.id, currentEntries);
-              entriesByHeat.set(nextHeat.id, nextEntries);
-              needed -= toMove.length;
+            // Procurar atletas nas próximas baterias do mesmo contexto
+            for (let j = i + 1; j < sortedContextHeats.length && needed > 0; j++) {
+              const nextHeat = sortedContextHeats[j];
+              const nextEntries = entriesByHeat.get(nextHeat.id) || [];
+              
+              if (nextEntries.length > 0) {
+                // Pegar atletas da próxima bateria
+                const toMove = nextEntries.splice(0, Math.min(needed, nextEntries.length));
+                currentEntries.push(...toMove);
+                entriesByHeat.set(currentHeat.id, currentEntries);
+                entriesByHeat.set(nextHeat.id, nextEntries);
+                totalMoved += toMove.length;
+              }
             }
           }
         }
+      }
+
+      if (totalMoved === 0) {
+        toast.info("Nenhuma intercalação necessária - todas as baterias já estão completas");
+        setSavingEdits(false);
+        return;
       }
 
       // Atualizar lane_numbers e salvar no banco
@@ -1090,11 +1134,11 @@ export default function Heats() {
         if (insertError) throw insertError;
       }
 
-      toast.success("Baterias intercaladas com sucesso!");
+      toast.success(`${totalMoved} atleta(s)/time(s) movido(s) - Baterias intercaladas com sucesso!`);
       await loadHeats();
     } catch (error: any) {
       console.error("Error intercalating heats:", error);
-      toast.error("Erro ao intercalar baterias");
+      toast.error("Erro ao intercalar baterias: " + (error.message || 'Erro desconhecido'));
     } finally {
       setSavingEdits(false);
     }
@@ -1410,19 +1454,27 @@ export default function Heats() {
             <Input
               id="athletesPerHeat"
               type="number"
-              value={athletesPerHeat}
+              value={athletesPerHeat === '' ? '' : athletesPerHeat}
+              placeholder="Ex: 5"
               onChange={async (e) => {
-                const newValue = parseInt(e.target.value) || 10;
-                setAthletesPerHeat(newValue);
-                // Salvar automaticamente na categoria
-                if (selectedCategory) {
-                  try {
-                    await supabase
-                      .from("categories")
-                      .update({ athletes_per_heat: newValue })
-                      .eq("id", selectedCategory);
-                  } catch (error) {
-                    console.error("Erro ao salvar athletes_per_heat:", error);
+                const inputValue = e.target.value;
+                if (inputValue === '') {
+                  setAthletesPerHeat('');
+                  return;
+                }
+                const newValue = parseInt(inputValue);
+                if (!isNaN(newValue) && newValue > 0) {
+                  setAthletesPerHeat(newValue);
+                  // Salvar automaticamente na categoria
+                  if (selectedCategory) {
+                    try {
+                      await supabase
+                        .from("categories")
+                        .update({ athletes_per_heat: newValue })
+                        .eq("id", selectedCategory);
+                    } catch (error) {
+                      console.error("Erro ao salvar athletes_per_heat:", error);
+                    }
                   }
                 }
               }}
