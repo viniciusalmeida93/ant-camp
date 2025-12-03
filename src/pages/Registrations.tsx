@@ -1,15 +1,208 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, X, Edit, Trash2, CheckCircle2, Mail, Eye } from 'lucide-react';
+import { Plus, Loader2, X, Edit, Trash2, CheckCircle2, Mail, Eye, ChevronDown, ChevronUp, GripVertical, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Componente SortableRegistrationItem para drag and drop
+function SortableRegistrationItem({ 
+  reg, 
+  onEdit, 
+  onDelete, 
+  onPreviewEmail, 
+  onSendEmail,
+  isExpanded,
+  onToggleExpand 
+}: { 
+  reg: any; 
+  onEdit: () => void; 
+  onDelete: () => void;
+  onPreviewEmail: () => void;
+  onSendEmail: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: reg.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const hasMembers = reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0;
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 rounded-sm border border-border bg-card hover:bg-muted/50 transition-all">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1 self-start sm:self-center"
+          title="Arrastar para reorganizar"
+        >
+          <GripVertical className="w-5 h-5" />
+        </button>
+        
+        <div className="flex-1 min-w-0">
+          {/* Header - Nome e Número */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-sm shrink-0">
+              #{reg.registrationOrder || 0}
+            </span>
+            <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
+            <span className="font-semibold text-foreground ml-auto shrink-0">
+              R$ {(reg.total_cents / 100).toFixed(2).replace('.', ',')}
+            </span>
+          </div>
+          
+          {/* Info - Layout Responsivo */}
+          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold">{reg.category?.name}</span>
+              {hasMembers && (
+                <>
+                  <span>•</span>
+                  <span>{reg.team_members.length} integrante(s)</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="truncate max-w-[180px] sm:max-w-none">{reg.athlete_email}</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline">{reg.athlete_phone}</span>
+            </div>
+            <div className="text-xs">
+              Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </div>
+          </div>
+
+          {/* Dropdown de Integrantes */}
+          {hasMembers && (
+            <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="mt-3">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between text-xs h-8"
+                >
+                  <span className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Ver integrantes ({reg.team_members.length})
+                  </span>
+                  {isExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <div className="bg-muted/50 rounded-sm p-3 space-y-2">
+                  {reg.team_members.map((member: any, index: number) => (
+                    <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                      <div className="font-semibold mb-1">
+                        Integrante {index + 1}
+                        {member.name && ` - ${member.name}`}
+                      </div>
+                      <div className="space-y-1 text-muted-foreground">
+                        {member.email && <div>📧 {member.email}</div>}
+                        {member.whatsapp && <div>📱 {member.whatsapp}</div>}
+                        {member.cpf && <div>🆔 CPF: {member.cpf}</div>}
+                        {member.birthDate && (
+                          <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
+                        )}
+                        {member.shirtSize && <div>👕 Tamanho: {member.shirtSize}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
+        
+        {/* Botões de Ação */}
+        <div className="flex gap-1 shrink-0 justify-end sm:justify-start">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onPreviewEmail}
+            title="👁️ Visualizar email"
+            className="h-8 w-8"
+          >
+            <Eye className="w-4 h-4 text-purple-600" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onSendEmail}
+            title="✉️ Enviar email"
+            className="h-8 w-8"
+          >
+            <Mail className="w-4 h-4 text-blue-600" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onEdit}
+            title="Editar"
+            className="h-8 w-8"
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onDelete}
+            title="Excluir"
+            className="h-8 w-8"
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Registrations() {
   const navigate = useNavigate();
@@ -20,6 +213,15 @@ export default function Registrations() {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [filteredRegistrations, setFilteredRegistrations] = useState<any[]>([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
+  
+  // Configurar sensores para drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRegistration, setEditingRegistration] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
@@ -277,34 +479,39 @@ export default function Registrations() {
     }
   };
 
-  const handleTestEmail = async () => {
-    const toastId = toast.loading("Testando configuração de email...");
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('test-resend');
-      
-      console.log("Resultado do teste:", data, error);
-      
-      if (error) {
-        toast.error(`Erro no teste: ${error.message}`, { id: toastId });
-        console.error("Detalhes do erro:", error);
-        return;
-      }
-      
-      if (data?.success) {
-        toast.success("✅ Email de teste enviado! Verifique sua caixa de entrada.", { id: toastId });
+  const toggleMembersExpanded = (regId: string) => {
+    setExpandedMembers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(regId)) {
+        newSet.delete(regId);
       } else {
-        toast.error(`Erro: ${data?.error || "Desconhecido"}`, { id: toastId });
+        newSet.add(regId);
       }
-      
-      // Mostrar resultado completo no console
-      console.log("========= TESTE DE EMAIL =========");
-      console.log(JSON.stringify(data, null, 2));
-      console.log("==================================");
-    } catch (error: any) {
-      console.error("Erro ao testar email:", error);
-      toast.error(`Erro: ${error.message}`, { id: toastId });
+      return newSet;
+    });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
     }
+
+    const oldIndex = filteredRegistrations.findIndex((r) => r.id === active.id);
+    const newIndex = filteredRegistrations.findIndex((r) => r.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newRegistrations = arrayMove(filteredRegistrations, oldIndex, newIndex);
+    setFilteredRegistrations(newRegistrations);
+    
+    // Atualizar ordem no banco de dados (usando um campo de ordem se existir)
+    // Por enquanto, vamos apenas atualizar a ordem localmente
+    // Se precisar salvar no banco, podemos adicionar um campo 'order' na tabela registrations
+    toast.success("Ordem das inscrições atualizada!");
   };
 
   const handleSendEmail = async (reg: any) => {
@@ -506,17 +713,6 @@ export default function Registrations() {
         <div>
           <h1 className="text-4xl font-bold mb-2">Inscrições</h1>
           <p className="text-muted-foreground">Gerencie as inscrições do campeonato</p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleTestEmail}
-            className="gap-2"
-            title="Testar se o email está configurado corretamente"
-          >
-            🧪 Testar Email
-          </Button>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -782,94 +978,31 @@ export default function Registrations() {
             </p>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {filteredRegistrations.map((reg) => (
-              <div
-                key={reg.id}
-                className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all"
-              >
-                <div className="flex-1 min-w-0">
-                  {/* Header - Nome e Número */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded shrink-0">
-                      #{reg.registrationOrder || 0}
-                    </span>
-                    <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
-                    <span className="font-semibold text-foreground ml-auto shrink-0">
-                      R$ {(reg.total_cents / 100).toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
-                  
-                  {/* Info - Layout Responsivo */}
-                  <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{reg.category?.name}</span>
-                      {reg.team_members && reg.team_members.length > 0 && (
-                        <>
-                          <span>•</span>
-                          <span>{reg.team_members.length} integrante(s)</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap text-xs">
-                      <span className="truncate max-w-[180px] sm:max-w-none">{reg.athlete_email}</span>
-                      <span className="hidden sm:inline">•</span>
-                      <span className="hidden sm:inline">{reg.athlete_phone}</span>
-                    </div>
-                    <div className="text-xs">
-                      Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Botões de Ação */}
-                <div className="flex gap-1 shrink-0 justify-end sm:justify-start">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handlePreviewEmail(reg)}
-                    title="👁️ Visualizar email"
-                    className="h-8 w-8"
-                  >
-                    <Eye className="w-4 h-4 text-purple-600" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleSendEmail(reg)}
-                    title="✉️ Enviar email"
-                    className="h-8 w-8"
-                  >
-                    <Mail className="w-4 h-4 text-blue-600" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleEdit(reg)}
-                    title="Editar"
-                    className="h-8 w-8"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleDelete(reg.id)}
-                    title="Excluir"
-                    className="h-8 w-8"
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredRegistrations.map(r => r.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {filteredRegistrations.map((reg) => (
+                  <SortableRegistrationItem
+                    key={reg.id}
+                    reg={reg}
+                    onEdit={() => handleEdit(reg)}
+                    onDelete={() => handleDelete(reg.id)}
+                    onPreviewEmail={() => handlePreviewEmail(reg)}
+                    onSendEmail={() => handleSendEmail(reg)}
+                    isExpanded={expandedMembers.has(reg.id)}
+                    onToggleExpand={() => toggleMembersExpanded(reg.id)}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </div>
