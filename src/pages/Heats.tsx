@@ -1376,7 +1376,7 @@ export default function Heats() {
       </div>
 
       <Card className="p-6 shadow-card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
           <div>
             <Label htmlFor="category">Categoria</Label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -1431,7 +1431,7 @@ export default function Heats() {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 md:col-span-3">
             <Button 
               onClick={handleGenerateHeats} 
               className="flex-1 shadow-glow h-12" 
@@ -1448,6 +1448,15 @@ export default function Heats() {
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Gerando Todas...' : 'GERAR TODAS AS BATERIAS'}
+            </Button>
+            <Button 
+              onClick={handleIntercalateHeats} 
+              className="flex-1 shadow-glow h-12" 
+              disabled={generating || savingEdits}
+              variant="outline"
+            >
+              <Shuffle className={`w-4 h-4 mr-2 ${savingEdits ? 'animate-spin' : ''}`} />
+              {savingEdits ? 'Intercalando...' : 'Intercalar Baterias'}
             </Button>
           </div>
         </div>
@@ -1497,11 +1506,11 @@ export default function Heats() {
                   <SortableHeat key={heat.id} heat={heat}>
                     {({ dragAttributes, dragListeners }) => (
                       <Card className="p-6 shadow-card animate-fade-in relative">
-                        {/* Ícone de arraste no canto superior direito */}
+                        {/* Ícone de arraste no canto superior esquerdo */}
                         <div 
                           {...dragAttributes} 
                           {...dragListeners} 
-                          className="absolute top-4 right-4 cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded z-10"
+                          className="absolute top-4 left-4 cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded z-10"
                           title="Arraste para reordenar"
                         >
                           <GripVertical className="w-5 h-5 text-muted-foreground" />
@@ -1559,16 +1568,6 @@ export default function Heats() {
                                 Definir Horário
                               </Button>
                             )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleIntercalateHeats}
-                              disabled={savingEdits}
-                              title="Intercalar baterias para preencher baterias incompletas"
-                            >
-                              <Shuffle className="w-4 h-4 mr-2" />
-                              Intercalar
-                            </Button>
                           </div>
                         </div>
 
