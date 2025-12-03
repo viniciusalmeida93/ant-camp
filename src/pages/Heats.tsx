@@ -105,13 +105,14 @@ export default function Heats() {
       }
       return true;
     }).sort((a, b) => {
-      const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
-      const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
-      if (categoryA !== categoryB) return categoryA - categoryB;
-      
+      // Ordenar por WOD primeiro, depois categoria, depois número da bateria
       const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
       const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
       if (wodA !== wodB) return wodA - wodB;
+      
+      const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+      const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+      if (categoryA !== categoryB) return categoryA - categoryB;
       
       return a.heat_number - b.heat_number;
     });
@@ -435,17 +436,20 @@ export default function Heats() {
       const skipped: string[] = [];
       const errors: string[] = [];
 
-      // Iterar sobre todas as categorias
-      for (const category of categories) {
-        const athletesPerHeatValue = category.athletes_per_heat || athletesPerHeat;
+      // Iterar sobre todos os WODs primeiro, depois todas as categorias
+      // Isso garante que todas as baterias de todas as categorias para o WOD 1 sejam geradas primeiro
+      for (const wod of wods) {
+        const athletesPerHeatValue = athletesPerHeat; // Usar valor padrão
 
-        // Iterar sobre todos os WODs
-        for (const wod of wods) {
+        // Iterar sobre todas as categorias para este WOD
+        for (const category of categories) {
+          const categoryAthletesPerHeat = category.athletes_per_heat || athletesPerHeatValue;
+          
           try {
             const result = await generateHeatsForCategoryAndWod(
               category.id,
               wod.id,
-              athletesPerHeatValue
+              categoryAthletesPerHeat
             );
 
             if (result.success) {
@@ -547,15 +551,15 @@ export default function Heats() {
                 );
               }
 
-              // Ordenar baterias do dia por categoria e WOD
+              // Ordenar baterias do dia por WOD primeiro, depois categoria, depois número da bateria
               const sortedDayHeats = dayHeats.sort((a, b) => {
-                const catA = categories.find(c => c.id === a.category_id)?.order_index || 0;
-                const catB = categories.find(c => c.id === b.category_id)?.order_index || 0;
-                if (catA !== catB) return catA - catB;
-                
                 const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
                 const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
                 if (wodA !== wodB) return wodA - wodB;
+                
+                const catA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+                const catB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+                if (catA !== catB) return catA - catB;
                 
                 return a.heat_number - b.heat_number;
               });
@@ -1117,14 +1121,14 @@ export default function Heats() {
     // Se nenhum filtro está selecionado, mostrar todas
     return true;
   }).sort((a, b) => {
-    // Ordenar por categoria, depois WOD, depois número da bateria
-    const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
-    const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
-    if (categoryA !== categoryB) return categoryA - categoryB;
-    
+    // Ordenar por WOD primeiro, depois categoria, depois número da bateria
     const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
     const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
     if (wodA !== wodB) return wodA - wodB;
+    
+    const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+    const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+    if (categoryA !== categoryB) return categoryA - categoryB;
     
     return a.heat_number - b.heat_number;
   });
