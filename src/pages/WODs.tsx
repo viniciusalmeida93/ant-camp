@@ -417,20 +417,35 @@ export default function WODs() {
           }
 
           // Carregar valores reais do banco
-          // Se description ou notes são null mas há uma variação salva, usar valores padrão do WOD
-          // Isso garante que valores copiados com applyAll apareçam como texto editável
-          const descriptionValue = variation.description !== null && variation.description !== undefined
-            ? variation.description
-            : (baseWod?.description || '');
+          // IMPORTANTE: Se description ou notes são null mas há uma variação salva no banco,
+          // significa que foi salvo com applyAll mas os valores não foram persistidos corretamente
+          // Nesse caso, usar valores padrão do WOD para garantir que apareçam como texto editável
+          // SEMPRE garantir que sejam strings não-vazias quando há uma variação salva
+          let descriptionValue = '';
+          let notesValue = '';
           
-          const notesValue = variation.notes !== null && variation.notes !== undefined
-            ? variation.notes
-            : (baseWod?.notes || '');
+          // Se há uma variação salva no banco para esta categoria, sempre carregar valores reais
+          // Se description/notes são null, usar valores padrão do WOD
+          if (variation.description !== null && variation.description !== undefined) {
+            // Valor real salvo no banco - usar diretamente (mesmo que seja string vazia)
+            descriptionValue = variation.description;
+          } else if (baseWod?.description) {
+            // Se null mas há variação salva, usar valor padrão do WOD
+            descriptionValue = baseWod.description;
+          }
+          
+          if (variation.notes !== null && variation.notes !== undefined) {
+            // Valor real salvo no banco - usar diretamente (mesmo que seja string vazia)
+            notesValue = variation.notes;
+          } else if (baseWod?.notes) {
+            // Se null mas há variação salva, usar valor padrão do WOD
+            notesValue = baseWod.notes;
+          }
 
           base[variation.category_id] = {
             displayName: variation.display_name || '',
-            description: descriptionValue, // Valor real do banco ou padrão do WOD
-            notes: notesValue, // Valor real do banco ou padrão do WOD
+            description: descriptionValue, // Sempre string para poder editar (não null)
+            notes: notesValue, // Sempre string para poder editar (não null)
             estimatedDuration:
               variation.estimated_duration_minutes !== null && variation.estimated_duration_minutes !== undefined
                 ? String(variation.estimated_duration_minutes)
@@ -566,33 +581,40 @@ export default function WODs() {
               : baseEstimatedDuration;
 
             // Quando applyAll está ativo, usar os valores da variação (que foram copiados do padrão)
-            // Se não houver valores na variação mas applyAll está ativo, usar os valores padrão do formulário
+            // Os valores em categoryVariations já foram copiados como strings reais quando o botão foi clicado
             const form = formRef.current;
             const formData = form ? new FormData(form) : null;
             const baseDescription = formData?.get('description') as string || '';
             const baseNotes = formData?.get('notes') as string || '';
             
-            // Se applyAll está ativo, sempre salvar valores reais (mesmo que sejam os padrão copiados)
-            // Isso garante que ao carregar novamente, os valores apareçam como texto editável
-            let finalDescription = variation?.description?.trim() || '';
-            let finalNotes = variation?.notes?.trim() || '';
+            // Obter valores da variação (que foram copiados quando applyAll foi ativado)
+            let finalDescription = '';
+            let finalNotes = '';
             
             if (applyAll) {
-              // Se applyAll está ativo e não há dados personalizados, usar os valores padrão
-              if (!hasData || !finalDescription) {
-                finalDescription = baseDescription;
-              }
-              if (!hasData || !finalNotes) {
-                finalNotes = baseNotes;
-              }
+              // Quando applyAll está ativo, SEMPRE usar os valores que foram copiados para categoryVariations
+              // Se os valores em categoryVariations estão vazios, usar os valores padrão do formulário
+              // Isso garante que sempre há valores reais para salvar
+              finalDescription = (variation?.description && variation.description.trim()) 
+                ? variation.description 
+                : baseDescription;
+              finalNotes = (variation?.notes && variation.notes.trim()) 
+                ? variation.notes 
+                : baseNotes;
+            } else {
+              // Quando applyAll não está ativo, só salvar se houver dados personalizados
+              finalDescription = variation?.description?.trim() || '';
+              finalNotes = variation?.notes?.trim() || '';
             }
             
+            // Quando applyAll está ativo, SEMPRE salvar valores reais (não null)
+            // Isso permite que sejam editáveis ao recarregar
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
-              description: finalDescription || null,
-              notes: finalNotes || null,
+              description: applyAll ? finalDescription : (finalDescription || null),
+              notes: applyAll ? finalNotes : (finalNotes || null),
               estimated_duration_minutes: estimatedDurationMinutes > 0 
                 ? estimatedDurationMinutes 
                 : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
