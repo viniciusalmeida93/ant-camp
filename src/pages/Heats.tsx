@@ -515,22 +515,43 @@ export default function Heats() {
               const targetDay = dayHeats[0].targetDay;
               const breakInterval = targetDay.break_interval_minutes || 5;
 
-              // Buscar última bateria do dia com horário
-              const { data: lastDayHeat } = await supabase
+              // Buscar última bateria do MESMO DIA com horário
+              const targetDate = new Date(targetDay.date);
+              const targetDateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
+              
+              const { data: allDayHeats } = await supabase
                 .from("heats")
                 .select("*, wods(*)")
                 .eq("championship_id", selectedChampionship.id)
                 .not("scheduled_time", "is", null)
-                .order("scheduled_time", { ascending: false })
-                .limit(1);
+                .order("scheduled_time", { ascending: true });
+
+              // Filtrar apenas baterias do mesmo dia
+              const sameDayHeats = (allDayHeats || []).filter(h => {
+                if (!h.scheduled_time) return false;
+                const heatDate = new Date(h.scheduled_time);
+                return heatDate.toISOString().split('T')[0] === targetDateStr;
+              });
 
               let currentTime: Date;
               
-              if (lastDayHeat && lastDayHeat.length > 0) {
-                const lastHeat = lastDayHeat[0];
+              if (sameDayHeats.length > 0) {
+                // Pegar a última bateria do dia
+                const lastHeat = sameDayHeats[sameDayHeats.length - 1];
                 const lastHeatTime = new Date(lastHeat.scheduled_time);
                 const lastWodDuration = (lastHeat.wods as any)?.estimated_duration_minutes || 15;
-                currentTime = new Date(lastHeatTime.getTime() + (lastWodDuration * 60000) + (breakInterval * 60000));
+                
+                // Buscar variação de categoria se existir para a última bateria
+                const { data: lastVariationData } = await supabase
+                  .from("wod_category_variations")
+                  .select("estimated_duration_minutes")
+                  .eq("wod_id", lastHeat.wod_id)
+                  .eq("category_id", lastHeat.category_id)
+                  .maybeSingle();
+                
+                const finalLastWodDuration = lastVariationData?.estimated_duration_minutes || lastWodDuration;
+                
+                currentTime = new Date(lastHeatTime.getTime() + (finalLastWodDuration * 60000) + (breakInterval * 60000));
               } else {
                 let startTimeStr = targetDay.start_time || "09:00";
                 if (typeof startTimeStr === 'string' && startTimeStr.includes(':')) {
