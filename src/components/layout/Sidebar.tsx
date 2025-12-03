@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X } from 'lucide-react';
+import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/scoring', label: 'Pontuação', icon: Settings },
   { path: '/results', label: 'Resultados', icon: Calculator },
   { path: '/heats', label: 'Baterias', icon: Grid },
+  { path: '/global-heats', label: 'Baterias Globais', icon: LayoutGrid },
   { path: '/leaderboard', label: 'Leaderboard', icon: Award },
 ];
 

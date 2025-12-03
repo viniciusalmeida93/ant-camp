@@ -1,4 +1,3 @@
--- Adicionar 'emom' como tipo válido na tabela wods
 -- Primeiro, verificar e corrigir dados existentes que possam violar a constraint
 -- Se houver algum tipo inválido, vamos convertê-lo para 'tempo' como padrão
 UPDATE public.wods
