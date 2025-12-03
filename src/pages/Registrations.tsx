@@ -111,7 +111,7 @@ function SortableRegistrationItem({
               >
                 <span className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  Ver integrantes{hasMembers ? ` (${reg.team_members.length + 1})` : ''}
+                  Ver integrantes{hasMembers ? ` (${reg.team_members.length})` : ''}
                 </span>
                 {isExpanded ? (
                   <ChevronUp className="w-4 h-4" />
@@ -122,25 +122,11 @@ function SortableRegistrationItem({
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2">
               <div className="bg-muted/50 rounded-sm p-3 space-y-2">
-                {/* Atleta Principal */}
-                <div className="text-xs border-b border-border/50 pb-2">
-                  <div className="font-semibold mb-1">
-                    Atleta Principal
-                    {reg.athlete_name && ` - ${reg.athlete_name}`}
-                  </div>
-                  <div className="space-y-1 text-muted-foreground">
-                    {reg.athlete_email && <div>📧 {reg.athlete_email}</div>}
-                    {reg.athlete_phone && <div>📱 {reg.athlete_phone}</div>}
-                    {reg.box_name && <div>🏋️ Box: {reg.box_name}</div>}
-                  </div>
-                </div>
-                
                 {/* Integrantes do Time */}
                 {hasMembers && reg.team_members.map((member: any, index: number) => (
                   <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
                     <div className="font-semibold mb-1">
-                      Integrante {index + 1}
-                      {member.name && ` - ${member.name}`}
+                      {member.name || `Integrante ${index + 1}`}
                     </div>
                     <div className="space-y-1 text-muted-foreground">
                       {member.email && <div>📧 {member.email}</div>}
@@ -153,6 +139,11 @@ function SortableRegistrationItem({
                     </div>
                   </div>
                 ))}
+                {!hasMembers && (
+                  <div className="text-xs text-muted-foreground">
+                    Nenhum integrante adicional cadastrado.
+                  </div>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>
