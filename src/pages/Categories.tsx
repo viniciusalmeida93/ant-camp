@@ -447,7 +447,7 @@ export default function Categories() {
               Nova Categoria
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingCategory ? 'Editar' : 'Criar'} Categoria</DialogTitle>
             </DialogHeader>
