@@ -302,7 +302,7 @@ export default function WODs() {
     setCategoryVariations(createEmptyVariations());
     setVariationCategoriesWithData([]);
     setApplyToAllCategories(false);
-    await loadWodVariations(wod.id);
+    await loadWodVariations(wod.id, wod); // Passar wod como parâmetro para ter acesso aos valores padrão
   };
 
   useEffect(() => {
@@ -388,7 +388,7 @@ export default function WODs() {
     }
   };
 
-  const loadWodVariations = async (wodId: string) => {
+  const loadWodVariations = async (wodId: string, wodData?: any) => {
     setVariationsLoading(true);
     try {
       const { data, error } = await supabase
@@ -407,24 +407,42 @@ export default function WODs() {
       } else {
         const base = createEmptyVariations();
         const categoriesWithData: string[] = [];
+        
+        // Usar wodData passado como parâmetro ou editingWOD do estado
+        const baseWod = wodData || editingWOD;
 
         (data || []).forEach((variation: any) => {
           if (!base[variation.category_id]) {
             base[variation.category_id] = emptyVariation();
           }
 
+          // Carregar valores reais do banco
+          // Se description ou notes são null mas há uma variação salva, usar valores padrão do WOD
+          // Isso garante que valores copiados com applyAll apareçam como texto editável
+          const descriptionValue = variation.description !== null && variation.description !== undefined
+            ? variation.description
+            : (baseWod?.description || '');
+          
+          const notesValue = variation.notes !== null && variation.notes !== undefined
+            ? variation.notes
+            : (baseWod?.notes || '');
+
           base[variation.category_id] = {
             displayName: variation.display_name || '',
-            description: variation.description || '',
-            notes: variation.notes || '',
+            description: descriptionValue, // Valor real do banco ou padrão do WOD
+            notes: notesValue, // Valor real do banco ou padrão do WOD
             estimatedDuration:
               variation.estimated_duration_minutes !== null && variation.estimated_duration_minutes !== undefined
                 ? String(variation.estimated_duration_minutes)
-                : '',
+                : (baseWod?.estimated_duration_minutes ? String(baseWod.estimated_duration_minutes) : ''),
           };
 
           categoriesWithData.push(variation.category_id);
         });
+
+        // Se todas as categorias têm variações salvas, provavelmente applyToAllCategories estava ativo
+        // Mas não vamos assumir isso automaticamente - deixar o usuário decidir
+        // O importante é que os valores sejam carregados como strings reais
 
         setCategoryVariations(base);
         setVariationCategoriesWithData(categoriesWithData);
@@ -548,18 +566,33 @@ export default function WODs() {
               : baseEstimatedDuration;
 
             // Quando applyAll está ativo, usar os valores da variação (que foram copiados do padrão)
-            // Se não houver valores na variação, usar os valores padrão do formulário
+            // Se não houver valores na variação mas applyAll está ativo, usar os valores padrão do formulário
             const form = formRef.current;
             const formData = form ? new FormData(form) : null;
             const baseDescription = formData?.get('description') as string || '';
             const baseNotes = formData?.get('notes') as string || '';
             
+            // Se applyAll está ativo, sempre salvar valores reais (mesmo que sejam os padrão copiados)
+            // Isso garante que ao carregar novamente, os valores apareçam como texto editável
+            let finalDescription = variation?.description?.trim() || '';
+            let finalNotes = variation?.notes?.trim() || '';
+            
+            if (applyAll) {
+              // Se applyAll está ativo e não há dados personalizados, usar os valores padrão
+              if (!hasData || !finalDescription) {
+                finalDescription = baseDescription;
+              }
+              if (!hasData || !finalNotes) {
+                finalNotes = baseNotes;
+              }
+            }
+            
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
-              description: variation?.description?.trim() || (applyAll && !hasData ? baseDescription : null),
-              notes: variation?.notes?.trim() || (applyAll && !hasData ? baseNotes : null),
+              description: finalDescription || null,
+              notes: finalNotes || null,
               estimated_duration_minutes: estimatedDurationMinutes > 0 
                 ? estimatedDurationMinutes 
                 : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
