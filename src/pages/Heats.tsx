@@ -1045,12 +1045,9 @@ export default function Heats() {
               min={1}
               max={30}
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Este valor é salvo automaticamente na categoria. O sistema calculará quantas baterias serão necessárias.
-            </p>
           </div>
 
-          <div className="flex items-end gap-2">
+          <div className="flex gap-2">
             {filteredHeats.length > 0 && (
               <Button 
                 onClick={() => setIsGlobalEditMode(!isGlobalEditMode)}
