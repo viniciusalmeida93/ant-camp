@@ -248,7 +248,7 @@ export default function Heats() {
     const categoryRegs = registrations.filter(r => r.category_id === categoryId);
     
     if (categoryRegs.length === 0) {
-      return { success: false, message: `Nenhuma inscrição na categoria` };
+      return { success: false, skipped: true, message: `Nenhuma inscrição na categoria` };
     }
 
     // Buscar resultados do WOD para esta categoria (se necessário)
@@ -397,7 +397,8 @@ export default function Heats() {
     setGenerating(true);
     try {
       let totalGenerated = 0;
-      let totalErrors = 0;
+      let totalSkipped = 0;
+      const skipped: string[] = [];
       const errors: string[] = [];
 
       // Iterar sobre todas as categorias
@@ -415,12 +416,14 @@ export default function Heats() {
 
             if (result.success) {
               totalGenerated += result.totalHeats || 0;
+            } else if ((result as any).skipped || result.message?.includes("Nenhuma inscrição")) {
+              // Não contar como erro - é esperado quando não há inscrições
+              totalSkipped++;
+              skipped.push(`${category.name} - ${wod.name}`);
             } else {
-              totalErrors++;
               errors.push(`${category.name} - ${wod.name}: ${result.message}`);
             }
           } catch (error: any) {
-            totalErrors++;
             errors.push(`${category.name} - ${wod.name}: ${error.message}`);
             console.error(`Erro ao gerar baterias para ${category.name} - ${wod.name}:`, error);
           }
@@ -429,13 +432,27 @@ export default function Heats() {
 
       await loadHeats();
 
-      if (totalErrors === 0) {
-        toast.success(`Todas as baterias geradas com sucesso! Total: ${totalGenerated} baterias`);
-      } else {
+      // Construir mensagem de sucesso
+      let message = `${totalGenerated} baterias geradas com sucesso!`;
+      
+      if (totalSkipped > 0) {
+        message += ` ${totalSkipped} combinações foram puladas (sem inscrições).`;
+        if (skipped.length <= 5) {
+          console.log("Combinações puladas (sem inscrições):", skipped);
+        } else {
+          console.log(`${totalSkipped} combinações puladas (sem inscrições). Primeiras 5:`, skipped.slice(0, 5));
+        }
+      }
+
+      if (errors.length > 0) {
         toast.warning(
-          `${totalGenerated} baterias geradas, mas ${totalErrors} combinações falharam. Verifique o console.`
+          `${message} ${errors.length} erro(s) encontrado(s). Verifique o console.`
         );
         console.error("Erros:", errors);
+      } else if (totalSkipped > 0) {
+        toast.success(message);
+      } else {
+        toast.success(message);
       }
     } catch (error: any) {
       console.error("Error generating all heats:", error);
