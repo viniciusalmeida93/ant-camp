@@ -59,6 +59,7 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
     const typeMap: Record<string, string> = {
       'tempo': 'For Time',
       'amrap': 'AMRAP',
+      'emom': 'EMOM',
       'reps': 'Max Reps',
       'carga': 'Carga Máxima',
     };
@@ -206,11 +207,12 @@ export default function WODs() {
   };
 
   // Mapear tipos do banco para tipos do frontend
-  // Banco usa: 'tempo', 'reps', 'carga', 'amrap'
+  // Banco usa: 'tempo', 'reps', 'carga', 'amrap', 'emom'
   const mapDatabaseTypeToFrontend = (databaseType: string): string => {
     const typeMap: Record<string, string> = {
       'tempo': 'for-time',
       'amrap': 'amrap',
+      'emom': 'emom',
       'reps': 'max-reps',
       'carga': 'carga-maxima',
     };
@@ -218,14 +220,14 @@ export default function WODs() {
   };
 
   // Mapear tipos do frontend para tipos do banco de dados
-  // Banco aceita: 'tempo', 'reps', 'carga', 'amrap'
+  // Banco aceita: 'tempo', 'reps', 'carga', 'amrap', 'emom'
   const mapWodTypeToDatabase = (frontendType: string): string => {
     if (!frontendType) return 'tempo';
     
     const typeMap: Record<string, string> = {
       'for-time': 'tempo',
       'amrap': 'amrap',
-      'emom': 'tempo', // EMOM também é tempo
+      'emom': 'emom', // EMOM agora é um tipo próprio no banco
       'tonelagem': 'carga', // Tonelagem é carga
       'carga-maxima': 'carga', // Carga máxima é carga
       'max-reps': 'reps',
@@ -502,11 +504,11 @@ export default function WODs() {
         : 0;
 
       // Mapear o tipo do frontend para o tipo do banco
-      // Banco aceita apenas: 'tempo', 'reps', 'carga', 'amrap'
+      // Banco aceita: 'tempo', 'reps', 'carga', 'amrap', 'emom'
       const databaseType = mapWodTypeToDatabase(wodType || 'for-time');
       
       // Validação extra: garantir que o tipo está na lista permitida
-      const validTypes = ['tempo', 'reps', 'carga', 'amrap'];
+      const validTypes = ['tempo', 'reps', 'carga', 'amrap', 'emom'];
       if (!validTypes.includes(databaseType)) {
         console.error('Tipo inválido após mapeamento:', databaseType, 'Tipo original:', wodType);
         throw new Error(`Tipo de WOD inválido: ${databaseType}. Tipos permitidos: ${validTypes.join(', ')}`);
