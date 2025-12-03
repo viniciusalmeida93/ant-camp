@@ -444,6 +444,132 @@ export default function Heats() {
         }
       }
 
+      // Calcular horários para todas as baterias geradas
+      try {
+        const { data: daysData } = await supabase
+          .from("championship_days")
+          .select("*")
+          .eq("championship_id", selectedChampionship.id)
+          .order("day_number");
+
+        if (daysData && daysData.length > 0) {
+          // Buscar todas as baterias recém-criadas para calcular horários
+          const { data: allNewHeats } = await supabase
+            .from("heats")
+            .select("*, wods(*), categories(*)")
+            .eq("championship_id", selectedChampionship.id)
+            .is("scheduled_time", null)
+            .order("heat_number");
+
+          if (allNewHeats && allNewHeats.length > 0) {
+            // Agrupar baterias por dia do WOD
+            const heatsByDay = new Map<number, any[]>();
+            
+            for (const heat of allNewHeats) {
+              const { data: dayWodData } = await supabase
+                .from("championship_day_wods")
+                .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes)")
+                .eq("wod_id", heat.wod_id)
+                .single();
+
+              let dayNumber = 1;
+              let targetDay = daysData[0];
+              
+              if (dayWodData && dayWodData.championship_days) {
+                dayNumber = (dayWodData.championship_days as any).day_number || 1;
+                targetDay = dayWodData.championship_days as any;
+              }
+
+              if (!heatsByDay.has(dayNumber)) {
+                heatsByDay.set(dayNumber, []);
+              }
+              heatsByDay.get(dayNumber)!.push({ ...heat, dayNumber, targetDay });
+            }
+
+            // Calcular horários para cada dia
+            for (const [dayNum, dayHeats] of heatsByDay.entries()) {
+              const targetDay = dayHeats[0].targetDay;
+              const breakInterval = targetDay.break_interval_minutes || 5;
+
+              // Buscar última bateria do dia com horário
+              const { data: lastDayHeat } = await supabase
+                .from("heats")
+                .select("*, wods(*)")
+                .eq("championship_id", selectedChampionship.id)
+                .not("scheduled_time", "is", null)
+                .order("scheduled_time", { ascending: false })
+                .limit(1);
+
+              let currentTime: Date;
+              
+              if (lastDayHeat && lastDayHeat.length > 0) {
+                const lastHeat = lastDayHeat[0];
+                const lastHeatTime = new Date(lastHeat.scheduled_time);
+                const lastWodDuration = (lastHeat.wods as any)?.estimated_duration_minutes || 15;
+                currentTime = new Date(lastHeatTime.getTime() + (lastWodDuration * 60000) + (breakInterval * 60000));
+              } else {
+                let startTimeStr = targetDay.start_time || "09:00";
+                if (typeof startTimeStr === 'string' && startTimeStr.includes(':')) {
+                  const parts = startTimeStr.split(':');
+                  startTimeStr = `${parts[0]}:${parts[1]}`;
+                }
+                
+                const [hours, mins] = startTimeStr.split(':');
+                const [year, month, dayNum] = targetDay.date.split('-');
+                currentTime = new Date(
+                  parseInt(year), 
+                  parseInt(month) - 1, 
+                  parseInt(dayNum), 
+                  parseInt(hours), 
+                  parseInt(mins), 
+                  0, 
+                  0
+                );
+              }
+
+              // Ordenar baterias do dia por categoria e WOD
+              const sortedDayHeats = dayHeats.sort((a, b) => {
+                const catA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+                const catB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+                if (catA !== catB) return catA - catB;
+                
+                const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+                const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+                if (wodA !== wodB) return wodA - wodB;
+                
+                return a.heat_number - b.heat_number;
+              });
+
+              // Atualizar horários das baterias do dia
+              for (const heat of sortedDayHeats) {
+                const wodDuration = (heat.wods as any)?.estimated_duration_minutes || 15;
+                
+                // Buscar variação de categoria se existir
+                const { data: variationData } = await supabase
+                  .from("wod_category_variations")
+                  .select("estimated_duration_minutes")
+                  .eq("wod_id", heat.wod_id)
+                  .eq("category_id", heat.category_id)
+                  .maybeSingle();
+
+                const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
+
+                await supabase
+                  .from("heats")
+                  .update({ scheduled_time: currentTime.toISOString() })
+                  .eq("id", heat.id);
+
+                // Avançar tempo para próxima bateria
+                currentTime = new Date(currentTime.getTime() + (finalWodDuration * 60000));
+                currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
+              }
+            }
+          }
+        }
+      } catch (scheduleError) {
+        console.error("Erro ao calcular horários:", scheduleError);
+      }
+
       await loadHeats();
 
       // Construir mensagem de sucesso
@@ -1222,27 +1348,22 @@ export default function Heats() {
             )}
             <Button 
               onClick={handleGenerateHeats} 
-              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow md:col-span-2 h-12"} 
+              className={filteredHeats.length > 0 ? "flex-1 shadow-glow h-12" : "flex-1 shadow-glow h-12"} 
               disabled={generating || isGlobalEditMode}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Gerando...' : 'Gerar Baterias'}
             </Button>
+            <Button 
+              onClick={handleGenerateAllHeats} 
+              className="flex-1 shadow-glow h-12" 
+              disabled={generating || isGlobalEditMode}
+              variant="destructive"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Gerando Todas...' : 'GERAR TODAS AS BATERIAS'}
+            </Button>
           </div>
-        </div>
-        
-        {/* Botão para gerar todas as baterias */}
-        <div className="pt-4 border-t">
-          <Button 
-            onClick={handleGenerateAllHeats} 
-            className="w-full shadow-glow h-12" 
-            disabled={generating || isGlobalEditMode}
-            variant="destructive"
-            size="lg"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Gerando Todas as Baterias...' : 'GERAR TODAS AS BATERIAS'}
-          </Button>
         </div>
         {isGlobalEditMode && filteredHeats.length > 0 && (
           <div className="flex gap-2 mt-4 pt-4 border-t">
@@ -1395,20 +1516,32 @@ export default function Heats() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {scheduledTime && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm">{scheduledTime}</span>
-                    </div>
+                  {scheduledTime ? (
+                    <>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm">{scheduledTime}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                        title="Editar horário"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
+                      title="Definir horário"
+                    >
+                      <Clock className="w-4 h-4 mr-2" />
+                      Definir Horário
+                    </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenEditTime(heat.id, heat.scheduled_time)}
-                    title="Editar horário"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
                 </div>
               </div>
 
