@@ -417,35 +417,35 @@ export default function WODs() {
           }
 
           // Carregar valores reais do banco
-          // IMPORTANTE: Se description ou notes são null mas há uma variação salva no banco,
-          // significa que foi salvo com applyAll mas os valores não foram persistidos corretamente
-          // Nesse caso, usar valores padrão do WOD para garantir que apareçam como texto editável
-          // SEMPRE garantir que sejam strings não-vazias quando há uma variação salva
+          // IMPORTANTE: Se há uma variação salva no banco, sempre carregar valores reais
+          // Se description/notes são null, usar valores padrão do WOD para garantir texto editável
           let descriptionValue = '';
           let notesValue = '';
           
           // Se há uma variação salva no banco para esta categoria, sempre carregar valores reais
-          // Se description/notes são null, usar valores padrão do WOD
+          // Prioridade: valor do banco > valor padrão do WOD > string vazia
           if (variation.description !== null && variation.description !== undefined) {
-            // Valor real salvo no banco - usar diretamente (mesmo que seja string vazia)
+            // Valor real salvo no banco - usar diretamente
             descriptionValue = variation.description;
-          } else if (baseWod?.description) {
-            // Se null mas há variação salva, usar valor padrão do WOD
-            descriptionValue = baseWod.description;
+          } else {
+            // Se null mas há variação salva, usar valor padrão do WOD (garantir texto editável)
+            descriptionValue = baseWod?.description || '';
           }
           
           if (variation.notes !== null && variation.notes !== undefined) {
-            // Valor real salvo no banco - usar diretamente (mesmo que seja string vazia)
+            // Valor real salvo no banco - usar diretamente
             notesValue = variation.notes;
-          } else if (baseWod?.notes) {
-            // Se null mas há variação salva, usar valor padrão do WOD
-            notesValue = baseWod.notes;
+          } else {
+            // Se null mas há variação salva, usar valor padrão do WOD (garantir texto editável)
+            notesValue = baseWod?.notes || '';
           }
 
+          // IMPORTANTE: Sempre garantir que description e notes sejam strings (não null)
+          // Isso permite que o Textarea mostre o valor como texto editável, não placeholder
           base[variation.category_id] = {
             displayName: variation.display_name || '',
-            description: descriptionValue, // Sempre string para poder editar (não null)
-            notes: notesValue, // Sempre string para poder editar (não null)
+            description: descriptionValue, // Sempre string (não null) para poder editar
+            notes: notesValue, // Sempre string (não null) para poder editar
             estimatedDuration:
               variation.estimated_duration_minutes !== null && variation.estimated_duration_minutes !== undefined
                 ? String(variation.estimated_duration_minutes)
@@ -595,26 +595,30 @@ export default function WODs() {
               // Quando applyAll está ativo, SEMPRE usar os valores que foram copiados para categoryVariations
               // Se os valores em categoryVariations estão vazios, usar os valores padrão do formulário
               // Isso garante que sempre há valores reais para salvar
-              finalDescription = (variation?.description && variation.description.trim()) 
-                ? variation.description 
-                : baseDescription;
-              finalNotes = (variation?.notes && variation.notes.trim()) 
-                ? variation.notes 
-                : baseNotes;
+              finalDescription = variation?.description || baseDescription;
+              finalNotes = variation?.notes || baseNotes;
+              
+              // Garantir que sejam sempre strings não-vazias quando applyAll está ativo
+              if (!finalDescription || finalDescription.trim() === '') {
+                finalDescription = baseDescription;
+              }
+              if (!finalNotes || finalNotes.trim() === '') {
+                finalNotes = baseNotes;
+              }
             } else {
               // Quando applyAll não está ativo, só salvar se houver dados personalizados
               finalDescription = variation?.description?.trim() || '';
               finalNotes = variation?.notes?.trim() || '';
             }
             
-            // Quando applyAll está ativo, SEMPRE salvar valores reais (não null)
+            // Quando applyAll está ativo, SEMPRE salvar valores reais (não null, não vazio)
             // Isso permite que sejam editáveis ao recarregar
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
-              description: applyAll ? finalDescription : (finalDescription || null),
-              notes: applyAll ? finalNotes : (finalNotes || null),
+              description: applyAll ? (finalDescription || null) : (finalDescription || null),
+              notes: applyAll ? (finalNotes || null) : (finalNotes || null),
               estimated_duration_minutes: estimatedDurationMinutes > 0 
                 ? estimatedDurationMinutes 
                 : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
@@ -865,9 +869,16 @@ export default function WODs() {
                         const estimatedDurationInput = formRef.current.querySelector('[name="estimatedDuration"]') as HTMLInputElement;
                         
                         // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
-                        const descriptionValue = descriptionInput?.value || '';
-                        const notesValue = notesInput?.value || '';
-                        const estimatedDurationValue = estimatedDurationInput?.value || '';
+                        // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
+                        const descriptionValue = descriptionInput?.value ?? '';
+                        const notesValue = notesInput?.value ?? '';
+                        const estimatedDurationValue = estimatedDurationInput?.value ?? '';
+                        
+                        console.log('Copiando valores para todas as categorias:', {
+                          description: descriptionValue,
+                          notes: notesValue,
+                          estimatedDuration: estimatedDurationValue
+                        });
                         
                         setCategoryVariations(prev => {
                           const updated: Record<string, CategoryVariationForm> = {};
@@ -877,9 +888,9 @@ export default function WODs() {
                             // Garantir que sejam strings reais (mesmo que vazias) para poder editar
                             updated[cat.id] = {
                               displayName: current.displayName || '',
-                              description: descriptionValue, // Valor real copiado do campo
-                              notes: notesValue, // Valor real copiado do campo
-                              estimatedDuration: estimatedDurationValue, // Valor real copiado do campo
+                              description: descriptionValue, // Valor real copiado do campo (sempre string)
+                              notes: notesValue, // Valor real copiado do campo (sempre string)
+                              estimatedDuration: estimatedDurationValue, // Valor real copiado do campo (sempre string)
                             };
                           });
                           return updated;
