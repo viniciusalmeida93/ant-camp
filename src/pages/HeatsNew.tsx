@@ -940,6 +940,11 @@ export default function HeatsNew() {
     const leaderboard = calculateLeaderboard();
     const lbEntry = leaderboard.find(l => l.registrationId === reg.id);
     const name = reg.team_name || reg.athlete_name;
+    
+    // Buscar categoria do registro
+    const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
+    const categoryName = participantCategory?.name || '';
+    const fullName = categoryName ? `${categoryName} - ${name}` : name;
 
     // Verificar se o atleta já está em alguma bateria
     const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
@@ -978,7 +983,7 @@ export default function HeatsNew() {
       >
         <GripVertical className="w-3 h-3 flex-shrink-0" />
         <span className="font-bold w-6">{index + 1}</span>
-        <span className="flex-1 truncate">{name}</span>
+        <span className="flex-1 truncate">{fullName}</span>
         {lbEntry?.position && (
           <Badge variant="secondary" className="text-xs">{lbEntry.position}º</Badge>
         )}
@@ -1004,6 +1009,12 @@ export default function HeatsNew() {
   function SortableParticipant({ entry, heatId, laneNumber }: { entry: any; heatId: string; laneNumber: number }) {
     const reg = registrations.find(r => r.id === entry.registration_id);
     const participantName = reg?.team_name || reg?.athlete_name || 'Aguardando';
+    
+    // Buscar categoria do registro
+    const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
+    const categoryName = participantCategory?.name || '';
+    const fullName = categoryName ? `${categoryName} - ${participantName}` : participantName;
+    
     const leaderboard = calculateLeaderboard();
     const lbEntry = leaderboard.find(l => l.registrationId === entry.registration_id);
     
@@ -1035,7 +1046,7 @@ export default function HeatsNew() {
         <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="font-bold text-sm flex-shrink-0">{laneNumber}</span>
-          <span className="text-sm truncate flex-1">{participantName}</span>
+          <span className="text-sm truncate flex-1">{fullName}</span>
           {lbEntry && lbEntry.position && (
             <Badge variant="outline" className="text-xs flex-shrink-0">
               {lbEntry.position}º
@@ -1686,10 +1697,19 @@ export default function HeatsNew() {
                 value={editHeatData.wod_id} 
                 onValueChange={(value) => {
                   const selectedWod = wods.find(w => w.id === value);
+                  console.log('WOD selecionado:', selectedWod);
+                  console.log('TimeCap do WOD:', selectedWod?.time_cap);
+                  
+                  // Garantir que o timecap está no formato correto
+                  let formattedTimeCap = '10:00';
+                  if (selectedWod?.time_cap) {
+                    formattedTimeCap = selectedWod.time_cap;
+                  }
+                  
                   setEditHeatData(prev => ({ 
                     ...prev, 
                     wod_id: value,
-                    time_cap: selectedWod?.time_cap || '10:00'
+                    time_cap: formattedTimeCap
                   }));
                 }}
               >
