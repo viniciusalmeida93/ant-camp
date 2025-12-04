@@ -16,7 +16,7 @@ import WODs from "./pages/WODs";
 import Registrations from "./pages/Registrations";
 import Scoring from "./pages/Scoring";
 import Results from "./pages/Results";
-import Heats from "./pages/Heats";
+import HeatsNew from "./pages/HeatsNew";
 import Leaderboard from "./pages/Leaderboard";
 import TVDisplay from "./pages/TVDisplay";
 import NotFound from "./pages/NotFound";
@@ -78,7 +78,7 @@ const App = () => (
                   <Route path="/bulk-import" element={<BulkImport />} />
                   <Route path="/scoring" element={<Scoring />} />
                   <Route path="/results" element={<Results />} />
-                  <Route path="/heats" element={<Heats />} />
+                  <Route path="/heats" element={<HeatsNew />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
