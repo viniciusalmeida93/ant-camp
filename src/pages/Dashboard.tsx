@@ -1371,37 +1371,6 @@ export default function Dashboard() {
                           </div>
                         </div>
                         
-                        {/* Configurações do dia */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <Label htmlFor={`wod-interval-${day.id}`} className="text-sm">Intervalo entre Provas (minutos)</Label>
-                            <Input
-                              id={`wod-interval-${day.id}`}
-                              type="number"
-                              min="0"
-                              value={day.wod_interval_minutes !== null && day.wod_interval_minutes !== undefined ? day.wod_interval_minutes : 10}
-                              onChange={async (e) => {
-                                const newInterval = parseInt(e.target.value) || 10;
-                                
-                                const { error } = await supabase
-                                  .from("championship_days")
-                                  .update({ wod_interval_minutes: newInterval })
-                                  .eq("id", day.id);
-                                
-                                if (!error) {
-                                  await loadChampionshipDays();
-                                } else {
-                                  console.error("Erro ao atualizar intervalo entre provas:", error);
-                                  toast.error("Erro ao atualizar intervalo entre provas");
-                                }
-                              }}
-                              className="mt-1"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Tempo de organização da arena entre provas diferentes
-                            </p>
-                          </div>
-              </div>
                         
                         <div className="space-y-2 mb-3">
                           <Label className="text-sm">Provas do Dia:</Label>
