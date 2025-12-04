@@ -1365,11 +1365,10 @@ export default function Heats() {
     const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
     if (wodA !== wodB) return wodA - wodB;
     
-    // Se há categoria selecionada, ordenar baterias dessa categoria por heat_number
+    // Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
     // Isso garante que baterias intercaladas apareçam na ordem correta dentro da categoria
+    // (ex: se bateria 3 tem 1 atleta Scale Feminino, ela aparece como última bateria dessa categoria)
     if (selectedCategory) {
-      // Para baterias intercaladas, ordenar por heat_number dentro do mesmo WOD
-      // Isso mantém a ordem sequencial global mas agrupa por categoria quando filtrado
       return a.heat_number - b.heat_number;
     }
     
