@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar } from 'lucide-react';
+import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar, Plus, Minus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
@@ -55,6 +56,9 @@ export default function HeatsNew() {
   const [savingEdits, setSavingEdits] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'baterias' | 'horarios'>('baterias');
+  const [expandedHeats, setExpandedHeats] = useState<Set<string>>(new Set());
+  const [editingCapacity, setEditingCapacity] = useState<string | null>(null);
+  const [heatCapacities, setHeatCapacities] = useState<Map<string, number>>(new Map());
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -362,6 +366,92 @@ export default function HeatsNew() {
     toast.success(`Transição de ${transitionTime} minutos aplicada!`);
   };
 
+  const toggleHeatExpand = (heatId: string) => {
+    setExpandedHeats(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(heatId)) {
+        newSet.delete(heatId);
+      } else {
+        newSet.add(heatId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddHeat = async () => {
+    if (!selectedChampionship || !selectedCategory || !selectedWOD) {
+      toast.error("Selecione categoria e WOD primeiro");
+      return;
+    }
+
+    try {
+      const maxHeatNumber = Math.max(...filteredHeats.map(h => h.heat_number), 0);
+      
+      const { data: newHeat, error } = await supabase
+        .from("heats")
+        .insert({
+          championship_id: selectedChampionship.id,
+          category_id: selectedCategory,
+          wod_id: selectedWOD,
+          heat_number: maxHeatNumber + 1,
+          athletes_per_heat: athletesPerHeat,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Bateria adicionada!");
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error adding heat:", error);
+      toast.error("Erro ao adicionar bateria");
+    }
+  };
+
+  const handleRemoveHeat = async (heatId: string) => {
+    try {
+      // Remover entries primeiro
+      await supabase
+        .from("heat_entries")
+        .delete()
+        .eq("heat_id", heatId);
+
+      // Remover bateria
+      await supabase
+        .from("heats")
+        .delete()
+        .eq("id", heatId);
+
+      toast.success("Bateria removida!");
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error removing heat:", error);
+      toast.error("Erro ao remover bateria");
+    }
+  };
+
+  const handleUpdateHeatCapacity = async (heatId: string, newCapacity: number) => {
+    try {
+      await supabase
+        .from("heats")
+        .update({ athletes_per_heat: newCapacity })
+        .eq("id", heatId);
+
+      setHeatCapacities(prev => {
+        const newMap = new Map(prev);
+        newMap.set(heatId, newCapacity);
+        return newMap;
+      });
+
+      toast.success("Capacidade atualizada!");
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error updating capacity:", error);
+      toast.error("Erro ao atualizar capacidade");
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) {
@@ -372,9 +462,57 @@ export default function HeatsNew() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
+    // Verificar se é um atleta da sidebar sendo arrastado
+    const isSidebarAthlete = activeId.startsWith('sidebar-athlete-');
     const activeMatch = activeId.match(/^heat-(.+?)-entry-(.+)$/);
     const overMatch = overId.match(/^heat-(.+?)-entry-(.+)$/);
+    const overHeatMatch = overId.match(/^heat-dropzone-(.+)$/);
 
+    if (isSidebarAthlete) {
+      // Atleta da sidebar sendo arrastado para uma bateria
+      const registrationId = activeId.replace('sidebar-athlete-', '');
+      let targetHeatId: string | null = null;
+
+      if (overMatch) {
+        targetHeatId = overMatch[1];
+      } else if (overHeatMatch) {
+        targetHeatId = overHeatMatch[1];
+      }
+
+      if (!targetHeatId) {
+        setActiveId(null);
+        return;
+      }
+
+      try {
+        setSavingEdits(true);
+
+        const currentEntries = allHeatEntries.get(targetHeatId) || [];
+        const maxLaneNumber = currentEntries.length > 0 
+          ? Math.max(...currentEntries.map(e => e.lane_number || 0))
+          : 0;
+
+        await supabase
+          .from("heat_entries")
+          .insert({
+            heat_id: targetHeatId,
+            registration_id: registrationId,
+            lane_number: maxLaneNumber + 1,
+          });
+
+        toast.success("Atleta adicionado à bateria!");
+        await loadHeats();
+      } catch (error: any) {
+        console.error("Error adding athlete:", error);
+        toast.error("Erro ao adicionar atleta");
+      } finally {
+        setSavingEdits(false);
+        setActiveId(null);
+      }
+      return;
+    }
+
+    // Lógica existente para mover atletas entre baterias
     if (!activeMatch) {
       setActiveId(null);
       return;
@@ -409,6 +547,17 @@ export default function HeatsNew() {
         updatedOverHeat.splice(overIndex, 0, { ...activeEntry, heat_id: overHeatId });
         newEntriesMap.set(overHeatId, updatedOverHeat);
       }
+    } else if (overHeatMatch) {
+      // Arrastando para área vazia da bateria
+      const overHeatId = overHeatMatch[1];
+      const activeHeatEntries = newEntriesMap.get(activeHeatId) || [];
+      const overHeatEntries = newEntriesMap.get(overHeatId) || [];
+
+      const updatedActiveHeat = activeHeatEntries.filter(e => e.id !== activeEntryId);
+      newEntriesMap.set(activeHeatId, updatedActiveHeat);
+
+      const updatedOverHeat = [...overHeatEntries, { ...activeEntry, heat_id: overHeatId }];
+      newEntriesMap.set(overHeatId, updatedOverHeat);
     }
 
     newEntriesMap.forEach((entries, heatId) => {
@@ -459,6 +608,71 @@ export default function HeatsNew() {
       setSavingEdits(false);
     }
   };
+
+  function SidebarAthlete({ reg, index }: { reg: any; index: number }) {
+    const leaderboard = calculateLeaderboard();
+    const lbEntry = leaderboard.find(l => l.registrationId === reg.id);
+    const name = reg.team_name || reg.athlete_name;
+
+    // Verificar se o atleta já está em alguma bateria
+    const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
+      entries.some(e => e.registration_id === reg.id)
+    );
+    
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id: `sidebar-athlete-${reg.id}`,
+      disabled: isInHeat,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : (isInHeat ? 0.4 : 1),
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`flex items-center gap-2 p-2 rounded border text-sm ${
+          isInHeat 
+            ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+            : 'bg-background cursor-grab active:cursor-grabbing hover:bg-accent/50'
+        } transition-colors`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="w-3 h-3 flex-shrink-0" />
+        <span className="font-bold w-6">{index + 1}</span>
+        <span className="flex-1 truncate">{name}</span>
+        {lbEntry?.position && (
+          <Badge variant="secondary" className="text-xs">{lbEntry.position}º</Badge>
+        )}
+      </div>
+    );
+  }
+
+  function HeatDropZone({ heatId, children }: { heatId: string; children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({
+      id: `heat-dropzone-${heatId}`,
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`transition-colors ${isOver ? 'bg-primary/10 rounded-lg' : ''}`}
+      >
+        {children}
+      </div>
+    );
+  }
 
   function SortableParticipant({ entry, heatId, laneNumber }: { entry: any; heatId: string; laneNumber: number }) {
     const reg = registrations.find(r => r.id === entry.registration_id);
@@ -638,24 +852,17 @@ export default function HeatsNew() {
                   </div>
                 </RadioGroup>
 
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  <Label className="text-xs text-muted-foreground">Disponíveis</Label>
-                  {sortedCompetitors.map((reg, idx) => {
-                    const leaderboard = calculateLeaderboard();
-                    const lbEntry = leaderboard.find(l => l.registrationId === reg.id);
-                    const name = reg.team_name || reg.athlete_name;
-                    
-                    return (
-                      <div key={reg.id} className="flex items-center gap-2 p-2 rounded border bg-background text-sm">
-                        <span className="font-bold w-6">{idx + 1}</span>
-                        <span className="flex-1 truncate">{name}</span>
-                        {lbEntry?.position && (
-                          <Badge variant="secondary" className="text-xs">{lbEntry.position}º</Badge>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <SortableContext 
+                  items={sortedCompetitors.map(r => `sidebar-athlete-${r.id}`)} 
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    <Label className="text-xs text-muted-foreground">Disponíveis (arraste para as baterias)</Label>
+                    {sortedCompetitors.map((reg, idx) => (
+                      <SidebarAthlete key={reg.id} reg={reg} index={idx} />
+                    ))}
+                  </div>
+                </SortableContext>
               </div>
             </Card>
 
@@ -716,63 +923,134 @@ export default function HeatsNew() {
                   onDragEnd={handleDragEnd}
                 >
                   <div className="space-y-4">
+                    {/* Botão para adicionar nova bateria */}
+                    <Button 
+                      onClick={handleAddHeat} 
+                      variant="outline" 
+                      className="w-full"
+                      disabled={!selectedCategory || !selectedWOD}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Bateria
+                    </Button>
+
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
-                      const maxAthletes = heat.athletes_per_heat || athletesPerHeat;
+                      const maxAthletes = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
                       const scheduledTime = heat.scheduled_time 
                         ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                         : startTime;
                       
                       const wodInfo = wods.find(w => w.id === heat.wod_id);
                       const timeCap = wodInfo?.time_cap || '10min';
-
                       const allItemIds = currentEntries.map(e => `heat-${heat.id}-entry-${e.id}`);
+                      const isExpanded = expandedHeats.has(heat.id);
 
                       return (
                         <Card key={heat.id} className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <Badge variant="default" className="text-base px-3 py-1">
-                                BATERIA {heat.heat_number}
-                              </Badge>
-                              <span className="text-sm text-muted-foreground">
-                                {categories.find(c => c.id === heat.category_id)?.name} - {wodInfo?.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                              <span>{scheduledTime} - {scheduledTime} | TIMECAP: {timeCap}</span>
-                              <Badge variant="outline">
-                                Ocupados: {currentEntries.length}/{maxAthletes}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {Array.from({ length: maxAthletes }).map((_, idx) => {
-                                const entry = currentEntries[idx];
-                                if (entry) {
-                                  return (
-                                    <SortableParticipant
-                                      key={entry.id}
-                                      entry={entry}
-                                      heatId={heat.id}
-                                      laneNumber={idx + 1}
+                          <Collapsible open={isExpanded} onOpenChange={() => toggleHeatExpand(heat.id)}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3 flex-1">
+                                <CollapsibleTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="p-1">
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <Badge variant="default" className="text-base px-3 py-1">
+                                  BATERIA {heat.heat_number}
+                                </Badge>
+                                <span className="text-sm text-muted-foreground">
+                                  {categories.find(c => c.id === heat.category_id)?.name} - {wodInfo?.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">
+                                  {scheduledTime} | TC: {timeCap}
+                                </span>
+                                {editingCapacity === heat.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max="20"
+                                      value={maxAthletes}
+                                      onChange={(e) => {
+                                        const newValue = parseInt(e.target.value) || 1;
+                                        setHeatCapacities(prev => {
+                                          const newMap = new Map(prev);
+                                          newMap.set(heat.id, newValue);
+                                          return newMap;
+                                        });
+                                      }}
+                                      onBlur={() => {
+                                        handleUpdateHeatCapacity(heat.id, maxAthletes);
+                                        setEditingCapacity(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleUpdateHeatCapacity(heat.id, maxAthletes);
+                                          setEditingCapacity(null);
+                                        }
+                                      }}
+                                      className="w-16 h-8 text-sm"
+                                      autoFocus
                                     />
-                                  );
-                                }
-                                return (
-                                  <div
-                                    key={`empty-${idx}`}
-                                    className="flex items-center gap-2 p-2 rounded border border-dashed bg-muted/20"
-                                  >
-                                    <span className="font-bold text-sm text-muted-foreground">{idx + 1}</span>
-                                    <span className="text-sm text-muted-foreground">Arraste o competidor aqui</span>
                                   </div>
-                                );
-                              })}
+                                ) : (
+                                  <Badge 
+                                    variant="outline" 
+                                    className="cursor-pointer hover:bg-accent"
+                                    onClick={() => setEditingCapacity(heat.id)}
+                                  >
+                                    Ocupados: {currentEntries.length}/{maxAthletes}
+                                  </Badge>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveHeat(heat.id)}
+                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </SortableContext>
+
+                            <CollapsibleContent>
+                              <HeatDropZone heatId={heat.id}>
+                                <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+                                    {Array.from({ length: maxAthletes }).map((_, idx) => {
+                                      const entry = currentEntries[idx];
+                                      if (entry) {
+                                        return (
+                                          <SortableParticipant
+                                            key={entry.id}
+                                            entry={entry}
+                                            heatId={heat.id}
+                                            laneNumber={idx + 1}
+                                          />
+                                        );
+                                      }
+                                      return (
+                                        <div
+                                          key={`empty-${idx}`}
+                                          className="flex items-center gap-2 p-2 rounded border border-dashed bg-muted/20 hover:bg-accent/20 transition-colors"
+                                        >
+                                          <span className="font-bold text-sm text-muted-foreground">{idx + 1}</span>
+                                          <span className="text-sm text-muted-foreground">Arraste aqui</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </SortableContext>
+                              </HeatDropZone>
+                            </CollapsibleContent>
+                          </Collapsible>
                         </Card>
                       );
                     })}
