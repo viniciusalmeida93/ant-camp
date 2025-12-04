@@ -1371,78 +1371,9 @@ export default function Dashboard() {
                           </div>
                         </div>
                         
-                        {/* Configurações do dia: Horário de início e Intervalo entre baterias */}
+                        {/* Configurações do dia */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                           <div>
-                            <Label htmlFor={`start-time-${day.id}`} className="text-sm">Horário de Início do Dia</Label>
-                            <Input
-                              id={`start-time-${day.id}`}
-                              type="time"
-                              step="60"
-                              value={(() => {
-                                // Converter start_time do formato TIME (HH:MM:SS) para HH:MM
-                                if (day.start_time && typeof day.start_time === 'string') {
-                                  const parts = day.start_time.split(':');
-                                  if (parts.length >= 2) {
-                                    return `${parts[0]}:${parts[1]}`;
-                                  }
-                                }
-                                return '08:00';
-                              })()}
-                              onChange={async (e) => {
-                                const newStartTime = e.target.value; // Já vem em formato HH:MM (24h)
-                                // Converter HH:MM para HH:MM:SS (formato TIME do PostgreSQL)
-                                const timeValue = `${newStartTime}:00`;
-                                
-                                console.log(`Atualizando horário do dia ${day.day_number}: ${newStartTime} -> ${timeValue}`);
-                                
-                                const { error } = await supabase
-                                  .from("championship_days")
-                                  .update({ start_time: timeValue })
-                                  .eq("id", day.id);
-                                
-                                if (!error) {
-                                  await loadChampionshipDays();
-                                } else {
-                                  console.error("Erro ao atualizar horário:", error);
-                                  toast.error("Erro ao atualizar horário");
-                                }
-                              }}
-                              className="mt-1"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Formato 24 horas (ex: 10:00, 13:00, 19:00)
-                            </p>
-              </div>
-              <div>
-                            <Label htmlFor={`break-interval-${day.id}`} className="text-sm">Intervalo entre Baterias (minutos)</Label>
-                            <Input
-                              id={`break-interval-${day.id}`}
-                              type="number"
-                              min="0"
-                              value={day.break_interval_minutes || scheduleConfig.breakIntervalMinutes || 5}
-                              onChange={async (e) => {
-                                const newInterval = parseInt(e.target.value) || 5;
-                                
-                                const { error } = await supabase
-                                  .from("championship_days")
-                                  .update({ break_interval_minutes: newInterval })
-                                  .eq("id", day.id);
-                                
-                                if (!error) {
-                                  await loadChampionshipDays();
-                                } else {
-                                  console.error("Erro ao atualizar intervalo:", error);
-                                  toast.error("Erro ao atualizar intervalo");
-                                }
-                              }}
-                              className="mt-1"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Tempo de espera entre cada bateria
-                            </p>
-                          </div>
-              <div>
                             <Label htmlFor={`wod-interval-${day.id}`} className="text-sm">Intervalo entre Provas (minutos)</Label>
                             <Input
                               id={`wod-interval-${day.id}`}

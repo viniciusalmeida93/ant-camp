@@ -294,35 +294,48 @@ export default function HeatsNew() {
           .in("id", heatIds);
       }
 
-      // Iterar sobre TODAS as categorias
-      for (const category of categories) {
-        const categoryRegs = registrations.filter(r => r.category_id === category.id);
+      // ORDEM CORRETA: Iterar primeiro por WOD, depois por categoria
+      // Ordenar WODs por order_num
+      const sortedWods = [...wods].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+      
+      // Ordenar categorias por order_index
+      const sortedCategories = [...categories].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+      // Para cada WOD
+      for (const wod of sortedWods) {
+        console.log(`Gerando baterias para WOD: ${wod.name}`);
         
-        if (categoryRegs.length === 0) {
-          console.log(`Categoria ${category.name} sem inscrições, pulando...`);
-          continue;
-        }
+        // Para cada categoria (dentro do WOD)
+        for (const category of sortedCategories) {
+          const categoryRegs = registrations.filter(r => r.category_id === category.id);
+          
+          if (categoryRegs.length === 0) {
+            console.log(`Categoria ${category.name} sem inscrições, pulando...`);
+            continue;
+          }
 
-        // Ordenar por ordem de inscrição
-        // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
-        const orderedParticipants = categoryRegs
-          .sort((a, b) => {
-            // Mais recente primeiro, mais antigo por último
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          })
-          .map(reg => ({ registrationId: reg.id }));
+          // Ordenar por ordem de inscrição
+          // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
+          const orderedParticipants = categoryRegs
+            .sort((a, b) => {
+              // Mais recente primeiro, mais antigo por último
+              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            })
+            .map(reg => ({ registrationId: reg.id }));
 
-        // Iterar sobre TODOS os WODs
-        for (const wod of wods) {
           // Usar o valor global de Raias configurado no topo
           const athletesPerHeatValue = athletesPerHeat;
           const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeatValue);
 
-          // Criar baterias para esta combinação categoria + WOD
+          console.log(`  Categoria ${category.name}: ${orderedParticipants.length} atletas, ${totalHeats} baterias`);
+
+          // Criar baterias para esta combinação WOD + categoria
           for (let i = 0; i < totalHeats; i++) {
             const startIndex = i * athletesPerHeatValue;
             const endIndex = Math.min(startIndex + athletesPerHeatValue, orderedParticipants.length);
             const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
+
+            totalHeatsGenerated++;
 
             const { data: newHeat, error: heatError } = await supabase
               .from("heats")
@@ -330,7 +343,7 @@ export default function HeatsNew() {
                 championship_id: selectedChampionship.id,
                 category_id: category.id,
                 wod_id: wod.id,
-                heat_number: totalHeatsGenerated + i + 1,
+                heat_number: totalHeatsGenerated,
                 athletes_per_heat: athletesPerHeatValue,
               })
               .select()
@@ -345,19 +358,21 @@ export default function HeatsNew() {
             }));
 
             if (entries.length > 0) {
-              const { error: entriesError } = await supabase
+              const { error: entriesError} = await supabase
                 .from("heat_entries")
                 .insert(entries);
 
               if (entriesError) throw entriesError;
             }
-
-            totalHeatsGenerated++;
           }
         }
       }
 
-      toast.success(`${totalHeatsGenerated} baterias geradas para todas as categorias e WODs!`);
+      toast.success(`${totalHeatsGenerated} baterias geradas! Calculando horários...`);
+      
+      // Agora calcular os horários respeitando TODOS os intervalos
+      await calculateAllHeatsSchedule();
+      
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats:", error);
@@ -678,6 +693,184 @@ export default function HeatsNew() {
     });
   };
 
+  /**
+   * Calcula os horários de TODAS as baterias respeitando:
+   * - Hora de início
+   * - Transição entre baterias
+   * - Intervalo entre provas
+   * - Duração da pausa
+   */
+  const calculateAllHeatsSchedule = async () => {
+    if (!selectedChampionship) return;
+
+    try {
+      // Buscar TODAS as baterias ordenadas por heat_number
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("*, wods(*)")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number");
+
+      if (!allHeats || allHeats.length === 0) return;
+
+      // Buscar configurações de pausa do campeonato
+      const { data: champConfig } = await supabase
+        .from("championships")
+        .select("enable_break, break_duration_minutes, break_after_wod_number")
+        .eq("id", selectedChampionship.id)
+        .single();
+
+      const baseDate = championshipDays.length > 0 
+        ? new Date(championshipDays[0].date)
+        : new Date();
+
+      // Hora de início
+      const [startHours, startMins] = startTime.split(':');
+      let currentTime = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        parseInt(startHours),
+        parseInt(startMins),
+        0,
+        0
+      );
+
+      let previousWodId: string | null = null;
+      const wodsProcessed = new Set<string>();
+
+      for (const heat of allHeats) {
+        // Verificar se mudou o WOD
+        if (previousWodId && heat.wod_id !== previousWodId) {
+          // Aplicar intervalo entre provas
+          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+          
+          // Verificar se deve aplicar pausa após o WOD anterior
+          if (champConfig?.enable_break) {
+            const previousWodIndex = wods.findIndex(w => w.id === previousWodId);
+            const previousWodOrderNum = wods[previousWodIndex]?.order_num || 0;
+            
+            if (previousWodOrderNum === champConfig.break_after_wod_number) {
+              const pausaDuration = champConfig.break_duration_minutes || 30;
+              currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
+              console.log(`Aplicando pausa de ${pausaDuration} minutos após WOD ${previousWodOrderNum}`);
+            }
+          }
+        }
+
+        wodsProcessed.add(heat.wod_id);
+
+        // Atualizar horário da bateria
+        await supabase
+          .from("heats")
+          .update({ scheduled_time: currentTime.toISOString() })
+          .eq("id", heat.id);
+
+        // Calcular duração desta bateria (timecap do WOD + transição)
+        const timeCap = heat.wods?.time_cap || '10:00';
+        const timecapMinutes = timeCap.includes(':') 
+          ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
+          : parseInt(timeCap) || 10;
+
+        // Próxima bateria = tempo atual + duração do WOD + transição
+        currentTime = new Date(currentTime.getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
+
+        previousWodId = heat.wod_id;
+      }
+
+      console.log('Horários calculados para todas as baterias!');
+      toast.success("Horários calculados com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao calcular horários:", error);
+      toast.error("Erro ao calcular horários das baterias");
+    }
+  };
+
+  /**
+   * Recalcula os horários de todas as baterias APÓS a bateria editada
+   */
+  const recalculateScheduleAfterHeat = async (editedHeatId: string) => {
+    if (!selectedChampionship) return;
+
+    try {
+      // Buscar a bateria editada
+      const { data: editedHeat } = await supabase
+        .from("heats")
+        .select("*, wods(*)")
+        .eq("id", editedHeatId)
+        .single();
+
+      if (!editedHeat || !editedHeat.scheduled_time) return;
+
+      // Buscar todas as baterias APÓS esta (heat_number maior)
+      const { data: followingHeats } = await supabase
+        .from("heats")
+        .select("*, wods(*)")
+        .eq("championship_id", selectedChampionship.id)
+        .gt("heat_number", editedHeat.heat_number)
+        .order("heat_number");
+
+      if (!followingHeats || followingHeats.length === 0) return;
+
+      // Buscar configurações de pausa
+      const { data: champConfig } = await supabase
+        .from("championships")
+        .select("enable_break, break_duration_minutes, break_after_wod_number")
+        .eq("id", selectedChampionship.id)
+        .single();
+
+      // Calcular o fim da bateria editada
+      const timeCap = editedHeat.wods?.time_cap || '10:00';
+      const timecapMinutes = timeCap.includes(':') 
+        ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
+        : parseInt(timeCap) || 10;
+
+      let currentTime = new Date(new Date(editedHeat.scheduled_time).getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
+
+      let previousWodId = editedHeat.wod_id;
+
+      for (const heat of followingHeats) {
+        // Se mudou o WOD
+        if (heat.wod_id !== previousWodId) {
+          // Aplicar intervalo entre provas
+          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+          
+          // Verificar se deve aplicar pausa após o WOD anterior
+          if (champConfig?.enable_break) {
+            const previousWodIndex = wods.findIndex(w => w.id === previousWodId);
+            const previousWodOrderNum = wods[previousWodIndex]?.order_num || 0;
+            
+            if (previousWodOrderNum === champConfig.break_after_wod_number) {
+              const pausaDuration = champConfig.break_duration_minutes || 30;
+              currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
+              console.log(`Aplicando pausa de ${pausaDuration} minutos após WOD ${previousWodOrderNum}`);
+            }
+          }
+        }
+
+        // Atualizar horário da bateria
+        await supabase
+          .from("heats")
+          .update({ scheduled_time: currentTime.toISOString() })
+          .eq("id", heat.id);
+
+        // Calcular duração desta bateria
+        const heatTimeCap = heat.wods?.time_cap || '10:00';
+        const heatTimecapMinutes = heatTimeCap.includes(':') 
+          ? parseInt(heatTimeCap.split(':')[0]) + (parseInt(heatTimeCap.split(':')[1]) / 60)
+          : parseInt(heatTimeCap) || 10;
+
+        currentTime = new Date(currentTime.getTime() + (heatTimecapMinutes * 60000) + (transitionTime * 60000));
+
+        previousWodId = heat.wod_id;
+      }
+
+      console.log('Horários recalculados após edição!');
+    } catch (error: any) {
+      console.error("Erro ao recalcular horários:", error);
+    }
+  };
+
   const handleSaveEditHeat = async () => {
     if (!editingHeat) return;
 
@@ -707,7 +900,11 @@ export default function HeatsNew() {
         })
         .eq("id", editingHeat.id);
 
-      toast.success("Bateria atualizada!");
+      toast.success("Bateria atualizada! Recalculando horários seguintes...");
+      
+      // Recalcular todas as baterias seguintes
+      await recalculateScheduleAfterHeat(editingHeat.id);
+      
       setEditingHeat(null);
       await loadHeats();
     } catch (error: any) {
