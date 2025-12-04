@@ -1309,9 +1309,6 @@ export default function HeatsNew() {
                         : startTime;
                       
                       const wodInfo = wods.find(w => w.id === heat.wod_id);
-                      console.log('Heat WOD ID:', heat.wod_id);
-                      console.log('WOD encontrado:', wodInfo);
-                      console.log('TimeCap do WOD:', wodInfo?.time_cap);
                       const timeCap = wodInfo?.time_cap || '10:00';
                       
                       // Calcular horário de término
@@ -1700,19 +1697,11 @@ export default function HeatsNew() {
                 value={editHeatData.wod_id} 
                 onValueChange={(value) => {
                   const selectedWod = wods.find(w => w.id === value);
-                  console.log('WOD selecionado:', selectedWod);
-                  console.log('TimeCap do WOD:', selectedWod?.time_cap);
-                  
-                  // Garantir que o timecap está no formato correto
-                  let formattedTimeCap = '10:00';
-                  if (selectedWod?.time_cap) {
-                    formattedTimeCap = selectedWod.time_cap;
-                  }
                   
                   setEditHeatData(prev => ({ 
                     ...prev, 
                     wod_id: value,
-                    time_cap: formattedTimeCap
+                    time_cap: selectedWod?.time_cap || '10:00'
                   }));
                 }}
               >
