@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
@@ -59,6 +60,7 @@ export default function HeatsNew() {
   const [expandedHeats, setExpandedHeats] = useState<Set<string>>(new Set());
   const [editingCapacity, setEditingCapacity] = useState<string | null>(null);
   const [heatCapacities, setHeatCapacities] = useState<Map<string, number>>(new Map());
+  const [selectedHeats, setSelectedHeats] = useState<Set<string>>(new Set());
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -278,14 +280,21 @@ export default function HeatsNew() {
           })
           .map(reg => ({ registrationId: reg.id }));
       } else {
-        // Ordenar por rank (pontuação acumulada)
+        // Ordenar por rank (pontuação acumulada) ou ordem de inscrição
         if (!hasResults) {
-          // Se não há resultados, ordenar por ordem de inscrição (mais recente primeiro)
+          // Se não há resultados, ordenar por ordem de inscrição
+          // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
+          // Então ordenamos do mais recente (created_at maior) para o mais antigo (created_at menor)
+          // O mais antigo (primeiro a se inscrever) vai para o final do array = última bateria
           orderedParticipants = categoryRegs
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .sort((a, b) => {
+              // Inverter a ordenação: mais recente primeiro, mais antigo por último
+              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            })
             .map(reg => ({ registrationId: reg.id }));
         } else {
           // Se há resultados, ordenar por pontuação (menor pontuação primeiro - semeadura reversa)
+          // Piores (menos pontos) nas primeiras baterias, melhores (mais pontos) nas últimas
           const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
           orderedParticipants = categoryRegs
             .map(reg => ({
@@ -428,6 +437,56 @@ export default function HeatsNew() {
     } catch (error: any) {
       console.error("Error removing heat:", error);
       toast.error("Erro ao remover bateria");
+    }
+  };
+
+  const toggleHeatSelection = (heatId: string) => {
+    setSelectedHeats(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(heatId)) {
+        newSet.delete(heatId);
+      } else {
+        newSet.add(heatId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllHeats = () => {
+    if (selectedHeats.size === filteredHeats.length) {
+      setSelectedHeats(new Set());
+    } else {
+      setSelectedHeats(new Set(filteredHeats.map(h => h.id)));
+    }
+  };
+
+  const handleRemoveSelectedHeats = async () => {
+    if (selectedHeats.size === 0) {
+      toast.error("Selecione pelo menos uma bateria");
+      return;
+    }
+
+    try {
+      const heatsToRemove = Array.from(selectedHeats);
+
+      // Remover entries primeiro
+      await supabase
+        .from("heat_entries")
+        .delete()
+        .in("heat_id", heatsToRemove);
+
+      // Remover baterias
+      await supabase
+        .from("heats")
+        .delete()
+        .in("id", heatsToRemove);
+
+      toast.success(`${heatsToRemove.length} bateria(s) removida(s)!`);
+      setSelectedHeats(new Set());
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error removing heats:", error);
+      toast.error("Erro ao remover baterias");
     }
   };
 
@@ -923,16 +982,51 @@ export default function HeatsNew() {
                   onDragEnd={handleDragEnd}
                 >
                   <div className="space-y-4">
-                    {/* Botão para adicionar nova bateria */}
-                    <Button 
-                      onClick={handleAddHeat} 
-                      variant="outline" 
-                      className="w-full"
-                      disabled={!selectedCategory || !selectedWOD}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Adicionar Bateria
-                    </Button>
+                    {/* Controles de gerenciamento de baterias */}
+                    <Card className="p-4">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="select-all-heats"
+                            checked={filteredHeats.length > 0 && selectedHeats.size === filteredHeats.length}
+                            onChange={handleSelectAllHeats}
+                            className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                          />
+                          <Label htmlFor="select-all-heats" className="text-sm cursor-pointer">
+                            Selecionar Todas
+                          </Label>
+                        </div>
+                        
+                        {selectedHeats.size > 0 && (
+                          <Badge variant="secondary">
+                            {selectedHeats.size} selecionada(s)
+                          </Badge>
+                        )}
+
+                        <div className="flex gap-2 ml-auto">
+                          <Button 
+                            onClick={handleRemoveSelectedHeats}
+                            variant="destructive"
+                            size="sm"
+                            disabled={selectedHeats.size === 0}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Excluir Selecionadas
+                          </Button>
+                          
+                          <Button 
+                            onClick={handleAddHeat} 
+                            variant="outline" 
+                            size="sm"
+                            disabled={!selectedCategory || !selectedWOD}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Adicionar Bateria
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
 
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
@@ -951,6 +1045,13 @@ export default function HeatsNew() {
                           <Collapsible open={isExpanded} onOpenChange={() => toggleHeatExpand(heat.id)}>
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedHeats.has(heat.id)}
+                                  onChange={() => toggleHeatSelection(heat.id)}
+                                  className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
                                 <CollapsibleTrigger asChild>
                                   <Button variant="ghost" size="sm" className="p-1">
                                     {isExpanded ? (
