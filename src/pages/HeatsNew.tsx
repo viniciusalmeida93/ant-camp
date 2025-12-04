@@ -89,15 +89,6 @@ export default function HeatsNew() {
   }, [selectedChampionship, selectedCategory, selectedWOD]);
 
   useEffect(() => {
-    if (selectedCategory && categories.length > 0) {
-      const category = categories.find(c => c.id === selectedCategory);
-      if (category && category.athletes_per_heat) {
-        setAthletesPerHeat(category.athletes_per_heat);
-      }
-    }
-  }, [selectedCategory, categories]);
-
-  useEffect(() => {
     const filteredHeats = heats.filter(h => {
       if (selectedCategory && selectedWOD) {
         return h.category_id === selectedCategory && h.wod_id === selectedWOD;
@@ -953,13 +944,64 @@ export default function HeatsNew() {
                 </div>
               </Card>
 
+              {/* Controles de gerenciamento de baterias - SEMPRE VISÍVEL */}
+              <Card className="p-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {filteredHeats.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="select-all-heats"
+                          checked={filteredHeats.length > 0 && selectedHeats.size === filteredHeats.length}
+                          onChange={handleSelectAllHeats}
+                          className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                        />
+                        <Label htmlFor="select-all-heats" className="text-sm cursor-pointer">
+                          Selecionar Todas
+                        </Label>
+                      </div>
+                      
+                      {selectedHeats.size > 0 && (
+                        <Badge variant="secondary">
+                          {selectedHeats.size} selecionada(s)
+                        </Badge>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex gap-2 ml-auto">
+                    {filteredHeats.length > 0 && (
+                      <Button 
+                        onClick={handleRemoveSelectedHeats}
+                        variant="destructive"
+                        size="sm"
+                        disabled={selectedHeats.size === 0}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Excluir Selecionadas
+                      </Button>
+                    )}
+                    
+                    <Button 
+                      onClick={handleAddHeat} 
+                      variant="outline" 
+                      size="sm"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Bateria
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
               {/* Baterias */}
               {filteredHeats.length === 0 ? (
                 <Card className="p-12 text-center">
                   <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground mb-2">Nenhuma bateria gerada ainda</p>
                   <p className="text-sm text-muted-foreground">
-                    Selecione categoria e WOD, depois clique em "Gerar Baterias"
+                    Clique em "Gerar Baterias" para gerar todas ou "Adicionar Bateria" para criar manualmente
                   </p>
                 </Card>
               ) : (
@@ -969,51 +1011,6 @@ export default function HeatsNew() {
                   onDragEnd={handleDragEnd}
                 >
                   <div className="space-y-4">
-                    {/* Controles de gerenciamento de baterias */}
-                    <Card className="p-4">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="select-all-heats"
-                            checked={filteredHeats.length > 0 && selectedHeats.size === filteredHeats.length}
-                            onChange={handleSelectAllHeats}
-                            className="w-4 h-4 rounded border-gray-300 cursor-pointer"
-                          />
-                          <Label htmlFor="select-all-heats" className="text-sm cursor-pointer">
-                            Selecionar Todas
-                          </Label>
-                        </div>
-                        
-                        {selectedHeats.size > 0 && (
-                          <Badge variant="secondary">
-                            {selectedHeats.size} selecionada(s)
-                          </Badge>
-                        )}
-
-                        <div className="flex gap-2 ml-auto">
-                          <Button 
-                            onClick={handleRemoveSelectedHeats}
-                            variant="destructive"
-                            size="sm"
-                            disabled={selectedHeats.size === 0}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Excluir Selecionadas
-                          </Button>
-                          
-                          <Button 
-                            onClick={handleAddHeat} 
-                            variant="outline" 
-                            size="sm"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar Bateria
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
                       const maxAthletes = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
