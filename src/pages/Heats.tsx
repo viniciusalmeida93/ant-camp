@@ -849,16 +849,77 @@ export default function Heats() {
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const reorderedHeats = arrayMove(editingHeatsOrder, oldIndex, newIndex);
-      // Atualizar heat_number baseado na nova ordem
-      const updatedHeats = reorderedHeats.map((heat, index) => ({
+      
+      // Manter a numeração sequencial global baseada na ordem atual
+      // Ordenar todas as baterias por WOD → Categoria → heat_number atual
+      const sortedAllHeats = [...heats].sort((a, b) => {
+        const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+        const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+        if (wodA !== wodB) return wodA - wodB;
+        
+        const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+        const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+        if (categoryA !== categoryB) return categoryA - categoryB;
+        
+        return a.heat_number - b.heat_number;
+      });
+
+      // Criar um mapa de heat_id -> heat_number atual antes da mudança
+      const heatNumberMap = new Map<string, number>();
+      sortedAllHeats.forEach((heat, index) => {
+        heatNumberMap.set(heat.id, heat.heat_number);
+      });
+
+      // Atualizar apenas as baterias que foram reordenadas, mantendo números sequenciais
+      // Encontrar o range de números que precisa ser atualizado
+      const movedHeat = editingHeatsOrder[oldIndex];
+      const targetHeat = editingHeatsOrder[newIndex];
+      
+      const oldHeatNumber = movedHeat.heat_number;
+      const newHeatNumber = targetHeat.heat_number;
+      
+      // Determinar direção do movimento
+      const isMovingDown = oldIndex < newIndex;
+      
+      // Atualizar números sequenciais mantendo a ordem global
+      const updatedHeats = reorderedHeats.map((heat, index) => {
+        // Se esta é a bateria que foi movida, usar o número da posição de destino
+        if (heat.id === movedHeat.id) {
+          return { ...heat, heat_number: newHeatNumber };
+        }
+        
+        // Para outras baterias no range afetado, ajustar números
+        const currentHeatNumber = heatNumberMap.get(heat.id) || heat.heat_number;
+        
+        if (isMovingDown) {
+          // Movendo para baixo: baterias entre oldIndex e newIndex precisam subir
+          if (currentHeatNumber > oldHeatNumber && currentHeatNumber <= newHeatNumber) {
+            return { ...heat, heat_number: currentHeatNumber - 1 };
+          }
+        } else {
+          // Movendo para cima: baterias entre newIndex e oldIndex precisam descer
+          if (currentHeatNumber >= newHeatNumber && currentHeatNumber < oldHeatNumber) {
+            return { ...heat, heat_number: currentHeatNumber + 1 };
+          }
+        }
+        
+        return heat;
+      });
+
+      // Reordenar por heat_number para garantir sequência correta
+      updatedHeats.sort((a, b) => a.heat_number - b.heat_number);
+      
+      // Renumerar sequencialmente mantendo a ordem
+      const finalHeats = updatedHeats.map((heat, index) => ({
         ...heat,
         heat_number: index + 1,
       }));
-      setEditingHeatsOrder(updatedHeats);
+
+      setEditingHeatsOrder(finalHeats);
 
       // Salvar automaticamente
       try {
-        for (const heat of updatedHeats) {
+        for (const heat of finalHeats) {
           await supabase
             .from("heats")
             .update({ heat_number: heat.heat_number })
