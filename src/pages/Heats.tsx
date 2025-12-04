@@ -1044,63 +1044,61 @@ export default function Heats() {
 
       let totalMoved = 0;
 
-      // Intercalar baterias - agrupar por categoria e WOD primeiro
-      const heatsByContext = new Map<string, any[]>();
-      filteredHeatsList.forEach(heat => {
-        const key = `${heat.category_id}-${heat.wod_id}`;
-        if (!heatsByContext.has(key)) {
-          heatsByContext.set(key, []);
-        }
-        heatsByContext.get(key)!.push(heat);
+      // Intercalar baterias - permitir intercalação entre categorias diferentes
+      // Ordenar todas as baterias por WOD, categoria e número da bateria
+      const sortedAllHeats = [...filteredHeatsList].sort((a, b) => {
+        const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
+        const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
+        if (wodA !== wodB) return wodA - wodB;
+        
+        const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
+        const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
+        if (categoryA !== categoryB) return categoryA - categoryB;
+        
+        return a.heat_number - b.heat_number;
       });
 
-      // Processar cada grupo de categoria/WOD separadamente
-      for (const [contextKey, contextHeats] of heatsByContext.entries()) {
-        // Ordenar baterias deste contexto por número
-        const sortedContextHeats = [...contextHeats].sort((a, b) => a.heat_number - b.heat_number);
+      console.log(`Total de baterias para intercalar: ${sortedAllHeats.length}`);
+
+      // Para cada bateria, verificar se está incompleta e buscar atletas das próximas baterias
+      for (let i = 0; i < sortedAllHeats.length; i++) {
+        const currentHeat = sortedAllHeats[i];
+        let currentEntries = [...(entriesByHeat.get(currentHeat.id) || [])];
         
-        // Buscar athletes_per_heat da primeira categoria deste contexto
-        const firstHeat = sortedContextHeats[0];
-        const category = categories.find(c => c.id === firstHeat.category_id);
-        const maxAthletes = firstHeat.athletes_per_heat || category?.athletes_per_heat || (typeof athletesPerHeat === 'number' ? athletesPerHeat : 10);
+        // Buscar athletes_per_heat da categoria desta bateria
+        const category = categories.find(c => c.id === currentHeat.category_id);
+        const maxAthletes = currentHeat.athletes_per_heat || category?.athletes_per_heat || (typeof athletesPerHeat === 'number' ? athletesPerHeat : 10);
         
         if (!maxAthletes || maxAthletes <= 0) {
-          console.warn(`Categoria ${category?.name} não tem athletes_per_heat definido`);
+          console.warn(`Bateria ${currentHeat.heat_number} (${category?.name}) não tem athletes_per_heat definido`);
           continue;
         }
 
-        console.log(`Intercalando contexto ${contextKey}, maxAthletes: ${maxAthletes}`);
-
-        // Intercalar baterias deste contexto
-        for (let i = 0; i < sortedContextHeats.length; i++) {
-          const currentHeat = sortedContextHeats[i];
-          let currentEntries = [...(entriesByHeat.get(currentHeat.id) || [])];
+        console.log(`Bateria ${currentHeat.heat_number} (${category?.name}) tem ${currentEntries.length}/${maxAthletes} atletas`);
+        
+        if (currentEntries.length < maxAthletes) {
+          // Esta bateria precisa de mais atletas
+          let needed = maxAthletes - currentEntries.length;
+          console.log(`Bateria ${currentHeat.heat_number} precisa de ${needed} atletas`);
           
-          console.log(`Bateria ${currentHeat.heat_number} tem ${currentEntries.length} atletas`);
-          
-          if (currentEntries.length < maxAthletes) {
-            // Esta bateria precisa de mais atletas
-            let needed = maxAthletes - currentEntries.length;
-            console.log(`Bateria ${currentHeat.heat_number} precisa de ${needed} atletas`);
+          // Procurar atletas nas próximas baterias (pode ser de qualquer categoria/WOD)
+          for (let j = i + 1; j < sortedAllHeats.length && needed > 0; j++) {
+            const nextHeat = sortedAllHeats[j];
+            let nextEntries = [...(entriesByHeat.get(nextHeat.id) || [])];
+            const nextCategory = categories.find(c => c.id === nextHeat.category_id);
             
-            // Procurar atletas nas próximas baterias do mesmo contexto
-            for (let j = i + 1; j < sortedContextHeats.length && needed > 0; j++) {
-              const nextHeat = sortedContextHeats[j];
-              let nextEntries = [...(entriesByHeat.get(nextHeat.id) || [])];
+            console.log(`Verificando bateria ${nextHeat.heat_number} (${nextCategory?.name}) com ${nextEntries.length} atletas`);
+            
+            if (nextEntries.length > 0) {
+              // Pegar atletas da próxima bateria
+              const toMove = nextEntries.splice(0, Math.min(needed, nextEntries.length));
+              console.log(`Movendo ${toMove.length} atletas da bateria ${nextHeat.heat_number} (${nextCategory?.name}) para bateria ${currentHeat.heat_number} (${category?.name})`);
               
-              console.log(`Verificando próxima bateria ${nextHeat.heat_number} com ${nextEntries.length} atletas`);
-              
-              if (nextEntries.length > 0) {
-                // Pegar atletas da próxima bateria
-                const toMove = nextEntries.splice(0, Math.min(needed, nextEntries.length));
-                console.log(`Movendo ${toMove.length} atletas da bateria ${nextHeat.heat_number} para bateria ${currentHeat.heat_number}`);
-                
-                currentEntries.push(...toMove);
-                entriesByHeat.set(currentHeat.id, currentEntries);
-                entriesByHeat.set(nextHeat.id, nextEntries);
-                totalMoved += toMove.length;
-                needed -= toMove.length;
-              }
+              currentEntries.push(...toMove);
+              entriesByHeat.set(currentHeat.id, currentEntries);
+              entriesByHeat.set(nextHeat.id, nextEntries);
+              totalMoved += toMove.length;
+              needed -= toMove.length;
             }
           }
         }
