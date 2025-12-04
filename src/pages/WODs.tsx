@@ -517,12 +517,14 @@ export default function WODs() {
       console.log('Tipo do frontend:', wodType);
       console.log('Tipo mapeado para banco:', databaseType);
 
+      const timeCap = formData.get('timeCap') as string;
+      
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
         type: databaseType,
         description: formData.get('description') as string,
-        time_cap: null,
+        time_cap: timeCap?.trim() || null,
         tiebreaker: null, // Removed
         notes: formData.get('notes') as string || null,
         estimated_duration_minutes: baseEstimatedDuration,
@@ -823,7 +825,22 @@ export default function WODs() {
               </div>
 
               <div>
-                <Label htmlFor="estimatedDuration">Time Cap (minutos)</Label>
+                <Label htmlFor="timeCap">Time Cap da Prova (MM:SS) *</Label>
+                <Input 
+                  id="timeCap" 
+                  name="timeCap"
+                  type="text"
+                  defaultValue={editingWOD?.time_cap || ''}
+                  placeholder="Ex: 10:00 para 10 minutos"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tempo LIMITE para completar o WOD (formato: minutos:segundos)
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="estimatedDuration">Duração Estimada (minutos)</Label>
                 <Input 
                   id="estimatedDuration" 
                   name="estimatedDuration"
@@ -833,7 +850,7 @@ export default function WODs() {
                   placeholder="Ex: 15"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tempo previsto para finalizar a prova (usado no cálculo automático de horários)
+                  Tempo previsto para a bateria (usado no cálculo de horários) - geralmente time_cap + transição
                 </p>
               </div>
 
