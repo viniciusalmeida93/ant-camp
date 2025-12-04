@@ -134,9 +134,10 @@ export default function Heats() {
       setAllHeatEntries(new Map());
     }
     
-    // Inicializar ordem das baterias
+    // Inicializar ordem das baterias ordenadas por heat_number sequencial
     if (filteredHeats.length > 0) {
-      setEditingHeatsOrder([...filteredHeats]);
+      const sortedByHeatNumber = [...filteredHeats].sort((a, b) => a.heat_number - b.heat_number);
+      setEditingHeatsOrder(sortedByHeatNumber);
     } else {
       setEditingHeatsOrder([]);
     }
@@ -844,15 +845,17 @@ export default function Heats() {
       return;
     }
 
-    const oldIndex = editingHeatsOrder.findIndex(h => h.id === active.id);
-    const newIndex = editingHeatsOrder.findIndex(h => h.id === over.id);
+    // Garantir que editingHeatsOrder está ordenado por heat_number antes de arrastar
+    const sortedHeats = [...editingHeatsOrder].sort((a, b) => a.heat_number - b.heat_number);
+    
+    const oldIndex = sortedHeats.findIndex(h => h.id === active.id);
+    const newIndex = sortedHeats.findIndex(h => h.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      // Reordenar o array
-      const reorderedHeats = arrayMove(editingHeatsOrder, oldIndex, newIndex);
+      // Reordenar o array mantendo ordem sequencial
+      const reorderedHeats = arrayMove(sortedHeats, oldIndex, newIndex);
       
-      // Renumerar sequencialmente baseado na nova posição no array
-      // Isso mantém a ordem sequencial global (1, 2, 3, 4...)
+      // Renumerar sequencialmente baseado na nova posição no array (1, 2, 3, 4...)
       const updatedHeats = reorderedHeats.map((heat, index) => ({
         ...heat,
         heat_number: index + 1,
