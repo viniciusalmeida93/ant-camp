@@ -96,24 +96,53 @@ export default function Heats() {
     }
   }, [selectedCategory, categories]);
 
+  // Função auxiliar para verificar se uma bateria tem participantes de uma categoria específica
+  const heatHasCategoryParticipants = (heatId: string, categoryId: string): boolean => {
+    const entries = heatEntries.filter(e => e.heat_id === heatId);
+    return entries.some(entry => {
+      const reg = registrations.find(r => r.id === entry.registration_id);
+      return reg?.category_id === categoryId;
+    });
+  };
+
   // Inicializar entries quando heats são carregados
   useEffect(() => {
-    // Sempre usar todas as baterias filtradas (mesma lógica do filteredHeats)
+    // Filtrar baterias considerando categorias dos participantes (para baterias intercaladas)
     const filteredHeats = heats.filter(h => {
+      // Se há filtro de categoria, verificar se a bateria tem participantes dessa categoria
       if (selectedCategory && selectedWOD) {
-        return h.category_id === selectedCategory && h.wod_id === selectedWOD;
+        const hasCategoryParticipants = heatHasCategoryParticipants(h.id, selectedCategory);
+        return hasCategoryParticipants && h.wod_id === selectedWOD;
       } else if (selectedCategory) {
-        return h.category_id === selectedCategory;
+        const hasCategoryParticipants = heatHasCategoryParticipants(h.id, selectedCategory);
+        return hasCategoryParticipants;
       } else if (selectedWOD) {
         return h.wod_id === selectedWOD;
       }
       return true;
     }).sort((a, b) => {
-      // Ordenar por WOD primeiro, depois categoria, depois número da bateria
+      // Ordenar por WOD primeiro, depois categoria filtrada, depois número da bateria
       const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
       const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
       if (wodA !== wodB) return wodA - wodB;
       
+      // Se há categoria selecionada, ordenar por ordem dessa categoria
+      if (selectedCategory) {
+        // Para baterias intercaladas, usar a ordem da categoria filtrada
+        // Pegar todas as baterias do mesmo WOD que têm participantes da categoria filtrada
+        const sameWodHeats = heats.filter(h2 => 
+          h2.wod_id === a.wod_id && heatHasCategoryParticipants(h2.id, selectedCategory)
+        ).sort((h1, h2) => h1.heat_number - h2.heat_number);
+        
+        const indexA = sameWodHeats.findIndex(h2 => h2.id === a.id);
+        const indexB = sameWodHeats.findIndex(h2 => h2.id === b.id);
+        
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+      }
+      
+      // Fallback: ordenar por categoria original da bateria, depois número
       const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
       const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
       if (categoryA !== categoryB) return categoryA - categoryB;
@@ -1305,23 +1334,46 @@ export default function Heats() {
     );
   }
 
+  // Função auxiliar para verificar se uma bateria tem participantes de uma categoria específica
+  const heatHasCategoryParticipants = (heatId: string, categoryId: string): boolean => {
+    const entries = heatEntries.filter(e => e.heat_id === heatId);
+    return entries.some(entry => {
+      const reg = registrations.find(r => r.id === entry.registration_id);
+      return reg?.category_id === categoryId;
+    });
+  };
+
   // Filtrar baterias baseado nas seleções (ou mostrar todas se não houver seleção)
+  // Considerar baterias intercaladas: mostrar bateria se tem participantes da categoria filtrada
   const filteredHeats = heats.filter(h => {
     if (selectedCategory && selectedWOD) {
-      return h.category_id === selectedCategory && h.wod_id === selectedWOD;
+      // Verificar se a bateria tem participantes da categoria selecionada E é do WOD selecionado
+      const hasCategoryParticipants = heatHasCategoryParticipants(h.id, selectedCategory);
+      return hasCategoryParticipants && h.wod_id === selectedWOD;
     } else if (selectedCategory) {
-      return h.category_id === selectedCategory;
+      // Verificar se a bateria tem participantes da categoria selecionada
+      const hasCategoryParticipants = heatHasCategoryParticipants(h.id, selectedCategory);
+      return hasCategoryParticipants;
     } else if (selectedWOD) {
       return h.wod_id === selectedWOD;
     }
     // Se nenhum filtro está selecionado, mostrar todas
     return true;
   }).sort((a, b) => {
-    // Ordenar por WOD primeiro, depois categoria, depois número da bateria
+    // Ordenar por WOD primeiro
     const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
     const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
     if (wodA !== wodB) return wodA - wodB;
     
+    // Se há categoria selecionada, ordenar baterias dessa categoria por heat_number
+    // Isso garante que baterias intercaladas apareçam na ordem correta dentro da categoria
+    if (selectedCategory) {
+      // Para baterias intercaladas, ordenar por heat_number dentro do mesmo WOD
+      // Isso mantém a ordem sequencial global mas agrupa por categoria quando filtrado
+      return a.heat_number - b.heat_number;
+    }
+    
+    // Sem filtro de categoria: ordenar por categoria original, depois número
     const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
     const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
     if (categoryA !== categoryB) return categoryA - categoryB;
