@@ -944,7 +944,7 @@ export default function HeatsNew() {
     // Buscar categoria do registro
     const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
     const categoryName = participantCategory?.name || '';
-    const fullName = categoryName ? `${categoryName} - ${name}` : name;
+    const fullName = categoryName ? `${name} - ${categoryName}` : name;
 
     // Verificar se o atleta já está em alguma bateria
     const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
@@ -1013,7 +1013,7 @@ export default function HeatsNew() {
     // Buscar categoria do registro
     const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
     const categoryName = participantCategory?.name || '';
-    const fullName = categoryName ? `${categoryName} - ${participantName}` : participantName;
+    const fullName = categoryName ? `${participantName} - ${categoryName}` : participantName;
     
     const leaderboard = calculateLeaderboard();
     const lbEntry = leaderboard.find(l => l.registrationId === entry.registration_id);
@@ -1309,6 +1309,9 @@ export default function HeatsNew() {
                         : startTime;
                       
                       const wodInfo = wods.find(w => w.id === heat.wod_id);
+                      console.log('Heat WOD ID:', heat.wod_id);
+                      console.log('WOD encontrado:', wodInfo);
+                      console.log('TimeCap do WOD:', wodInfo?.time_cap);
                       const timeCap = wodInfo?.time_cap || '10:00';
                       
                       // Calcular horário de término
