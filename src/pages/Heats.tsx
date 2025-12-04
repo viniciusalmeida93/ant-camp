@@ -134,10 +134,9 @@ export default function Heats() {
       setAllHeatEntries(new Map());
     }
     
-    // Inicializar ordem das baterias ordenadas por heat_number sequencial
+    // Inicializar ordem das baterias (mantendo ordem original: WOD → Categoria → heat_number)
     if (filteredHeats.length > 0) {
-      const sortedByHeatNumber = [...filteredHeats].sort((a, b) => a.heat_number - b.heat_number);
-      setEditingHeatsOrder(sortedByHeatNumber);
+      setEditingHeatsOrder([...filteredHeats]);
     } else {
       setEditingHeatsOrder([]);
     }
@@ -845,39 +844,17 @@ export default function Heats() {
       return;
     }
 
-    // Garantir que editingHeatsOrder está ordenado por heat_number antes de arrastar
-    const sortedHeats = [...editingHeatsOrder].sort((a, b) => a.heat_number - b.heat_number);
-    
-    const oldIndex = sortedHeats.findIndex(h => h.id === active.id);
-    const newIndex = sortedHeats.findIndex(h => h.id === over.id);
+    const oldIndex = editingHeatsOrder.findIndex(h => h.id === active.id);
+    const newIndex = editingHeatsOrder.findIndex(h => h.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      // Reordenar o array mantendo ordem sequencial
-      const reorderedHeats = arrayMove(sortedHeats, oldIndex, newIndex);
-      
-      // Renumerar sequencialmente baseado na nova posição no array (1, 2, 3, 4...)
-      const updatedHeats = reorderedHeats.map((heat, index) => ({
-        ...heat,
-        heat_number: index + 1,
-      }));
+      // Reordenar o array visualmente (sem renumerar)
+      const reorderedHeats = arrayMove(editingHeatsOrder, oldIndex, newIndex);
+      setEditingHeatsOrder(reorderedHeats);
 
-      setEditingHeatsOrder(updatedHeats);
-
-      // Salvar automaticamente
-      try {
-        // Atualizar todas as baterias para garantir ordem sequencial
-        for (let i = 0; i < updatedHeats.length; i++) {
-          await supabase
-            .from("heats")
-            .update({ heat_number: i + 1 })
-            .eq("id", updatedHeats[i].id);
-        }
-        toast.success("Ordem das baterias atualizada!");
-        await loadHeats();
-      } catch (error: any) {
-        console.error("Error saving heat order:", error);
-        toast.error("Erro ao salvar ordem das baterias");
-      }
+      // Não renumerar - apenas atualizar a ordem visual
+      // A numeração sequencial global já foi definida na geração
+      toast.success("Ordem visual das baterias atualizada!");
     }
   };
 
