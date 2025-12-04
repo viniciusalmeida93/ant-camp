@@ -249,70 +249,27 @@ export default function HeatsNew() {
   };
 
   const handleGenerateHeats = async () => {
-    if (!selectedChampionship || !selectedCategory || !selectedWOD) {
-      toast.error("Selecione categoria e WOD");
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    if (categories.length === 0 || wods.length === 0) {
+      toast.error("É necessário ter categorias e WODs cadastrados");
       return;
     }
 
     setGenerating(true);
     try {
-      const categoryRegs = registrations.filter(r => r.category_id === selectedCategory);
-      
-      if (categoryRegs.length === 0) {
-        toast.error("Nenhuma inscrição encontrada para esta categoria");
-        setGenerating(false);
-        return;
-      }
+      let totalHeatsGenerated = 0;
 
-      const leaderboard = calculateLeaderboard();
-      const hasResults = leaderboard.length > 0 && leaderboard.some(l => l.totalPoints > 0);
+      // Deletar TODAS as baterias existentes do campeonato
+      const { data: existingHeats } = await supabase
+        .from("heats")
+        .select("id")
+        .eq("championship_id", selectedChampionship.id);
 
-      let orderedParticipants: any[];
-      
-      // Ordenar baseado na escolha do usuário (Nº ou Rank)
-      if (orderBy === 'number') {
-        // Ordenar por número (alfabeticamente por nome)
-        orderedParticipants = categoryRegs
-          .sort((a, b) => {
-            const nameA = (a.team_name || a.athlete_name || '').toLowerCase();
-            const nameB = (b.team_name || b.athlete_name || '').toLowerCase();
-            return nameA.localeCompare(nameB);
-          })
-          .map(reg => ({ registrationId: reg.id }));
-      } else {
-        // Ordenar por rank (pontuação acumulada) ou ordem de inscrição
-        if (!hasResults) {
-          // Se não há resultados, ordenar por ordem de inscrição
-          // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
-          // Então ordenamos do mais recente (created_at maior) para o mais antigo (created_at menor)
-          // O mais antigo (primeiro a se inscrever) vai para o final do array = última bateria
-          orderedParticipants = categoryRegs
-            .sort((a, b) => {
-              // Inverter a ordenação: mais recente primeiro, mais antigo por último
-              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            })
-            .map(reg => ({ registrationId: reg.id }));
-        } else {
-          // Se há resultados, ordenar por pontuação (menor pontuação primeiro - semeadura reversa)
-          // Piores (menos pontos) nas primeiras baterias, melhores (mais pontos) nas últimas
-          const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
-          orderedParticipants = categoryRegs
-            .map(reg => ({
-              registrationId: reg.id,
-              totalPoints: leaderboardMap.get(reg.id)?.totalPoints || 0,
-            }))
-            .sort((a, b) => a.totalPoints - b.totalPoints);
-        }
-      }
-
-      const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
-
-      // Deletar baterias existentes
-      const existingHeats = heats.filter(
-        h => h.category_id === selectedCategory && h.wod_id === selectedWOD
-      );
-
-      if (existingHeats.length > 0) {
+      if (existingHeats && existingHeats.length > 0) {
         const heatIds = existingHeats.map(h => h.id);
         
         await supabase
@@ -326,42 +283,69 @@ export default function HeatsNew() {
           .in("id", heatIds);
       }
 
-      // Criar novas baterias
-      for (let i = 0; i < totalHeats; i++) {
-        const startIndex = i * athletesPerHeat;
-        const endIndex = Math.min(startIndex + athletesPerHeat, orderedParticipants.length);
-        const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
+      // Iterar sobre TODAS as categorias
+      for (const category of categories) {
+        const categoryRegs = registrations.filter(r => r.category_id === category.id);
+        
+        if (categoryRegs.length === 0) {
+          console.log(`Categoria ${category.name} sem inscrições, pulando...`);
+          continue;
+        }
 
-        const { data: newHeat, error: heatError } = await supabase
-          .from("heats")
-          .insert({
-            championship_id: selectedChampionship.id,
-            category_id: selectedCategory,
-            wod_id: selectedWOD,
-            heat_number: i + 1,
-            athletes_per_heat: athletesPerHeat,
+        // Ordenar por ordem de inscrição
+        // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
+        const orderedParticipants = categoryRegs
+          .sort((a, b) => {
+            // Mais recente primeiro, mais antigo por último
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           })
-          .select()
-          .single();
+          .map(reg => ({ registrationId: reg.id }));
 
-        if (heatError) throw heatError;
+        // Iterar sobre TODOS os WODs
+        for (const wod of wods) {
+          const athletesPerHeatValue = category.athletes_per_heat || athletesPerHeat;
+          const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeatValue);
 
-        const entries = heatParticipants.map((participant, index) => ({
-          heat_id: newHeat.id,
-          registration_id: participant.registrationId,
-          lane_number: index + 1,
-        }));
+          // Criar baterias para esta combinação categoria + WOD
+          for (let i = 0; i < totalHeats; i++) {
+            const startIndex = i * athletesPerHeatValue;
+            const endIndex = Math.min(startIndex + athletesPerHeatValue, orderedParticipants.length);
+            const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
 
-        if (entries.length > 0) {
-          const { error: entriesError } = await supabase
-            .from("heat_entries")
-            .insert(entries);
+            const { data: newHeat, error: heatError } = await supabase
+              .from("heats")
+              .insert({
+                championship_id: selectedChampionship.id,
+                category_id: category.id,
+                wod_id: wod.id,
+                heat_number: totalHeatsGenerated + i + 1,
+                athletes_per_heat: athletesPerHeatValue,
+              })
+              .select()
+              .single();
 
-          if (entriesError) throw entriesError;
+            if (heatError) throw heatError;
+
+            const entries = heatParticipants.map((participant, index) => ({
+              heat_id: newHeat.id,
+              registration_id: participant.registrationId,
+              lane_number: index + 1,
+            }));
+
+            if (entries.length > 0) {
+              const { error: entriesError } = await supabase
+                .from("heat_entries")
+                .insert(entries);
+
+              if (entriesError) throw entriesError;
+            }
+
+            totalHeatsGenerated++;
+          }
         }
       }
 
-      toast.success(`${totalHeats} baterias geradas com sucesso!`);
+      toast.success(`${totalHeatsGenerated} baterias geradas para todas as categorias e WODs!`);
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats:", error);
@@ -953,13 +937,13 @@ export default function HeatsNew() {
                   </div>
                   <div>
                     <Label htmlFor="generateBtn" className="text-xs text-muted-foreground mb-1 block">
-                      Ordenação: {orderBy === 'number' ? 'Alfabética (Nº)' : 'Por Ranking'}
+                      Gera todas as baterias de todas as categorias
                     </Label>
                     <Button 
                       id="generateBtn"
                       onClick={handleGenerateHeats} 
                       className="w-full" 
-                      disabled={generating || !selectedCategory || !selectedWOD}
+                      disabled={generating}
                     >
                       <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
                       {generating ? 'Gerando...' : 'Gerar Baterias'}
