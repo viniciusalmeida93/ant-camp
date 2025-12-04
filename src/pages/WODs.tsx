@@ -491,11 +491,6 @@ export default function WODs() {
     try {
       const form = e.target as HTMLFormElement;
       const formData = new FormData(form);
-      const baseEstimatedDurationValue = formData.get('estimatedDuration') as string;
-      const parsedBaseDuration = baseEstimatedDurationValue ? parseInt(baseEstimatedDurationValue, 10) : NaN;
-      const baseEstimatedDuration = Number.isFinite(parsedBaseDuration) && parsedBaseDuration > 0
-        ? parsedBaseDuration
-        : 15;
       const applyAll = applyToAllCategories;
       
       // Get max order_num to add new WOD at the end
@@ -519,6 +514,13 @@ export default function WODs() {
 
       const timeCap = formData.get('timeCap') as string;
       
+      // Calcular duração estimada baseada no time_cap
+      let estimatedDuration = 15; // Padrão
+      if (timeCap && timeCap.includes(':')) {
+        const [minutes, seconds] = timeCap.split(':').map(Number);
+        estimatedDuration = minutes + Math.ceil(seconds / 60) + 2; // time_cap + 2min de transição
+      }
+      
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
@@ -527,7 +529,7 @@ export default function WODs() {
         time_cap: timeCap?.trim() || null,
         tiebreaker: null, // Removed
         notes: formData.get('notes') as string || null,
-        estimated_duration_minutes: baseEstimatedDuration,
+        estimated_duration_minutes: estimatedDuration,
         order_num: editingWOD ? editingWOD.order_num : maxOrder + 1,
       };
 
@@ -825,32 +827,17 @@ export default function WODs() {
               </div>
 
               <div>
-                <Label htmlFor="timeCap">Time Cap da Prova (MM:SS) *</Label>
+                <Label htmlFor="timeCap">Time Cap da Prova *</Label>
                 <Input 
                   id="timeCap" 
                   name="timeCap"
                   type="text"
                   defaultValue={editingWOD?.time_cap || ''}
-                  placeholder="Ex: 10:00 para 10 minutos"
+                  placeholder="Ex: 6:00 (6 minutos)"
                   required
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tempo LIMITE para completar o WOD (formato: minutos:segundos)
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="estimatedDuration">Duração Estimada (minutos)</Label>
-                <Input 
-                  id="estimatedDuration" 
-                  name="estimatedDuration"
-                  type="number"
-                  min="1"
-                  defaultValue={editingWOD?.estimated_duration_minutes || 15}
-                  placeholder="Ex: 15"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Tempo previsto para a bateria (usado no cálculo de horários) - geralmente time_cap + transição
+                  Formato: MM:SS (minutos:segundos) - Exemplo: 10:00 = 10 minutos
                 </p>
               </div>
 
@@ -885,18 +872,15 @@ export default function WODs() {
                         // Ler valores diretamente dos elementos do formulário para garantir valores reais
                         const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
                         const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
-                        const estimatedDurationInput = formRef.current.querySelector('[name="estimatedDuration"]') as HTMLInputElement;
                         
                         // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
                         // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
                         const descriptionValue = descriptionInput?.value ?? '';
                         const notesValue = notesInput?.value ?? '';
-                        const estimatedDurationValue = estimatedDurationInput?.value ?? '';
                         
                         console.log('Copiando valores para todas as categorias:', {
                           description: descriptionValue,
-                          notes: notesValue,
-                          estimatedDuration: estimatedDurationValue
+                          notes: notesValue
                         });
                         
                         setCategoryVariations(prev => {
@@ -909,7 +893,7 @@ export default function WODs() {
                               displayName: current.displayName || '',
                               description: descriptionValue, // Valor real copiado do campo (sempre string)
                               notes: notesValue, // Valor real copiado do campo (sempre string)
-                              estimatedDuration: estimatedDurationValue, // Valor real copiado do campo (sempre string)
+                              estimatedDuration: '', // Será calculado automaticamente
                             };
                           });
                           return updated;
