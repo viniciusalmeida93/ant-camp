@@ -61,8 +61,11 @@ export default function HeatsNew() {
   const [heatCapacities, setHeatCapacities] = useState<Map<string, number>>(new Map());
   const [selectedHeats, setSelectedHeats] = useState<Set<string>>(new Set());
   const [editingHeat, setEditingHeat] = useState<any | null>(null);
+  const [isCreatingHeat, setIsCreatingHeat] = useState(false);
   const [editHeatData, setEditHeatData] = useState({
     custom_name: '',
+    category_id: '',
+    wod_id: '',
     athletes_per_heat: 4,
     scheduled_time: '',
     end_time: '',
@@ -450,43 +453,22 @@ export default function HeatsNew() {
     });
   };
 
-  const handleAddHeat = async () => {
+  const handleOpenCreateHeat = () => {
     if (!selectedChampionship) {
       toast.error("Selecione um campeonato primeiro");
       return;
     }
 
-    try {
-      // Buscar TODAS as baterias do campeonato para pegar o maior número
-      const { data: allHeats } = await supabase
-        .from("heats")
-        .select("heat_number")
-        .eq("championship_id", selectedChampionship.id)
-        .order("heat_number", { ascending: false })
-        .limit(1);
-
-      const maxHeatNumber = allHeats && allHeats.length > 0 ? allHeats[0].heat_number : 0;
-      
-      const { data: newHeat, error } = await supabase
-        .from("heats")
-        .insert({
-          championship_id: selectedChampionship.id,
-          category_id: selectedCategory || null, // Permitir null
-          wod_id: selectedWOD || null, // Permitir null
-          heat_number: maxHeatNumber + 1,
-          athletes_per_heat: athletesPerHeat,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast.success("Bateria vazia adicionada! Arraste atletas para preenchê-la.");
-      await loadHeats();
-    } catch (error: any) {
-      console.error("Error adding heat:", error);
-      toast.error("Erro ao adicionar bateria");
-    }
+    setIsCreatingHeat(true);
+    setEditHeatData({
+      custom_name: '',
+      category_id: selectedCategory || '',
+      wod_id: selectedWOD || '',
+      athletes_per_heat: athletesPerHeat,
+      scheduled_time: startTime,
+      end_time: startTime,
+      time_cap: '10:00',
+    });
   };
 
   const handleRemoveHeat = async (heatId: string) => {
@@ -726,6 +708,69 @@ export default function HeatsNew() {
     } catch (error: any) {
       console.error("Error saving heat:", error);
       toast.error("Erro ao salvar bateria");
+    }
+  };
+
+  const handleCreateHeat = async () => {
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato primeiro");
+      return;
+    }
+
+    if (!editHeatData.category_id || !editHeatData.wod_id) {
+      toast.error("Selecione categoria e WOD");
+      return;
+    }
+
+    try {
+      // Buscar TODAS as baterias do campeonato para pegar o maior número
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("heat_number")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number", { ascending: false })
+        .limit(1);
+
+      const maxHeatNumber = allHeats && allHeats.length > 0 ? allHeats[0].heat_number : 0;
+
+      // Converter horário para ISO
+      const [hours, mins] = editHeatData.scheduled_time.split(':');
+      const baseDate = championshipDays.length > 0 
+        ? new Date(championshipDays[0].date)
+        : new Date();
+      
+      const scheduledDate = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        parseInt(hours),
+        parseInt(mins),
+        0,
+        0
+      );
+      
+      const { data: newHeat, error } = await supabase
+        .from("heats")
+        .insert({
+          championship_id: selectedChampionship.id,
+          category_id: editHeatData.category_id,
+          wod_id: editHeatData.wod_id,
+          heat_number: maxHeatNumber + 1,
+          custom_name: editHeatData.custom_name.trim() || null,
+          athletes_per_heat: editHeatData.athletes_per_heat,
+          scheduled_time: scheduledDate.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Bateria criada com sucesso!");
+      setIsCreatingHeat(false);
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error creating heat:", error);
+      toast.error("Erro ao criar bateria");
     }
   };
 
@@ -1020,20 +1065,20 @@ export default function HeatsNew() {
   }
 
   const filteredHeats = heats.filter(h => {
-    if (selectedCategory && selectedWOD) {
-      return h.category_id === selectedCategory && h.wod_id === selectedWOD;
-    } else if (selectedCategory) {
-      return h.category_id === selectedCategory;
-    } else if (selectedWOD) {
-      return h.wod_id === selectedWOD;
-    }
-    return true;
+    // Se "all" estiver selecionado, não filtra por aquele critério
+    const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
+    const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
+    
+    return categoryFilter && wodFilter;
   }).sort((a, b) => a.heat_number - b.heat_number);
 
   // Filtrar competidores por busca
   const filteredCompetitors = registrations.filter(reg => {
+    // Se nenhuma categoria selecionada, não mostra ninguém
     if (!selectedCategory) return false;
-    if (reg.category_id !== selectedCategory) return false;
+    
+    // Se "all" estiver selecionado, mostra todos
+    if (selectedCategory !== 'all' && reg.category_id !== selectedCategory) return false;
     
     const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
     return name.includes(searchTerm.toLowerCase());
@@ -1082,6 +1127,7 @@ export default function HeatsNew() {
                       <SelectValue placeholder="Categoria" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="all">📋 Todas as Categorias</SelectItem>
                       {categories.map(cat => (
                         <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                       ))}
@@ -1093,6 +1139,7 @@ export default function HeatsNew() {
                       <SelectValue placeholder="WOD" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="all">🏋️ Todos os Eventos</SelectItem>
                       {wods.map(wod => (
                         <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
                       ))}
@@ -1211,7 +1258,7 @@ export default function HeatsNew() {
                     )}
                     
                     <Button 
-                      onClick={handleAddHeat} 
+                      onClick={handleOpenCreateHeat} 
                       variant="outline" 
                       size="sm"
                     >
@@ -1595,6 +1642,121 @@ export default function HeatsNew() {
             </Button>
             <Button onClick={handleSaveEditHeat}>
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Criação de Bateria */}
+      <Dialog open={isCreatingHeat} onOpenChange={(open) => !open && setIsCreatingHeat(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Bateria</DialogTitle>
+            <DialogDescription>
+              Configure os detalhes da nova bateria
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="create-category">Categoria *</Label>
+              <Select 
+                value={editHeatData.category_id} 
+                onValueChange={(value) => setEditHeatData(prev => ({ ...prev, category_id: value }))}
+              >
+                <SelectTrigger id="create-category">
+                  <SelectValue placeholder="Selecione a categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="create-wod">WOD/Evento *</Label>
+              <Select 
+                value={editHeatData.wod_id} 
+                onValueChange={(value) => {
+                  const selectedWod = wods.find(w => w.id === value);
+                  setEditHeatData(prev => ({ 
+                    ...prev, 
+                    wod_id: value,
+                    time_cap: selectedWod?.time_cap || '10:00'
+                  }));
+                }}
+              >
+                <SelectTrigger id="create-wod">
+                  <SelectValue placeholder="Selecione o WOD" />
+                </SelectTrigger>
+                <SelectContent>
+                  {wods.map(wod => (
+                    <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="create-custom-name">Nome da Bateria (opcional)</Label>
+              <Input
+                id="create-custom-name"
+                type="text"
+                placeholder="Ex: INICIANTE FEMININO - EVENTO 1: IZABEL"
+                value={editHeatData.custom_name}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  custom_name: e.target.value 
+                }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Deixe em branco para usar o nome padrão (Categoria - WOD)
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="create-athletes-per-heat">Número de Raias</Label>
+              <Input
+                id="create-athletes-per-heat"
+                type="number"
+                min="1"
+                value={editHeatData.athletes_per_heat}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  athletes_per_heat: parseInt(e.target.value) || 1 
+                }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="create-scheduled-time">Horário de Início</Label>
+              <Input
+                id="create-scheduled-time"
+                type="time"
+                value={editHeatData.scheduled_time}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  scheduled_time: e.target.value 
+                }))}
+              />
+            </div>
+
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm"><strong>TimeCap:</strong> {editHeatData.time_cap}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Definido automaticamente pelo WOD selecionado
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreatingHeat(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateHeat} disabled={!editHeatData.category_id || !editHeatData.wod_id}>
+              Criar Bateria
             </Button>
           </DialogFooter>
         </DialogContent>
