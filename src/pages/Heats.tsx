@@ -1038,7 +1038,8 @@ export default function Heats() {
         const entries = heatEntries
           .filter(e => e.heat_id === heat.id)
           .sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0));
-        entriesByHeat.set(heat.id, [...entries]);
+        // Criar uma cópia profunda do array para não modificar o original
+        entriesByHeat.set(heat.id, entries.map(e => ({ ...e })));
       });
 
       let totalMoved = 0;
@@ -1068,27 +1069,37 @@ export default function Heats() {
           continue;
         }
 
+        console.log(`Intercalando contexto ${contextKey}, maxAthletes: ${maxAthletes}`);
+
         // Intercalar baterias deste contexto
         for (let i = 0; i < sortedContextHeats.length; i++) {
           const currentHeat = sortedContextHeats[i];
-          const currentEntries = entriesByHeat.get(currentHeat.id) || [];
+          let currentEntries = [...(entriesByHeat.get(currentHeat.id) || [])];
+          
+          console.log(`Bateria ${currentHeat.heat_number} tem ${currentEntries.length} atletas`);
           
           if (currentEntries.length < maxAthletes) {
             // Esta bateria precisa de mais atletas
-            const needed = maxAthletes - currentEntries.length;
+            let needed = maxAthletes - currentEntries.length;
+            console.log(`Bateria ${currentHeat.heat_number} precisa de ${needed} atletas`);
             
             // Procurar atletas nas próximas baterias do mesmo contexto
             for (let j = i + 1; j < sortedContextHeats.length && needed > 0; j++) {
               const nextHeat = sortedContextHeats[j];
-              const nextEntries = entriesByHeat.get(nextHeat.id) || [];
+              let nextEntries = [...(entriesByHeat.get(nextHeat.id) || [])];
+              
+              console.log(`Verificando próxima bateria ${nextHeat.heat_number} com ${nextEntries.length} atletas`);
               
               if (nextEntries.length > 0) {
                 // Pegar atletas da próxima bateria
                 const toMove = nextEntries.splice(0, Math.min(needed, nextEntries.length));
+                console.log(`Movendo ${toMove.length} atletas da bateria ${nextHeat.heat_number} para bateria ${currentHeat.heat_number}`);
+                
                 currentEntries.push(...toMove);
                 entriesByHeat.set(currentHeat.id, currentEntries);
                 entriesByHeat.set(nextHeat.id, nextEntries);
                 totalMoved += toMove.length;
+                needed -= toMove.length;
               }
             }
           }
