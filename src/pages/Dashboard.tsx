@@ -646,7 +646,21 @@ export default function Dashboard() {
               ? day.break_interval_minutes
               : 5; // Padrão se não definido
             
-            console.log(`Dia ${day.day_number}: Usando intervalo de ${dayBreakInterval} minutos (valor do dia: ${day.break_interval_minutes})`);
+            const dayWodInterval = (day.wod_interval_minutes !== null && day.wod_interval_minutes !== undefined)
+              ? day.wod_interval_minutes
+              : 10; // Padrão se não definido
+            
+            // Se é a primeira categoria do WOD e não é o primeiro WOD do dia, aplicar intervalo entre provas
+            const isFirstCategoryOfWod = categoryId === sortedCategoryIds[0];
+            const isNotFirstWod = wodIndex > 0;
+            
+            if (isFirstCategoryOfWod && isNotFirstWod) {
+              // Aplicar intervalo entre provas antes da primeira bateria deste WOD
+              currentTime = new Date(currentTime.getTime() + (dayWodInterval * 60000));
+              console.log(`[Dia ${day.day_number}] Intervalo entre provas de ${dayWodInterval} minutos aplicado antes do WOD ${wod.name}`);
+            }
+            
+            console.log(`Dia ${day.day_number}: Usando intervalo entre baterias de ${dayBreakInterval} minutos e intervalo entre provas de ${dayWodInterval} minutos`);
             
             for (const heat of sortedHeats) {
               // Salvar horário usando toISOString (converte para UTC automaticamente)
@@ -1426,6 +1440,34 @@ export default function Dashboard() {
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                               Tempo de espera entre cada bateria
+                            </p>
+                          </div>
+              <div>
+                            <Label htmlFor={`wod-interval-${day.id}`} className="text-sm">Intervalo entre Provas (minutos)</Label>
+                            <Input
+                              id={`wod-interval-${day.id}`}
+                              type="number"
+                              min="0"
+                              value={day.wod_interval_minutes !== null && day.wod_interval_minutes !== undefined ? day.wod_interval_minutes : 10}
+                              onChange={async (e) => {
+                                const newInterval = parseInt(e.target.value) || 10;
+                                
+                                const { error } = await supabase
+                                  .from("championship_days")
+                                  .update({ wod_interval_minutes: newInterval })
+                                  .eq("id", day.id);
+                                
+                                if (!error) {
+                                  await loadChampionshipDays();
+                                } else {
+                                  console.error("Erro ao atualizar intervalo entre provas:", error);
+                                  toast.error("Erro ao atualizar intervalo entre provas");
+                                }
+                              }}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Tempo de organização da arena entre provas diferentes
                             </p>
                           </div>
               </div>

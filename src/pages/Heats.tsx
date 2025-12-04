@@ -504,7 +504,7 @@ export default function Heats() {
             for (const heat of allNewHeats) {
               const { data: dayWodData } = await supabase
                 .from("championship_day_wods")
-                .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes)")
+                .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes, wod_interval_minutes)")
                 .eq("wod_id", heat.wod_id)
                 .single();
 
@@ -526,6 +526,7 @@ export default function Heats() {
             for (const [dayNum, dayHeats] of heatsByDay.entries()) {
               const targetDay = dayHeats[0].targetDay;
               const breakInterval = targetDay.break_interval_minutes || 5;
+              const wodInterval = targetDay.wod_interval_minutes || 10;
 
               // Buscar última bateria do MESMO DIA com horário
               const targetDate = new Date(targetDay.date);
@@ -598,6 +599,8 @@ export default function Heats() {
               });
 
               // Atualizar horários das baterias do dia
+              let lastWodId: string | null = null;
+              
               for (const heat of sortedDayHeats) {
                 const wodDuration = (heat.wods as any)?.estimated_duration_minutes || 15;
                 
@@ -611,6 +614,11 @@ export default function Heats() {
 
                 const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
 
+                // Se mudou de WOD, aplicar intervalo entre provas
+                if (lastWodId !== null && lastWodId !== heat.wod_id) {
+                  currentTime = new Date(currentTime.getTime() + (wodInterval * 60000));
+                }
+
                 await supabase
                   .from("heats")
                   .update({ scheduled_time: currentTime.toISOString() })
@@ -619,6 +627,8 @@ export default function Heats() {
                 // Avançar tempo para próxima bateria
                 currentTime = new Date(currentTime.getTime() + (finalWodDuration * 60000));
                 currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
+                
+                lastWodId = heat.wod_id;
               }
             }
           }
@@ -709,7 +719,7 @@ export default function Heats() {
           // Buscar qual dia este WOD pertence
           const { data: dayWodData } = await supabase
             .from("championship_day_wods")
-            .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes)")
+            .select("championship_day_id, championship_days(day_number, date, start_time, break_interval_minutes, wod_interval_minutes)")
             .eq("wod_id", selectedWOD)
             .single();
 
@@ -727,6 +737,7 @@ export default function Heats() {
 
           const wodDuration = wodData?.estimated_duration_minutes || 15;
           const breakInterval = targetDay.break_interval_minutes || 5;
+          const wodInterval = targetDay.wod_interval_minutes || 10;
 
           // Buscar variação de categoria se existir
           const { data: variationData } = await supabase
@@ -763,8 +774,17 @@ export default function Heats() {
             const lastHeatTime = new Date(lastHeat.scheduled_time);
             const lastWodDuration = lastHeat.wods?.estimated_duration_minutes || 15;
             
-            // Próximo horário = último horário + duração + intervalo
-            currentTime = new Date(lastHeatTime.getTime() + (lastWodDuration * 60000) + (breakInterval * 60000));
+            // Verificar se a última bateria é de um WOD diferente
+            const lastHeatWodId = lastHeat.wod_id || lastHeat.wods?.id;
+            const isDifferentWod = lastHeatWodId !== selectedWOD;
+            
+            let timeToAdd = (lastWodDuration * 60000) + (breakInterval * 60000);
+            if (isDifferentWod) {
+              timeToAdd += (wodInterval * 60000);
+            }
+            
+            // Próximo horário = último horário + duração + intervalo (e intervalo entre provas se necessário)
+            currentTime = new Date(lastHeatTime.getTime() + timeToAdd);
           } else {
             // Primeira bateria do dia - usar horário de início
             let startTimeStr = targetDay.start_time || "09:00";
