@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar, Plus, Minus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar, Plus, Minus, ChevronDown, ChevronUp, Trash2, Edit, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   DndContext,
   closestCenter,
@@ -61,6 +62,15 @@ export default function HeatsNew() {
   const [editingCapacity, setEditingCapacity] = useState<string | null>(null);
   const [heatCapacities, setHeatCapacities] = useState<Map<string, number>>(new Map());
   const [selectedHeats, setSelectedHeats] = useState<Set<string>>(new Set());
+  const [editingHeat, setEditingHeat] = useState<any | null>(null);
+  const [editHeatData, setEditHeatData] = useState({
+    athletes_per_heat: 4,
+    scheduled_time: '',
+    end_time: '',
+    time_cap: '',
+  });
+  const [championshipDays, setChampionshipDays] = useState<any[]>([]);
+  const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(10);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -127,10 +137,11 @@ export default function HeatsNew() {
     
     setLoading(true);
     try {
-      const [catsResult, wodsResult, regsResult] = await Promise.all([
+      const [catsResult, wodsResult, regsResult, daysResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", selectedChampionship.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", selectedChampionship.id).order("order_num"),
         supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved"),
+        supabase.from("championship_days").select("*").eq("championship_id", selectedChampionship.id).order("day_number"),
       ]);
 
       if (catsResult.error) throw catsResult.error;
@@ -140,6 +151,13 @@ export default function HeatsNew() {
       setCategories(catsResult.data || []);
       setWODs(wodsResult.data || []);
       setRegistrations(regsResult.data || []);
+      setChampionshipDays(daysResult.data || []);
+      
+      // Carregar intervalo entre provas do primeiro dia (ou usar padrão)
+      if (daysResult.data && daysResult.data.length > 0) {
+        const firstDay = daysResult.data[0];
+        setWodIntervalMinutes(firstDay.wod_interval_minutes || 10);
+      }
     } catch (error: any) {
       console.error("Error loading data:", error);
       toast.error("Erro ao carregar dados");
@@ -348,7 +366,77 @@ export default function HeatsNew() {
   };
 
   const handleApplyTransition = async () => {
-    toast.success(`Transição de ${transitionTime} minutos aplicada!`);
+    if (!selectedChampionship) return;
+
+    try {
+      // Aplicar transição a todas as baterias recalculando horários
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("*, wods(*)")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number");
+
+      if (!allHeats || allHeats.length === 0) {
+        toast.error("Nenhuma bateria para aplicar transição");
+        return;
+      }
+
+      // Usar hora de início configurada
+      const [hours, mins] = startTime.split(':');
+      const baseDate = championshipDays.length > 0 
+        ? new Date(championshipDays[0].date)
+        : new Date();
+      
+      let currentTime = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        parseInt(hours),
+        parseInt(mins),
+        0,
+        0
+      );
+
+      // Recalcular horários com transição
+      for (const heat of allHeats) {
+        await supabase
+          .from("heats")
+          .update({ scheduled_time: currentTime.toISOString() })
+          .eq("id", heat.id);
+
+        // Avançar tempo (duração do WOD + transição)
+        const wodDuration = heat.wods?.estimated_duration_minutes || 10;
+        currentTime = new Date(currentTime.getTime() + (wodDuration * 60000) + (transitionTime * 60000));
+      }
+
+      toast.success(`Transição de ${transitionTime} minutos aplicada em todas as baterias!`);
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error applying transition:", error);
+      toast.error("Erro ao aplicar transição");
+    }
+  };
+
+  const handleApplyWodInterval = async () => {
+    if (!selectedChampionship || championshipDays.length === 0) {
+      toast.error("Configure os dias do campeonato primeiro");
+      return;
+    }
+
+    try {
+      // Atualizar todos os dias com o novo intervalo
+      for (const day of championshipDays) {
+        await supabase
+          .from("championship_days")
+          .update({ wod_interval_minutes: wodIntervalMinutes })
+          .eq("id", day.id);
+      }
+
+      toast.success(`Intervalo entre provas de ${wodIntervalMinutes} minutos aplicado!`);
+    } catch (error: any) {
+      console.error("Error applying wod interval:", error);
+      toast.error("Erro ao aplicar intervalo entre provas");
+    }
   };
 
   const toggleHeatExpand = (heatId: string) => {
@@ -364,20 +452,28 @@ export default function HeatsNew() {
   };
 
   const handleAddHeat = async () => {
-    if (!selectedChampionship || !selectedCategory || !selectedWOD) {
-      toast.error("Selecione categoria e WOD primeiro");
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato primeiro");
       return;
     }
 
     try {
-      const maxHeatNumber = Math.max(...filteredHeats.map(h => h.heat_number), 0);
+      // Buscar TODAS as baterias do campeonato para pegar o maior número
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("heat_number")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number", { ascending: false })
+        .limit(1);
+
+      const maxHeatNumber = allHeats && allHeats.length > 0 ? allHeats[0].heat_number : 0;
       
       const { data: newHeat, error } = await supabase
         .from("heats")
         .insert({
           championship_id: selectedChampionship.id,
-          category_id: selectedCategory,
-          wod_id: selectedWOD,
+          category_id: selectedCategory || null, // Permitir null
+          wod_id: selectedWOD || null, // Permitir null
           heat_number: maxHeatNumber + 1,
           athletes_per_heat: athletesPerHeat,
         })
@@ -386,7 +482,7 @@ export default function HeatsNew() {
 
       if (error) throw error;
 
-      toast.success("Bateria adicionada!");
+      toast.success("Bateria vazia adicionada! Arraste atletas para preenchê-la.");
       await loadHeats();
     } catch (error: any) {
       console.error("Error adding heat:", error);
@@ -484,6 +580,144 @@ export default function HeatsNew() {
     } catch (error: any) {
       console.error("Error updating capacity:", error);
       toast.error("Erro ao atualizar capacidade");
+    }
+  };
+
+  const handleGenerateByCategoryAndWod = async () => {
+    if (!selectedChampionship || !selectedCategory || !selectedWOD) {
+      toast.error("Selecione categoria e WOD primeiro");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const categoryRegs = registrations.filter(r => r.category_id === selectedCategory);
+      
+      if (categoryRegs.length === 0) {
+        toast.error("Nenhuma inscrição encontrada para esta categoria");
+        setGenerating(false);
+        return;
+      }
+
+      // Ordenar por ordem de inscrição (primeiro inscrito = última bateria)
+      const orderedParticipants = categoryRegs
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .map(reg => ({ registrationId: reg.id }));
+
+      const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
+
+      // Deletar baterias existentes desta categoria e WOD
+      const existingHeats = heats.filter(
+        h => h.category_id === selectedCategory && h.wod_id === selectedWOD
+      );
+
+      if (existingHeats.length > 0) {
+        const heatIds = existingHeats.map(h => h.id);
+        
+        await supabase
+          .from("heat_entries")
+          .delete()
+          .in("heat_id", heatIds);
+
+        await supabase
+          .from("heats")
+          .delete()
+          .in("id", heatIds);
+      }
+
+      // Criar novas baterias
+      for (let i = 0; i < totalHeats; i++) {
+        const startIndex = i * athletesPerHeat;
+        const endIndex = Math.min(startIndex + athletesPerHeat, orderedParticipants.length);
+        const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
+
+        const { data: newHeat, error: heatError } = await supabase
+          .from("heats")
+          .insert({
+            championship_id: selectedChampionship.id,
+            category_id: selectedCategory,
+            wod_id: selectedWOD,
+            heat_number: i + 1,
+            athletes_per_heat: athletesPerHeat,
+          })
+          .select()
+          .single();
+
+        if (heatError) throw heatError;
+
+        const entries = heatParticipants.map((participant, index) => ({
+          heat_id: newHeat.id,
+          registration_id: participant.registrationId,
+          lane_number: index + 1,
+        }));
+
+        if (entries.length > 0) {
+          const { error: entriesError } = await supabase
+            .from("heat_entries")
+            .insert(entries);
+
+          if (entriesError) throw entriesError;
+        }
+      }
+
+      toast.success(`${totalHeats} baterias geradas para ${categories.find(c => c.id === selectedCategory)?.name}!`);
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error generating heats by category:", error);
+      toast.error("Erro ao gerar baterias");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleOpenEditHeat = (heat: any) => {
+    setEditingHeat(heat);
+    const scheduledTime = heat.scheduled_time 
+      ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+      : startTime;
+    
+    setEditHeatData({
+      athletes_per_heat: heat.athletes_per_heat || athletesPerHeat,
+      scheduled_time: scheduledTime,
+      end_time: scheduledTime, // Por enquanto igual ao início
+      time_cap: wods.find(w => w.id === heat.wod_id)?.time_cap || '10:00',
+    });
+  };
+
+  const handleSaveEditHeat = async () => {
+    if (!editingHeat) return;
+
+    try {
+      // Converter horário para ISO
+      const [hours, mins] = editHeatData.scheduled_time.split(':');
+      const baseDate = championshipDays.length > 0 
+        ? new Date(championshipDays[0].date)
+        : new Date();
+      
+      const scheduledDate = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        parseInt(hours),
+        parseInt(mins),
+        0,
+        0
+      );
+
+      await supabase
+        .from("heats")
+        .update({
+          athletes_per_heat: editHeatData.athletes_per_heat,
+          scheduled_time: scheduledDate.toISOString(),
+        })
+        .eq("id", editingHeat.id);
+
+      toast.success("Bateria atualizada!");
+      setEditingHeat(null);
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error saving heat:", error);
+      toast.error("Erro ao salvar bateria");
     }
   };
 
@@ -927,18 +1161,24 @@ export default function HeatsNew() {
                       placeholder="Quantidade de raias por bateria"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="generateBtn" className="text-xs text-muted-foreground mb-1 block">
-                      Gera todas as baterias de todas as categorias
-                    </Label>
+                  <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Button 
-                      id="generateBtn"
                       onClick={handleGenerateHeats} 
                       className="w-full" 
                       disabled={generating}
+                      variant="default"
                     >
                       <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                      {generating ? 'Gerando...' : 'Gerar Baterias'}
+                      {generating ? 'Gerando...' : 'Gerar TODAS as Baterias'}
+                    </Button>
+                    <Button 
+                      onClick={handleGenerateByCategoryAndWod} 
+                      className="w-full" 
+                      disabled={generating || !selectedCategory || !selectedWOD}
+                      variant="outline"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                      {generating ? 'Gerando...' : 'Gerar por Categoria + WOD'}
                     </Button>
                   </div>
                 </div>
@@ -1096,8 +1336,18 @@ export default function HeatsNew() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => handleOpenEditHeat(heat)}
+                                  className="h-8 w-8 p-0"
+                                  title="Editar bateria"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleRemoveHeat(heat.id)}
                                   className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                  title="Remover bateria"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -1147,21 +1397,44 @@ export default function HeatsNew() {
 
         <TabsContent value="horarios" className="space-y-6">
           <Card className="p-4">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1">
-                <Label htmlFor="globalTransition">Transição (min)</Label>
-                <Input
-                  id="globalTransition"
-                  type="number"
-                  min="0"
-                  value={transitionTime}
-                  onChange={(e) => setTransitionTime(parseInt(e.target.value) || 0)}
-                  className="max-w-xs"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="globalTransition">Transição Entre Baterias (min)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="globalTransition"
+                    type="number"
+                    min="0"
+                    value={transitionTime}
+                    onChange={(e) => setTransitionTime(parseInt(e.target.value) || 0)}
+                  />
+                  <Button onClick={handleApplyTransition} size="sm">
+                    APLICAR
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tempo entre uma bateria e outra do mesmo WOD
+                </p>
               </div>
-              <Button onClick={handleApplyTransition} className="mt-6">
-                APLICAR
-              </Button>
+              
+              <div>
+                <Label htmlFor="wodInterval">Intervalo Entre Provas (min)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="wodInterval"
+                    type="number"
+                    min="0"
+                    value={wodIntervalMinutes}
+                    onChange={(e) => setWodIntervalMinutes(parseInt(e.target.value) || 10)}
+                  />
+                  <Button onClick={handleApplyWodInterval} size="sm">
+                    APLICAR
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tempo entre o fim de um WOD e início do próximo
+                </p>
+              </div>
             </div>
           </Card>
 
@@ -1216,6 +1489,81 @@ export default function HeatsNew() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de Edição de Bateria */}
+      <Dialog open={!!editingHeat} onOpenChange={(open) => !open && setEditingHeat(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Bateria #{editingHeat?.heat_number}</DialogTitle>
+            <DialogDescription>
+              Edite os detalhes da bateria
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-athletes-per-heat">Número de Raias</Label>
+              <Input
+                id="edit-athletes-per-heat"
+                type="number"
+                min="1"
+                value={editHeatData.athletes_per_heat}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  athletes_per_heat: parseInt(e.target.value) || 1 
+                }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-scheduled-time">Horário de Início</Label>
+              <Input
+                id="edit-scheduled-time"
+                type="time"
+                value={editHeatData.scheduled_time}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  scheduled_time: e.target.value 
+                }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-time-cap">TimeCap (min:seg)</Label>
+              <Input
+                id="edit-time-cap"
+                type="text"
+                placeholder="10:00"
+                value={editHeatData.time_cap}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  time_cap: e.target.value 
+                }))}
+                disabled
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                TimeCap é definido no WOD
+              </p>
+            </div>
+
+            {editingHeat && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm"><strong>Categoria:</strong> {categories.find(c => c.id === editingHeat.category_id)?.name || 'Múltiplas'}</p>
+                <p className="text-sm"><strong>WOD:</strong> {wods.find(w => w.id === editingHeat.wod_id)?.name || 'Múltiplos'}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingHeat(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEditHeat}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
