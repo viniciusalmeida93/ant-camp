@@ -510,7 +510,8 @@ export default function PublicHeats() {
       console.log("Baterias após filtro de dia:", filtered.map(h => ({ id: h.id, wod: h.wod_name, day: h.day_number })));
     }
 
-    // Ordenar por: 1) ordem do WOD (order_num), 2) ordem da categoria (order_index), 3) horário, 4) número da bateria
+    // Ordenar por: 1) ordem do WOD (order_num), 2) horário, 3) número da bateria (sequencial global)
+    // Quando filtrar por categoria, manter ordem sequencial global para baterias intercaladas
     filtered.sort((a, b) => {
       const dayA = a.day_number ?? 9999;
       const dayB = b.day_number ?? 9999;
@@ -533,6 +534,13 @@ export default function PublicHeats() {
         return wodOrderA - wodOrderB;
       }
 
+      // Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
+      // Isso garante que baterias intercaladas apareçam na posição correta dentro da categoria
+      if (selectedCategory !== "all") {
+        return a.heat_number - b.heat_number;
+      }
+
+      // Sem filtro de categoria: ordenar por categoria original, depois número
       const categoryOrderA = a.category_order ?? 9999;
       const categoryOrderB = b.category_order ?? 9999;
       if (categoryOrderA !== categoryOrderB) {
