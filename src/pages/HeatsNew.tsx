@@ -73,6 +73,7 @@ export default function HeatsNew() {
   });
   const [championshipDays, setChampionshipDays] = useState<any[]>([]);
   const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(10);
+  const [categoryIntervalMinutes, setCategoryIntervalMinutes] = useState<number>(2);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -696,9 +697,10 @@ export default function HeatsNew() {
   /**
    * Calcula os horários de TODAS as baterias respeitando:
    * - Hora de início
-   * - Transição entre baterias
-   * - Intervalo entre provas
-   * - Duração da pausa
+   * - Transição entre baterias (do mesmo WOD e categoria)
+   * - Tempo entre categorias (quando muda categoria no mesmo WOD)
+   * - Intervalo entre provas (quando muda de WOD)
+   * - Duração da pausa (após WOD específico configurado)
    */
   const calculateAllHeatsSchedule = async () => {
     if (!selectedChampionship) return;
@@ -724,7 +726,7 @@ export default function HeatsNew() {
         ? new Date(championshipDays[0].date)
         : new Date();
 
-      // Hora de início
+      // Hora de início (PRIMEIRA BATERIA começa exatamente nessa hora)
       const [startHours, startMins] = startTime.split(':');
       let currentTime = new Date(
         baseDate.getFullYear(),
@@ -737,28 +739,63 @@ export default function HeatsNew() {
       );
 
       let previousWodId: string | null = null;
-      const wodsProcessed = new Set<string>();
+      let previousCategoryId: string | null = null;
+      let wodsCompleted: string[] = [];
 
-      for (const heat of allHeats) {
-        // Verificar se mudou o WOD
-        if (previousWodId && heat.wod_id !== previousWodId) {
-          // Aplicar intervalo entre provas
-          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
-          
-          // Verificar se deve aplicar pausa após o WOD anterior
-          if (champConfig?.enable_break) {
-            const previousWodIndex = wods.findIndex(w => w.id === previousWodId);
-            const previousWodOrderNum = wods[previousWodIndex]?.order_num || 0;
+      for (let i = 0; i < allHeats.length; i++) {
+        const heat = allHeats[i];
+        const isFirstHeat = i === 0;
+
+        if (!isFirstHeat) {
+          // Calcular tempo até esta bateria
+          const previousHeat = allHeats[i - 1];
+          const previousTimeCap = previousHeat.wods?.time_cap || '10:00';
+          const previousTimecapMinutes = previousTimeCap.includes(':') 
+            ? parseInt(previousTimeCap.split(':')[0]) + (parseInt(previousTimeCap.split(':')[1]) / 60)
+            : parseInt(previousTimeCap) || 10;
+
+          // Adicionar duração da bateria anterior (timecap)
+          currentTime = new Date(currentTime.getTime() + (previousTimecapMinutes * 60000));
+
+          // Verificar se mudou de WOD
+          if (heat.wod_id !== previousWodId) {
+            console.log(`Mudança de WOD detectada: ${previousWodId} -> ${heat.wod_id}`);
             
-            if (previousWodOrderNum === champConfig.break_after_wod_number) {
-              const pausaDuration = champConfig.break_duration_minutes || 30;
-              currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
-              console.log(`Aplicando pausa de ${pausaDuration} minutos após WOD ${previousWodOrderNum}`);
+            // Marcar WOD anterior como completo
+            if (previousWodId) {
+              wodsCompleted.push(previousWodId);
             }
+
+            // Aplicar intervalo entre provas
+            currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+            console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
+            
+            // Verificar se deve aplicar PAUSA após o WOD anterior
+            if (champConfig?.enable_break && previousWodId) {
+              const previousWod = wods.find(w => w.id === previousWodId);
+              const previousWodOrderNum = previousWod?.order_num || 0;
+              
+              console.log(`  Verificando pausa: WOD anterior order_num=${previousWodOrderNum}, break_after=${champConfig.break_after_wod_number}`);
+              
+              if (previousWodOrderNum === champConfig.break_after_wod_number) {
+                const pausaDuration = champConfig.break_duration_minutes || 30;
+                currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
+                console.log(`  + ${pausaDuration} min (PAUSA após WOD ${previousWodOrderNum})`);
+              }
+            }
+          } 
+          // Se mudou apenas de categoria (mesmo WOD)
+          else if (heat.category_id !== previousCategoryId) {
+            console.log(`Mudança de categoria detectada: ${previousCategoryId} -> ${heat.category_id}`);
+            currentTime = new Date(currentTime.getTime() + (categoryIntervalMinutes * 60000));
+            console.log(`  + ${categoryIntervalMinutes} min (intervalo entre categorias)`);
+          } 
+          // Mesma categoria e mesmo WOD = apenas transição entre baterias
+          else {
+            currentTime = new Date(currentTime.getTime() + (transitionTime * 60000));
+            console.log(`  + ${transitionTime} min (transição entre baterias)`);
           }
         }
-
-        wodsProcessed.add(heat.wod_id);
 
         // Atualizar horário da bateria
         await supabase
@@ -766,19 +803,14 @@ export default function HeatsNew() {
           .update({ scheduled_time: currentTime.toISOString() })
           .eq("id", heat.id);
 
-        // Calcular duração desta bateria (timecap do WOD + transição)
-        const timeCap = heat.wods?.time_cap || '10:00';
-        const timecapMinutes = timeCap.includes(':') 
-          ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
-          : parseInt(timeCap) || 10;
-
-        // Próxima bateria = tempo atual + duração do WOD + transição
-        currentTime = new Date(currentTime.getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
+        console.log(`Bateria ${heat.heat_number}: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
 
         previousWodId = heat.wod_id;
+        previousCategoryId = heat.category_id;
       }
 
-      console.log('Horários calculados para todas as baterias!');
+      console.log('✅ Horários calculados para todas as baterias!');
+      console.log(`Total de WODs processados: ${wodsCompleted.length + 1}`);
       toast.success("Horários calculados com sucesso!");
     } catch (error: any) {
       console.error("Erro ao calcular horários:", error);
@@ -819,33 +851,52 @@ export default function HeatsNew() {
         .eq("id", selectedChampionship.id)
         .single();
 
-      // Calcular o fim da bateria editada
+      // Calcular o fim da bateria editada (início + timecap)
       const timeCap = editedHeat.wods?.time_cap || '10:00';
       const timecapMinutes = timeCap.includes(':') 
         ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
         : parseInt(timeCap) || 10;
 
-      let currentTime = new Date(new Date(editedHeat.scheduled_time).getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
+      let currentTime = new Date(new Date(editedHeat.scheduled_time).getTime() + (timecapMinutes * 60000));
 
       let previousWodId = editedHeat.wod_id;
+      let previousCategoryId = editedHeat.category_id;
+      let wodsCompleted: string[] = [];
 
       for (const heat of followingHeats) {
-        // Se mudou o WOD
+        // Verificar se mudou de WOD
         if (heat.wod_id !== previousWodId) {
-          // Aplicar intervalo entre provas
-          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+          console.log(`Recálculo: Mudança de WOD detectada`);
           
-          // Verificar se deve aplicar pausa após o WOD anterior
-          if (champConfig?.enable_break) {
-            const previousWodIndex = wods.findIndex(w => w.id === previousWodId);
-            const previousWodOrderNum = wods[previousWodIndex]?.order_num || 0;
+          // Marcar WOD anterior como completo
+          wodsCompleted.push(previousWodId);
+
+          // Adicionar intervalo entre provas
+          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+          console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
+          
+          // Verificar se deve aplicar PAUSA após o WOD anterior
+          if (champConfig?.enable_break && previousWodId) {
+            const previousWod = wods.find(w => w.id === previousWodId);
+            const previousWodOrderNum = previousWod?.order_num || 0;
             
             if (previousWodOrderNum === champConfig.break_after_wod_number) {
               const pausaDuration = champConfig.break_duration_minutes || 30;
               currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
-              console.log(`Aplicando pausa de ${pausaDuration} minutos após WOD ${previousWodOrderNum}`);
+              console.log(`  + ${pausaDuration} min (PAUSA após WOD ${previousWodOrderNum})`);
             }
           }
+        }
+        // Se mudou apenas de categoria (mesmo WOD)
+        else if (heat.category_id !== previousCategoryId) {
+          console.log(`Recálculo: Mudança de categoria detectada`);
+          currentTime = new Date(currentTime.getTime() + (categoryIntervalMinutes * 60000));
+          console.log(`  + ${categoryIntervalMinutes} min (intervalo entre categorias)`);
+        }
+        // Mesma categoria e mesmo WOD = apenas transição entre baterias
+        else {
+          currentTime = new Date(currentTime.getTime() + (transitionTime * 60000));
+          console.log(`  + ${transitionTime} min (transição entre baterias)`);
         }
 
         // Atualizar horário da bateria
@@ -854,18 +905,11 @@ export default function HeatsNew() {
           .update({ scheduled_time: currentTime.toISOString() })
           .eq("id", heat.id);
 
-        // Calcular duração desta bateria
-        const heatTimeCap = heat.wods?.time_cap || '10:00';
-        const heatTimecapMinutes = heatTimeCap.includes(':') 
-          ? parseInt(heatTimeCap.split(':')[0]) + (parseInt(heatTimeCap.split(':')[1]) / 60)
-          : parseInt(heatTimeCap) || 10;
-
-        currentTime = new Date(currentTime.getTime() + (heatTimecapMinutes * 60000) + (transitionTime * 60000));
-
         previousWodId = heat.wod_id;
+        previousCategoryId = heat.category_id;
       }
 
-      console.log('Horários recalculados após edição!');
+      console.log('✅ Horários recalculados após edição!');
     } catch (error: any) {
       console.error("Erro ao recalcular horários:", error);
     }
@@ -1682,6 +1726,25 @@ export default function HeatsNew() {
               </div>
               
               <div>
+                <Label htmlFor="categoryInterval">Tempo Entre Categorias (min)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="categoryInterval"
+                    type="number"
+                    min="0"
+                    value={categoryIntervalMinutes}
+                    onChange={(e) => setCategoryIntervalMinutes(parseInt(e.target.value) || 2)}
+                  />
+                  <Button onClick={calculateAllHeatsSchedule} size="sm">
+                    APLICAR
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tempo entre categorias diferentes no mesmo WOD
+                </p>
+              </div>
+              
+              <div>
                 <Label htmlFor="wodInterval">Intervalo Entre Provas (min)</Label>
                 <div className="flex gap-2">
                   <Input
@@ -1978,4 +2041,5 @@ export default function HeatsNew() {
     </div>
   );
 }
+
 
