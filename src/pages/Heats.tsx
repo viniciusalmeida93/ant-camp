@@ -848,11 +848,11 @@ export default function Heats() {
     const newIndex = editingHeatsOrder.findIndex(h => h.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      // Reordenar o array mantendo a ordem atual
+      // Reordenar o array
       const reorderedHeats = arrayMove(editingHeatsOrder, oldIndex, newIndex);
       
-      // Renumerar sequencialmente baseado na nova ordem (mantendo a ordem de WOD → Categoria)
-      // A ordem já está correta no array, só precisamos renumerar de 1 até N
+      // Renumerar sequencialmente baseado na nova posição no array
+      // Isso mantém a ordem sequencial global (1, 2, 3, 4...)
       const updatedHeats = reorderedHeats.map((heat, index) => ({
         ...heat,
         heat_number: index + 1,
@@ -862,11 +862,12 @@ export default function Heats() {
 
       // Salvar automaticamente
       try {
-        for (const heat of updatedHeats) {
+        // Atualizar todas as baterias para garantir ordem sequencial
+        for (let i = 0; i < updatedHeats.length; i++) {
           await supabase
             .from("heats")
-            .update({ heat_number: heat.heat_number })
-            .eq("id", heat.id);
+            .update({ heat_number: i + 1 })
+            .eq("id", updatedHeats[i].id);
         }
         toast.success("Ordem das baterias atualizada!");
         await loadHeats();
@@ -1380,6 +1381,10 @@ export default function Heats() {
     const lbEntry = calculateLeaderboard(categoryId).find(l => l.registrationId === entry.registration_id);
     const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
     
+    // Buscar categoria do registro
+    const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
+    const categoryName = participantCategory?.name || 'N/A';
+    
     const {
       attributes,
       listeners,
@@ -1412,6 +1417,11 @@ export default function Heats() {
           </div>
         </TableCell>
         <TableCell className="font-semibold">{participantName}</TableCell>
+        <TableCell>
+          <Badge variant="outline" className="text-xs">
+            {categoryName}
+          </Badge>
+        </TableCell>
         <TableCell>
           {lbEntry?.position ? (
             <span className="text-sm font-semibold">{lbEntry.position}º</span>
@@ -1650,6 +1660,7 @@ export default function Heats() {
                               <TableRow>
                                 <TableHead>Raia</TableHead>
                                 <TableHead>Atleta/Time</TableHead>
+                                <TableHead>Categoria</TableHead>
                                 <TableHead>Posição Atual</TableHead>
                                 <TableHead>Pontos Totais</TableHead>
                               </TableRow>
@@ -1658,7 +1669,7 @@ export default function Heats() {
                               {currentEntries.length === 0 ? (
                                 <TableRow>
                                   <TableCell 
-                                    colSpan={4} 
+                                    colSpan={5} 
                                     className="text-center text-muted-foreground py-8"
                                   >
                                     Arraste participantes aqui
