@@ -940,13 +940,15 @@ export default function HeatsNew() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="transitionTime">Transição entre *</Label>
+                    <Label htmlFor="athletesPerHeat">Raias *</Label>
                     <Input
-                      id="transitionTime"
+                      id="athletesPerHeat"
                       type="number"
                       min="1"
-                      value={transitionTime}
-                      onChange={(e) => setTransitionTime(parseInt(e.target.value) || 4)}
+                      max="20"
+                      value={athletesPerHeat}
+                      onChange={(e) => setAthletesPerHeat(parseInt(e.target.value) || 4)}
+                      placeholder="Quantidade de raias por bateria"
                     />
                   </div>
                   <div>
