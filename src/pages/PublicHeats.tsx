@@ -268,7 +268,7 @@ export default function PublicHeats() {
         console.error("Erro ao buscar entries:", entriesErrorRaw);
       }
       
-      // Buscar registrations separadamente
+      // Buscar registrations separadamente (incluindo category_id para filtro de baterias intercaladas)
       const registrationIds = [...new Set((entriesDataRaw || []).map((e: any) => e.registration_id).filter(Boolean))];
       console.log("IDs de registrations únicos:", registrationIds.length, registrationIds);
       
@@ -276,7 +276,7 @@ export default function PublicHeats() {
       if (registrationIds.length > 0) {
         const { data: regsData, error: regsError } = await supabase
           .from("registrations")
-          .select("id, team_name, athlete_name")
+          .select("id, team_name, athlete_name, category_id")
           .in("id", registrationIds);
         
         if (regsError) {
@@ -332,6 +332,17 @@ export default function PublicHeats() {
         console.log("WODs encontrados:", wodsMap);
         console.log("Entries encontrados:", entriesByHeat.size);
         
+        // Criar mapa de categorias por bateria (para baterias intercaladas)
+        const heatCategoriesMap = new Map<string, Set<string>>(); // Map<heat_id, Set<category_id>>
+        entriesData.forEach((entry: any) => {
+          if (entry.registrations && entry.registrations.category_id) {
+            if (!heatCategoriesMap.has(entry.heat_id)) {
+              heatCategoriesMap.set(entry.heat_id, new Set());
+            }
+            heatCategoriesMap.get(entry.heat_id)!.add(entry.registrations.category_id);
+          }
+        });
+
         const formattedHeats: Heat[] = heatsData.map((heat: any) => {
           const dayNumber = dayWodsMapLocal.get(heat.wod_id);
           const categoryName = categoriesMap.get(heat.category_id) || 'Sem categoria';
@@ -344,7 +355,10 @@ export default function PublicHeats() {
             : 9999; // Ordem alta para WODs não encontrados
           const entries = entriesByHeat.get(heat.id) || [];
           
-          console.log("Formatando bateria:", heat.id, "WOD:", wodName, "Ordem WOD:", wodOrder, "Categoria:", categoryName, "ID Categoria:", heat.category_id, "Ordem Categoria:", categoryOrder, "Dia:", dayNumber, "Entries:", entries.length);
+          // Obter todas as categorias presentes nesta bateria (para baterias intercaladas)
+          const heatCategories = heatCategoriesMap.get(heat.id) || new Set();
+          
+          console.log("Formatando bateria:", heat.id, "WOD:", wodName, "Ordem WOD:", wodOrder, "Categoria:", categoryName, "ID Categoria:", heat.category_id, "Ordem Categoria:", categoryOrder, "Dia:", dayNumber, "Entries:", entries.length, "Categorias presentes:", Array.from(heatCategories));
           
           // Mapear participantes com mais detalhes
           const participants = entries
@@ -353,11 +367,12 @@ export default function PublicHeats() {
               const reg = entry.registrations;
               // Para times, usar team_name; para individuais, usar athlete_name
               const participantName = reg.team_name || reg.athlete_name || 'Desconhecido';
-              console.log("Participante mapeado:", participantName, "Lane:", entry.lane_number);
+              console.log("Participante mapeado:", participantName, "Lane:", entry.lane_number, "Categoria:", reg.category_id);
               return {
                 participant_id: entry.registration_id,
                 participant_name: participantName,
                 lane_number: entry.lane_number,
+                category_id: reg.category_id, // Adicionar category_id do participante
               };
             })
             .sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0)); // Ordenar por raia
@@ -376,6 +391,7 @@ export default function PublicHeats() {
             wod_order: wodOrder, // Adicionar order_num do WOD
             day_number: dayNumber, // Pode ser undefined se WOD não estiver atribuído a um dia
             participants: participants,
+            participant_categories: Array.from(heatCategories), // Categorias presentes na bateria
           };
         });
 
@@ -459,7 +475,15 @@ export default function PublicHeats() {
 
     if (selectedCategory !== "all") {
       const before = filtered.length;
-      filtered = filtered.filter(h => h.category_id === selectedCategory);
+      // Filtrar por categoria: considerar tanto a category_id da bateria quanto as categorias dos participantes
+      filtered = filtered.filter(h => {
+        // Verificar se a bateria tem a categoria selecionada como sua category_id original
+        const hasOriginalCategory = h.category_id === selectedCategory;
+        // Verificar se a bateria tem participantes da categoria selecionada (para baterias intercaladas)
+        const hasCategoryParticipants = h.participant_categories?.includes(selectedCategory) || 
+          h.participants?.some((p: any) => p.category_id === selectedCategory);
+        return hasOriginalCategory || hasCategoryParticipants;
+      });
       console.log(`Filtro por categoria: ${before} -> ${filtered.length}`);
     }
 
