@@ -25,7 +25,9 @@ interface Heat {
     participant_id: string;
     participant_name: string;
     lane_number: number | null;
+    category_id?: string; // Categoria do participante
   }>;
+  participant_categories?: string[]; // Categorias presentes na bateria (para baterias intercaladas)
 }
 
 export default function PublicHeats() {
