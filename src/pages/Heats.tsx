@@ -281,7 +281,8 @@ export default function Heats() {
   const generateHeatsForCategoryAndWod = async (
     categoryId: string,
     wodId: string,
-    athletesPerHeatValue: number
+    athletesPerHeatValue: number,
+    startHeatNumber?: number
   ) => {
     // Buscar registrações da categoria
     const categoryRegs = registrations.filter(r => r.category_id === categoryId);
@@ -387,6 +388,7 @@ export default function Heats() {
 
     // Criar novas baterias
     const newHeats: any[] = [];
+    const baseHeatNumber = startHeatNumber !== undefined ? startHeatNumber : 1;
     
     for (let i = 0; i < totalHeats; i++) {
       const startIndex = i * athletesPerHeatValue;
@@ -399,7 +401,7 @@ export default function Heats() {
           championship_id: selectedChampionship!.id,
           category_id: categoryId,
           wod_id: wodId,
-          heat_number: i + 1,
+          heat_number: baseHeatNumber + i,
           athletes_per_heat: athletesPerHeatValue,
         })
         .select()
@@ -440,6 +442,9 @@ export default function Heats() {
       const skipped: string[] = [];
       const errors: string[] = [];
 
+      // Contador global para numeração sequencial das baterias
+      let globalHeatNumber = 1;
+
       // Iterar sobre todos os WODs primeiro, depois todas as categorias
       // Isso garante que todas as baterias de todas as categorias para o WOD 1 sejam geradas primeiro
       for (const wod of wods) {
@@ -453,11 +458,14 @@ export default function Heats() {
             const result = await generateHeatsForCategoryAndWod(
               category.id,
               wod.id,
-              categoryAthletesPerHeat
+              categoryAthletesPerHeat,
+              globalHeatNumber // Passar número sequencial global
             );
 
             if (result.success) {
-              totalGenerated += result.totalHeats || 0;
+              const heatsGenerated = result.totalHeats || 0;
+              totalGenerated += heatsGenerated;
+              globalHeatNumber += heatsGenerated; // Incrementar contador global
             } else if ((result as any).skipped || result.message?.includes("Nenhuma inscrição")) {
               // Não contar como erro - é esperado quando não há inscrições
               totalSkipped++;
@@ -1567,18 +1575,17 @@ export default function Heats() {
                   <SortableHeat key={heat.id} heat={heat}>
                     {({ dragAttributes, dragListeners }) => (
                       <Card className="p-6 shadow-card animate-fade-in relative">
-                        {/* Ícone de arraste no canto superior esquerdo */}
-                        <div 
-                          {...dragAttributes} 
-                          {...dragListeners} 
-                          className="absolute top-4 left-4 cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded z-10"
-                          title="Arraste para reordenar"
-                        >
-                          <GripVertical className="w-5 h-5 text-muted-foreground" />
-                        </div>
-
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3 flex-wrap">
+                            {/* Ícone de arraste ao lado do badge */}
+                            <div 
+                              {...dragAttributes} 
+                              {...dragListeners} 
+                              className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded"
+                              title="Arraste para reordenar"
+                            >
+                              <GripVertical className="w-5 h-5 text-muted-foreground" />
+                            </div>
                             <Badge variant="default" className="text-lg px-4 py-2">
                               Bateria {heat.heat_number}
                             </Badge>
