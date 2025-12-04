@@ -263,18 +263,33 @@ export default function HeatsNew() {
 
       let orderedParticipants: any[];
       
-      if (!hasResults) {
+      // Ordenar baseado na escolha do usuário (Nº ou Rank)
+      if (orderBy === 'number') {
+        // Ordenar por número (alfabeticamente por nome)
         orderedParticipants = categoryRegs
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .sort((a, b) => {
+            const nameA = (a.team_name || a.athlete_name || '').toLowerCase();
+            const nameB = (b.team_name || b.athlete_name || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+          })
           .map(reg => ({ registrationId: reg.id }));
       } else {
-        const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
-        orderedParticipants = categoryRegs
-          .map(reg => ({
-            registrationId: reg.id,
-            totalPoints: leaderboardMap.get(reg.id)?.totalPoints || 0,
-          }))
-          .sort((a, b) => a.totalPoints - b.totalPoints);
+        // Ordenar por rank (pontuação acumulada)
+        if (!hasResults) {
+          // Se não há resultados, ordenar por ordem de inscrição (mais recente primeiro)
+          orderedParticipants = categoryRegs
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .map(reg => ({ registrationId: reg.id }));
+        } else {
+          // Se há resultados, ordenar por pontuação (menor pontuação primeiro - semeadura reversa)
+          const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
+          orderedParticipants = categoryRegs
+            .map(reg => ({
+              registrationId: reg.id,
+              totalPoints: leaderboardMap.get(reg.id)?.totalPoints || 0,
+            }))
+            .sort((a, b) => a.totalPoints - b.totalPoints);
+        }
       }
 
       const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
@@ -668,8 +683,12 @@ export default function HeatsNew() {
                       onChange={(e) => setTransitionTime(parseInt(e.target.value) || 4)}
                     />
                   </div>
-                  <div className="flex items-end">
+                  <div>
+                    <Label htmlFor="generateBtn" className="text-xs text-muted-foreground mb-1 block">
+                      Ordenação: {orderBy === 'number' ? 'Alfabética (Nº)' : 'Por Ranking'}
+                    </Label>
                     <Button 
+                      id="generateBtn"
                       onClick={handleGenerateHeats} 
                       className="w-full" 
                       disabled={generating || !selectedCategory || !selectedWOD}
