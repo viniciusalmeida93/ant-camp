@@ -459,15 +459,20 @@ export default function HeatsNew() {
       return;
     }
 
+    // Buscar o time_cap do WOD selecionado (se houver)
+    const preSelectedWod = selectedWOD && selectedWOD !== 'all' 
+      ? wods.find(w => w.id === selectedWOD)
+      : null;
+
     setIsCreatingHeat(true);
     setEditHeatData({
       custom_name: '',
-      category_id: selectedCategory || '',
-      wod_id: selectedWOD || '',
+      category_id: (selectedCategory && selectedCategory !== 'all') ? selectedCategory : '',
+      wod_id: (selectedWOD && selectedWOD !== 'all') ? selectedWOD : '',
       athletes_per_heat: athletesPerHeat,
       scheduled_time: startTime,
       end_time: startTime,
-      time_cap: '10:00',
+      time_cap: preSelectedWod?.time_cap || '10:00',
     });
   };
 
@@ -1114,20 +1119,25 @@ export default function HeatsNew() {
         </TabsList>
 
         <TabsContent value="baterias" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sidebar: Competidores */}
-            <Card className="p-4 lg:col-span-1">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-semibold">Competidores</Label>
-                  <p className="text-xs text-muted-foreground mb-3">Categoria e WOD</p>
-                  
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Sidebar: Competidores */}
+              <Card className="p-4 lg:col-span-1">
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-semibold">Competidores</Label>
+                    <p className="text-xs text-muted-foreground mb-3">Categoria e WOD</p>
+                    
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                     <SelectTrigger className="mb-2">
                       <SelectValue placeholder="Categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">📋 Todas as Categorias</SelectItem>
+                      <SelectItem value="all">Todas as Categorias</SelectItem>
                       {categories.map(cat => (
                         <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                       ))}
@@ -1139,7 +1149,7 @@ export default function HeatsNew() {
                       <SelectValue placeholder="WOD" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">🏋️ Todos os Eventos</SelectItem>
+                      <SelectItem value="all">Todos os Eventos</SelectItem>
                       {wods.map(wod => (
                         <SelectItem key={wod.id} value={wod.id}>{wod.name}</SelectItem>
                       ))}
@@ -1279,12 +1289,7 @@ export default function HeatsNew() {
                   </p>
                 </Card>
               ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <div className="space-y-4">
+                <div className="space-y-4">
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
                       const maxAthletes = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
@@ -1440,10 +1445,10 @@ export default function HeatsNew() {
                       );
                     })}
                   </div>
-                </DndContext>
               )}
             </div>
           </div>
+          </DndContext>
         </TabsContent>
 
         <TabsContent value="horarios" className="space-y-6">
