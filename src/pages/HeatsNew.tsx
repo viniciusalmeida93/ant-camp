@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -52,7 +51,6 @@ export default function HeatsNew() {
   const [athletesPerHeat, setAthletesPerHeat] = useState<number>(4);
   const [startTime, setStartTime] = useState<string>('09:00');
   const [transitionTime, setTransitionTime] = useState<number>(4);
-  const [orderBy, setOrderBy] = useState<'number' | 'rank'>('number');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [allHeatEntries, setAllHeatEntries] = useState<Map<string, any[]>>(new Map());
   const [savingEdits, setSavingEdits] = useState(false);
@@ -64,6 +62,7 @@ export default function HeatsNew() {
   const [selectedHeats, setSelectedHeats] = useState<Set<string>>(new Set());
   const [editingHeat, setEditingHeat] = useState<any | null>(null);
   const [editHeatData, setEditHeatData] = useState({
+    custom_name: '',
     athletes_per_heat: 4,
     scheduled_time: '',
     end_time: '',
@@ -676,11 +675,19 @@ export default function HeatsNew() {
       ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
       : startTime;
     
+    // Gerar nome padrão se não houver custom_name
+    const categoryInfo = categories.find(c => c.id === heat.category_id);
+    const wodInfo = wods.find(w => w.id === heat.wod_id);
+    const defaultName = categoryInfo && wodInfo 
+      ? `${categoryInfo.name} - ${wodInfo.name}`
+      : `BATERIA ${heat.heat_number}`;
+    
     setEditHeatData({
+      custom_name: heat.custom_name || defaultName,
       athletes_per_heat: heat.athletes_per_heat || athletesPerHeat,
       scheduled_time: scheduledTime,
-      end_time: scheduledTime, // Por enquanto igual ao início
-      time_cap: wods.find(w => w.id === heat.wod_id)?.time_cap || '10:00',
+      end_time: scheduledTime,
+      time_cap: wodInfo?.time_cap || '10:00',
     });
   };
 
@@ -707,6 +714,7 @@ export default function HeatsNew() {
       await supabase
         .from("heats")
         .update({
+          custom_name: editHeatData.custom_name.trim() || null,
           athletes_per_heat: editHeatData.athletes_per_heat,
           scheduled_time: scheduledDate.toISOString(),
         })
@@ -1032,21 +1040,11 @@ export default function HeatsNew() {
   });
 
   // Ordenar competidores
-  const sortedCompetitors = orderBy === 'rank' 
-    ? (() => {
-        const leaderboard = calculateLeaderboard();
-        return filteredCompetitors
-          .map(reg => ({
-            ...reg,
-            position: leaderboard.find(l => l.registrationId === reg.id)?.position,
-          }))
-          .sort((a, b) => (a.position || 999) - (b.position || 999));
-      })()
-    : filteredCompetitors.sort((a, b) => {
-        const nameA = (a.team_name || a.athlete_name || '').toLowerCase();
-        const nameB = (b.team_name || b.athlete_name || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
+  const sortedCompetitors = filteredCompetitors.sort((a, b) => {
+    const nameA = (a.team_name || a.athlete_name || '').toLowerCase();
+    const nameB = (b.team_name || b.athlete_name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -1109,17 +1107,6 @@ export default function HeatsNew() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-
-                <RadioGroup value={orderBy} onValueChange={(v) => setOrderBy(v as any)}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="number" id="number" />
-                    <Label htmlFor="number" className="text-sm cursor-pointer">Nº</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="rank" id="rank" />
-                    <Label htmlFor="rank" className="text-sm cursor-pointer">Rank</Label>
-                  </div>
-                </RadioGroup>
 
                 <SortableContext 
                   items={sortedCompetitors.map(r => `sidebar-athlete-${r.id}`)} 
@@ -1259,7 +1246,22 @@ export default function HeatsNew() {
                         : startTime;
                       
                       const wodInfo = wods.find(w => w.id === heat.wod_id);
-                      const timeCap = wodInfo?.time_cap || '10min';
+                      const timeCap = wodInfo?.time_cap || '10:00';
+                      
+                      // Calcular horário de término
+                      const timecapMinutes = timeCap.includes(':') 
+                        ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
+                        : parseInt(timeCap) || 10;
+                      
+                      const startDate = heat.scheduled_time ? new Date(heat.scheduled_time) : new Date();
+                      const endDate = new Date(startDate.getTime() + timecapMinutes * 60000);
+                      const endTime = endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                      
+                      // Nome da bateria (custom ou padrão)
+                      const categoryInfo = categories.find(c => c.id === heat.category_id);
+                      const heatDisplayName = heat.custom_name || 
+                        (categoryInfo && wodInfo ? `${categoryInfo.name} - ${wodInfo.name}` : `BATERIA ${heat.heat_number}`);
+                      
                       const allItemIds = currentEntries.map(e => `heat-${heat.id}-entry-${e.id}`);
                       const isExpanded = expandedHeats.has(heat.id);
 
@@ -1287,14 +1289,16 @@ export default function HeatsNew() {
                                 <Badge variant="default" className="text-base px-3 py-1">
                                   BATERIA {heat.heat_number}
                                 </Badge>
-                                <span className="text-sm text-muted-foreground">
-                                  {categories.find(c => c.id === heat.category_id)?.name} - {wodInfo?.name}
-                                </span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">
+                                    {heatDisplayName}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {scheduledTime} - {endTime} | TimeCap: {timeCap}
+                                  </span>
+                                </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">
-                                  {scheduledTime} | TC: {timeCap}
-                                </span>
                                 {editingCapacity === heat.id ? (
                                   <div className="flex items-center gap-1">
                                     <Input
@@ -1462,10 +1466,24 @@ export default function HeatsNew() {
                   filteredHeats.map(heat => {
                     const wodInfo = wods.find(w => w.id === heat.wod_id);
                     const categoryInfo = categories.find(c => c.id === heat.category_id);
-                    const timeCap = wodInfo?.time_cap || '00:10';
+                    const timeCap = wodInfo?.time_cap || '10:00';
+                    
+                    // Calcular horário de término
+                    const timecapMinutes = timeCap.includes(':') 
+                      ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
+                      : parseInt(timeCap) || 10;
+                    
+                    const startDate = heat.scheduled_time ? new Date(heat.scheduled_time) : new Date();
+                    const endDate = new Date(startDate.getTime() + timecapMinutes * 60000);
+                    
                     const scheduledTime = heat.scheduled_time 
                       ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                       : startTime;
+                    const endTime = endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    
+                    // Nome da bateria (custom ou padrão)
+                    const heatDisplayName = heat.custom_name || 
+                      (categoryInfo && wodInfo ? `${categoryInfo.name} - ${wodInfo.name}` : `BATERIA ${heat.heat_number}`);
                     
                     return (
                       <TableRow key={heat.id}>
@@ -1473,12 +1491,12 @@ export default function HeatsNew() {
                           <GripVertical className="w-4 h-4 text-muted-foreground" />
                         </TableCell>
                         <TableCell className="font-bold">{heat.heat_number}</TableCell>
-                        <TableCell>
-                          {categoryInfo?.name} - {wodInfo?.name}
+                        <TableCell className="font-medium">
+                          {heatDisplayName}
                         </TableCell>
                         <TableCell>{timeCap}</TableCell>
                         <TableCell>{scheduledTime}</TableCell>
-                        <TableCell>{scheduledTime}</TableCell>
+                        <TableCell>{endTime}</TableCell>
                         <TableCell>{transitionTime}min</TableCell>
                       </TableRow>
                     );
@@ -1501,6 +1519,23 @@ export default function HeatsNew() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-custom-name">Nome da Bateria</Label>
+              <Input
+                id="edit-custom-name"
+                type="text"
+                placeholder="Ex: INICIANTE FEMININO - EVENTO 1: IZABEL"
+                value={editHeatData.custom_name}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  custom_name: e.target.value 
+                }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Ideal para baterias mistas ou com nomes personalizados
+              </p>
+            </div>
+
             <div>
               <Label htmlFor="edit-athletes-per-heat">Número de Raias</Label>
               <Input
