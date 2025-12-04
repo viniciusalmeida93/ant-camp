@@ -303,7 +303,8 @@ export default function HeatsNew() {
 
         // Iterar sobre TODOS os WODs
         for (const wod of wods) {
-          const athletesPerHeatValue = category.athletes_per_heat || athletesPerHeat;
+          // Usar o valor global de Raias configurado no topo
+          const athletesPerHeatValue = athletesPerHeat;
           const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeatValue);
 
           // Criar baterias para esta combinação categoria + WOD
@@ -1005,7 +1006,6 @@ export default function HeatsNew() {
                             onClick={handleAddHeat} 
                             variant="outline" 
                             size="sm"
-                            disabled={!selectedCategory || !selectedWOD}
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Adicionar Bateria
