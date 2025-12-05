@@ -143,7 +143,7 @@ export default function HeatsNew() {
       const [catsResult, wodsResult, regsResult, daysResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", selectedChampionship.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", selectedChampionship.id).order("order_num"),
-        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved"),
+        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved").order("order_index", { ascending: true, nullsLast: true }).order("created_at", { ascending: true }),
         supabase.from("championship_days").select("*").eq("championship_id", selectedChampionship.id).order("day_number"),
       ]);
 
@@ -482,14 +482,25 @@ export default function HeatsNew() {
             continue;
           }
 
-          // Ordenar por ordem de inscrição
-          // IMPORTANTE: Quem se inscreveu PRIMEIRO fica nas ÚLTIMAS baterias (vantagem estratégica)
-          const orderedParticipants = categoryRegs
+          // Ordenar por order_index (posição no ranking/leaderboard)
+          // IMPORTANTE: Quem está em 1º lugar (order_index = 1) fica nas ÚLTIMAS baterias
+          // Ordenar por order_index ascendente (1, 2, 3...) e usar created_at como fallback
+          const sortedParticipants = categoryRegs
             .sort((a, b) => {
-              // Mais recente primeiro, mais antigo por último
-              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            })
-            .map(reg => ({ registrationId: reg.id }));
+              // Se ambos têm order_index, ordenar por ele
+              if (a.order_index !== null && a.order_index !== undefined && 
+                  b.order_index !== null && b.order_index !== undefined) {
+                return a.order_index - b.order_index; // Menor order_index primeiro (1º lugar vem antes)
+              }
+              // Se apenas um tem order_index, ele vem primeiro
+              if (a.order_index !== null && a.order_index !== undefined) return -1;
+              if (b.order_index !== null && b.order_index !== undefined) return 1;
+              // Se nenhum tem order_index, usar created_at como fallback
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
+          
+          // INVERTER a ordem: quem está em 1º lugar (order_index = 1) vai para a última bateria
+          const orderedParticipants = sortedParticipants.reverse().map(reg => ({ registrationId: reg.id }));
 
           // Usar o valor global de Raias configurado no topo
           const athletesPerHeatValue = athletesPerHeat;
@@ -802,10 +813,24 @@ export default function HeatsNew() {
         return;
       }
 
-      // Ordenar por ordem de inscrição (primeiro inscrito = última bateria)
-      const orderedParticipants = categoryRegs
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .map(reg => ({ registrationId: reg.id }));
+      // Ordenar por order_index (posição no ranking/leaderboard)
+      // IMPORTANTE: Quem está em 1º lugar (order_index = 1) fica nas ÚLTIMAS baterias
+      const sortedParticipants = categoryRegs
+        .sort((a, b) => {
+          // Se ambos têm order_index, ordenar por ele
+          if (a.order_index !== null && a.order_index !== undefined && 
+              b.order_index !== null && b.order_index !== undefined) {
+            return a.order_index - b.order_index; // Menor order_index primeiro (1º lugar vem antes)
+          }
+          // Se apenas um tem order_index, ele vem primeiro
+          if (a.order_index !== null && a.order_index !== undefined) return -1;
+          if (b.order_index !== null && b.order_index !== undefined) return 1;
+          // Se nenhum tem order_index, usar created_at como fallback
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+      
+      // INVERTER a ordem: quem está em 1º lugar (order_index = 1) vai para a última bateria
+      const orderedParticipants = sortedParticipants.reverse().map(reg => ({ registrationId: reg.id }));
 
       const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
 
@@ -1437,8 +1462,10 @@ export default function HeatsNew() {
           }
         }
         
-        // Recarregar e recalcular horários
+        // Atualizar estado local imediatamente para refletir no front
         await loadHeats();
+        
+        // Recalcular horários após atualizar
         await calculateAllHeatsSchedule();
         
         toast.success("Baterias reorganizadas e horários recalculados!");
