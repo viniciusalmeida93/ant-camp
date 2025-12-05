@@ -1362,9 +1362,11 @@ export default function HeatsNew() {
           return categoryFilter && wodFilter;
         }).sort((a, b) => a.heat_number - b.heat_number);
         
+        // ATUALIZAÇÃO OTIMISTA: Atualizar estado local IMEDIATAMENTE antes de salvar no banco
+        let newOrderedHeats: any[] = [];
+        
         if (hasFilters) {
-          // Se há filtros aplicados, trabalhar apenas com as baterias filtradas
-          // Mas precisamos atualizar a ordem dentro do contexto global
+          // Se há filtros aplicados
           const activeIndex = currentFilteredHeats.findIndex(h => h.id === activeHeatId);
           const overIndex = currentFilteredHeats.findIndex(h => h.id === overHeatId);
           
@@ -1373,10 +1375,38 @@ export default function HeatsNew() {
             return;
           }
           
-          // Reordenar apenas as baterias filtradas
-          const reorderedFiltered = arrayMove(currentFilteredHeats, activeIndex, overIndex);
+          // ATUALIZAÇÃO OTIMISTA: Atualizar visual IMEDIATAMENTE
+          setHeats(prevHeats => {
+            const sorted = [...prevHeats].sort((a, b) => a.heat_number - b.heat_number);
+            const filteredIds = new Set(currentFilteredHeats.map(h => h.id));
+            
+            // Separar filtradas e não filtradas
+            const filtered = sorted.filter(h => filteredIds.has(h.id));
+            const nonFiltered = sorted.filter(h => !filteredIds.has(h.id));
+            
+            // Reordenar apenas as filtradas
+            const activeIdx = filtered.findIndex(h => h.id === activeHeatId);
+            const overIdx = filtered.findIndex(h => h.id === overHeatId);
+            
+            if (activeIdx === -1 || overIdx === -1) return prevHeats;
+            
+            const reorderedFiltered = arrayMove(filtered, activeIdx, overIdx);
+            
+            // Combinar mantendo ordem relativa
+            const minHeatNum = Math.min(...filtered.map(h => h.heat_number));
+            const before = nonFiltered.filter(h => h.heat_number < minHeatNum);
+            const after = nonFiltered.filter(h => h.heat_number >= minHeatNum);
+            
+            const combined = [...before, ...reorderedFiltered, ...after];
+            
+            // Atualizar heat_number localmente
+            return combined.map((heat, idx) => ({
+              ...heat,
+              heat_number: idx + 1
+            }));
+          });
           
-          // Buscar todas as baterias para atualizar a ordem completa
+          // Buscar todas do banco para persistir
           const { data: allHeats } = await supabase
             .from("heats")
             .select("*")
@@ -1384,53 +1414,52 @@ export default function HeatsNew() {
             .order("heat_number");
           
           if (!allHeats) {
+            await loadHeats();
             setActiveId(null);
             return;
           }
           
-          // Criar um mapa das novas posições das baterias filtradas
-          const filteredHeatIds = new Set(reorderedFiltered.map(h => h.id));
-          
-          // Separar baterias filtradas e não filtradas
+          const filteredHeatIds = new Set(currentFilteredHeats.map(h => h.id));
+          const reorderedFiltered = arrayMove(currentFilteredHeats, activeIndex, overIndex);
           const nonFilteredHeats = allHeats.filter(h => !filteredHeatIds.has(h.id));
           
-          // Encontrar onde inserir as baterias filtradas (mantendo a ordem relativa das não filtradas)
-          // Vamos posicionar as baterias filtradas na mesma região onde estavam antes
           const minFilteredHeatNumber = Math.min(...currentFilteredHeats.map(h => h.heat_number));
           const maxFilteredHeatNumber = Math.max(...currentFilteredHeats.map(h => h.heat_number));
-          
-          // Ordenar baterias não filtradas
           const sortedNonFiltered = nonFilteredHeats.sort((a, b) => a.heat_number - b.heat_number);
           
-          // Reconstruir array completo mantendo ordem
           const allHeatsReordered: any[] = [];
-          
-          // Adicionar baterias antes da região filtrada
           for (const heat of sortedNonFiltered) {
             if (heat.heat_number < minFilteredHeatNumber) {
               allHeatsReordered.push(heat);
             }
           }
-          
-          // Adicionar baterias filtradas reordenadas
           allHeatsReordered.push(...reorderedFiltered);
-          
-          // Adicionar baterias depois da região filtrada
           for (const heat of sortedNonFiltered) {
             if (heat.heat_number > maxFilteredHeatNumber) {
               allHeatsReordered.push(heat);
             }
           }
           
-          // Atualizar heat_number de todas as baterias
-          for (let i = 0; i < allHeatsReordered.length; i++) {
-            await supabase
-              .from("heats")
-              .update({ heat_number: i + 1 })
-              .eq("id", allHeatsReordered[i].id);
-          }
+          newOrderedHeats = allHeatsReordered;
         } else {
-          // Se não há filtros, reordenar todas as baterias normalmente
+          // Sem filtros: reordenar todas normalmente
+          
+          // ATUALIZAÇÃO OTIMISTA: Atualizar visual IMEDIATAMENTE
+          setHeats(prevHeats => {
+            const sorted = [...prevHeats].sort((a, b) => a.heat_number - b.heat_number);
+            const activeIdx = sorted.findIndex(h => h.id === activeHeatId);
+            const overIdx = sorted.findIndex(h => h.id === overHeatId);
+            
+            if (activeIdx === -1 || overIdx === -1) return prevHeats;
+            
+            const reordered = arrayMove(sorted, activeIdx, overIdx);
+            
+            return reordered.map((heat, idx) => ({
+              ...heat,
+              heat_number: idx + 1
+            }));
+          });
+          
           const { data: allHeatsOrdered } = await supabase
             .from("heats")
             .select("*")
@@ -1438,6 +1467,7 @@ export default function HeatsNew() {
             .order("heat_number");
           
           if (!allHeatsOrdered) {
+            await loadHeats();
             setActiveId(null);
             return;
           }
@@ -1446,33 +1476,40 @@ export default function HeatsNew() {
           const overIndex = allHeatsOrdered.findIndex(h => h.id === overHeatId);
           
           if (activeIndex === -1 || overIndex === -1) {
+            await loadHeats();
             setActiveId(null);
             return;
           }
           
-          // Reordenar array
-          const newHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
-          
-          // Atualizar heat_number no banco para TODAS as baterias
-          for (let i = 0; i < newHeats.length; i++) {
-            await supabase
-              .from("heats")
-              .update({ heat_number: i + 1 })
-              .eq("id", newHeats[i].id);
-          }
+          newOrderedHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
         }
         
-        // Atualizar estado local imediatamente para refletir no front
-        await loadHeats();
+        // Persistir no banco em background (já temos feedback visual)
+        setActiveId(null); // Liberar imediatamente para melhor UX
         
-        // Recalcular horários após atualizar
-        await calculateAllHeatsSchedule();
+        Promise.all(
+          newOrderedHeats.map((heat, idx) =>
+            supabase
+              .from("heats")
+              .update({ heat_number: idx + 1 })
+              .eq("id", heat.id)
+          )
+        ).then(async () => {
+          await loadHeats(); // Sincronizar
+          await calculateAllHeatsSchedule();
+          toast.success("Baterias reorganizadas e horários recalculados!");
+        }).catch((error) => {
+          console.error("Erro ao persistir:", error);
+          loadHeats(); // Reverter
+          toast.error("Erro ao salvar nova ordem");
+        });
         
-        toast.success("Baterias reorganizadas e horários recalculados!");
+        toast.success("Reorganizando...");
       } catch (error) {
         console.error("Erro ao reordenar baterias:", error);
+        // Reverter estado em caso de erro
+        await loadHeats();
         toast.error("Erro ao reorganizar baterias");
-      } finally {
         setActiveId(null);
       }
       return;
@@ -1697,12 +1734,17 @@ export default function HeatsNew() {
 
     const style = {
       transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
+      transition: isDragging ? 'none' : transition, // Sem transição durante drag para movimento mais preciso
+      opacity: isDragging ? 0.8 : 1,
+      zIndex: isDragging ? 999 : 1,
     };
 
     return (
-      <div ref={setNodeRef} style={style}>
+      <div 
+        ref={setNodeRef} 
+        style={style}
+        className={`${isDragging ? 'ring-2 ring-primary ring-offset-2 shadow-lg scale-105' : ''} transition-shadow duration-200`}
+      >
         {children(listeners, attributes)}
       </div>
     );
