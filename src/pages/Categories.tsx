@@ -186,10 +186,14 @@ export default function Categories() {
         return;
       }
 
+      // DESABILITADO: Não criar resultados fictícios automaticamente
+      // Os resultados devem ser lançados manualmente
+      /*
       const [scaleResult, randomResult] = await Promise.all([
         ensureScaleTrios(selectedChampionship.id),
         ensureRandomResults(selectedChampionship.id),
       ]);
+      */
 
       // Development helpers removed - no need to show to end users
 

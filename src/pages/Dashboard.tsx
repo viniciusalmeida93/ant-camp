@@ -87,6 +87,9 @@ export default function Dashboard() {
 
       let shouldRefresh = false;
 
+      // DESABILITADO: Não criar resultados fictícios automaticamente
+      // Os resultados devem ser lançados manualmente
+      /*
       if (!scaleTriosEnsuredRef.current.has(championshipId)) {
         try {
           const { added } = await ensureScaleTrios(championshipId);
@@ -112,6 +115,7 @@ export default function Dashboard() {
           randomResultsEnsuredRef.current.add(championshipId);
         }
       }
+      */
 
       if (shouldRefresh) {
         await Promise.all([
