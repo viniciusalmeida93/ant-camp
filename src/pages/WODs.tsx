@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2, CopyPlus, GripVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Dumbbell, Loader2, CopyPlus, GripVertical, Globe, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -484,7 +484,7 @@ export default function WODs() {
     }
   }, [editingWOD]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>, publish: boolean = false) => {
     e.preventDefault();
     setSaving(true);
 
@@ -531,6 +531,7 @@ export default function WODs() {
         notes: formData.get('notes') as string || null,
         estimated_duration_minutes: estimatedDuration,
         order_num: editingWOD ? editingWOD.order_num : maxOrder + 1,
+        is_published: publish, // Definir se está publicado ou não
       };
 
       let wodId = editingWOD?.id ?? null;
@@ -543,14 +544,34 @@ export default function WODs() {
 
         if (error) throw error;
         wodId = editingWOD.id;
+        // Atualizar o estado local com o novo valor de is_published
+        const updatedWOD = { ...editingWOD, ...wodData, id: editingWOD.id, is_published: publish };
         setWODs(prev =>
           prev.map(w =>
             w.id === editingWOD.id
-              ? { ...w, ...wodData, id: editingWOD.id }
+              ? updatedWOD
               : w
           )
         );
-        toast.success("WOD atualizado com sucesso!");
+        // Se estiver publicando ou despublicando, atualizar o status
+        if (publish) {
+          const { error: publishError } = await supabase
+            .from("wods")
+            .update({ is_published: true })
+            .eq("id", editingWOD.id);
+
+          if (publishError) throw publishError;
+          toast.success("WOD atualizado e publicado com sucesso!");
+        } else {
+          // Garantir que WODs salvos sem publicar tenham is_published = false
+          const { error: unpublishError } = await supabase
+            .from("wods")
+            .update({ is_published: false })
+            .eq("id", editingWOD.id);
+
+          if (unpublishError) throw unpublishError;
+          toast.success("WOD atualizado com sucesso! (Não publicado ainda)");
+        }
       } else {
         const { data: newWod, error } = await supabase
           .from("wods")
@@ -566,7 +587,11 @@ export default function WODs() {
             return next.sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
           });
         }
-        toast.success("WOD criado com sucesso!");
+        if (publish) {
+          toast.success("WOD criado e publicado com sucesso!");
+        } else {
+          toast.success("WOD criado com sucesso! (Não publicado ainda)");
+        }
       }
 
       if (wodId) {
@@ -1008,14 +1033,61 @@ export default function WODs() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1" disabled={saving}>
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const form = formRef.current;
+                    if (form) {
+                      const formEvent = new Event('submit', { bubbles: true, cancelable: true });
+                      const syntheticEvent = Object.assign(formEvent, {
+                        preventDefault: () => formEvent.preventDefault(),
+                        target: form,
+                        currentTarget: form,
+                      });
+                      handleSubmit(syntheticEvent as any, false);
+                    }
+                  }}
+                  className="flex-1" 
+                  disabled={saving}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
                   {saving ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Salvando...
                     </>
                   ) : (
-                    editingWOD ? 'Atualizar' : 'Criar'
+                    'Salvar WOD'
+                  )}
+                </Button>
+                <Button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const form = formRef.current;
+                    if (form) {
+                      const formEvent = new Event('submit', { bubbles: true, cancelable: true });
+                      const syntheticEvent = Object.assign(formEvent, {
+                        preventDefault: () => formEvent.preventDefault(),
+                        target: form,
+                        currentTarget: form,
+                      });
+                      handleSubmit(syntheticEvent as any, true);
+                    }
+                  }}
+                  className="flex-1" 
+                  disabled={saving}
+                >
+                  <Globe className="w-4 h-4 mr-2" />
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Publicando...
+                    </>
+                  ) : (
+                    'Publicar WOD'
                   )}
                 </Button>
               </div>

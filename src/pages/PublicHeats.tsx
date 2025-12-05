@@ -126,11 +126,12 @@ export default function PublicHeats() {
 
       if (catsData) setCategories(catsData);
 
-      // Load WODs
+      // Load WODs - APENAS WODS PUBLICADOS
       const { data: wodsData, error: wodsError } = await supabase
         .from("wods")
         .select("id, name")
         .eq("championship_id", champ.id)
+        .eq("is_published", true) // Apenas WODs publicados aparecem nas páginas públicas
         .order("order_num");
 
       if (wodsError) {

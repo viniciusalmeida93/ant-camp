@@ -92,9 +92,10 @@ export default function PublicLeaderboard() {
       setChampionship(champ);
 
       // Load categories, WODs, and registrations
+      // IMPORTANTE: Apenas WODs publicados aparecem no leaderboard público
       const [catsResult, wodsResult, regsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", champ.id).order("order_index"),
-        supabase.from("wods").select("*").eq("championship_id", champ.id).order("order_num"),
+        supabase.from("wods").select("*").eq("championship_id", champ.id).eq("is_published", true).order("order_num"),
         supabase.from("registrations").select("*").eq("championship_id", champ.id).eq("status", "approved").order("order_index", { ascending: true, nullsLast: true }).order("created_at", { ascending: true }),
       ]);
 
