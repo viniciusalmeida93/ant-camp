@@ -1940,11 +1940,21 @@ export default function HeatsNew() {
       setSavingEdits(true);
       
       const affectedHeatIds = Array.from(newEntriesMap.keys());
-      await supabase
+      
+      console.log('[DEBUG DRAG] Salvando movimentos. Baterias afetadas:', affectedHeatIds.length);
+      
+      // Deletar todas as entries das baterias afetadas
+      const { error: deleteError } = await supabase
         .from("heat_entries")
         .delete()
         .in("heat_id", affectedHeatIds);
 
+      if (deleteError) {
+        console.error('[DEBUG DRAG] Erro ao deletar entries:', deleteError);
+        throw deleteError;
+      }
+
+      // Preparar entries para inserir
       const allEntriesToInsert: any[] = [];
       newEntriesMap.forEach((entries, heatId) => {
         entries.forEach(entry => {
@@ -1958,17 +1968,39 @@ export default function HeatsNew() {
         });
       });
 
-      if (allEntriesToInsert.length > 0) {
-        await supabase
+      console.log('[DEBUG DRAG] Inserindo', allEntriesToInsert.length, 'entries');
+      
+      // Verificar se há duplicatas antes de inserir
+      const uniqueEntries = new Map<string, any>();
+      allEntriesToInsert.forEach(entry => {
+        const key = `${entry.heat_id}-${entry.registration_id}`;
+        if (!uniqueEntries.has(key)) {
+          uniqueEntries.set(key, entry);
+        } else {
+          console.warn('[DEBUG DRAG] Duplicata detectada:', entry);
+        }
+      });
+      
+      const entriesToInsert = Array.from(uniqueEntries.values());
+
+      if (entriesToInsert.length > 0) {
+        const { error: insertError } = await supabase
           .from("heat_entries")
-          .insert(allEntriesToInsert);
+          .insert(entriesToInsert);
+          
+        if (insertError) {
+          console.error('[DEBUG DRAG] Erro ao inserir entries:', insertError);
+          throw insertError;
+        }
       }
 
       toast.success("Baterias atualizadas!");
       await loadHeats();
+      console.log('[DEBUG DRAG] Salvo com sucesso');
     } catch (error: any) {
       console.error("Error saving edits:", error);
       toast.error("Erro ao salvar alterações");
+      await loadHeats(); // Reverter para estado do banco
     } finally {
       setSavingEdits(false);
     }
