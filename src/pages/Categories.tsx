@@ -11,8 +11,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
-import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
-import { ensureRandomResults } from '@/utils/ensureRandomResults';
+// REMOVIDO: Não criar resultados fictícios automaticamente
+// import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
+// import { ensureRandomResults } from '@/utils/ensureRandomResults';
 import {
   DndContext,
   closestCenter,

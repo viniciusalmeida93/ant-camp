@@ -14,9 +14,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
-import { generateDemoData } from '@/utils/generateDemoData';
-import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
-import { ensureRandomResults } from '@/utils/ensureRandomResults';
+// REMOVIDO: Não criar resultados fictícios automaticamente
+// import { generateDemoData } from '@/utils/generateDemoData';
+// import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
+// import { ensureRandomResults } from '@/utils/ensureRandomResults';
 
 export default function Dashboard() {
   const navigate = useNavigate();

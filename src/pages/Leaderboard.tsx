@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, RefreshCw, TrendingUp, TrendingDown, Minus, Medal, Loader2 } from 'lucide-react';
+import { Trophy, RefreshCw, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -229,11 +229,16 @@ export default function Leaderboard() {
     });
 
     // Criar entradas do leaderboard
+    // IMPORTANTE: Incluir TODOS os registros da categoria, mesmo sem resultados
     const entries: LeaderboardEntry[] = [];
+    const processedRegIds = new Set<string>();
     
+    // Primeiro, processar participantes com resultados
     participantMap.forEach((wodResults, registrationId) => {
       const reg = registrations.find(r => r.id === registrationId);
       if (!reg) return;
+      
+      processedRegIds.add(registrationId);
 
       const totalPoints = wodResults.reduce((sum, r) => sum + (r.points || 0), 0);
       const firstPlaces = wodResults.filter(r => r.position === 1).length;
@@ -270,6 +275,24 @@ export default function Leaderboard() {
         lastWodPosition,
         wodResults: sortedResults,
       });
+    });
+    
+    // Depois, adicionar participantes SEM resultados (zerados)
+    registrations.forEach(reg => {
+      if (reg.category_id === selectedCategory && !processedRegIds.has(reg.id)) {
+        entries.push({
+          registrationId: reg.id,
+          participantName: reg.team_name || reg.athlete_name,
+          categoryId: selectedCategory,
+          totalPoints: 0,
+          position: 0, // será calculado depois
+          firstPlaces: 0,
+          secondPlaces: 0,
+          thirdPlaces: 0,
+          lastWodPosition: undefined,
+          wodResults: [],
+        });
+      }
     });
 
     // Ordenar e atribuir posições
@@ -403,30 +426,7 @@ export default function Leaderboard() {
   };
 
   const getPositionBadge = (position: number) => {
-    if (position === 1) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-accent" />
-          <span className="text-base font-bold">1º</span>
-        </div>
-      );
-    }
-    if (position === 2) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-base font-bold">2º</span>
-        </div>
-      );
-    }
-    if (position === 3) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-amber-600" />
-          <span className="text-base font-bold">3º</span>
-        </div>
-      );
-    }
+    // Removido: medalhas de 1º, 2º e 3º lugar - mostrar apenas número
     return <span className="text-sm font-bold">{position}º</span>;
   };
 
