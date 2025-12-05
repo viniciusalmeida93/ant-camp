@@ -1588,7 +1588,33 @@ export default function HeatsNew() {
       try {
         setSavingEdits(true);
 
+        // Buscar a bateria para obter sua capacidade
+        const targetHeat = heats.find(h => h.id === targetHeatId);
+        if (!targetHeat) {
+          toast.error("Bateria não encontrada");
+          setActiveId(null);
+          return;
+        }
+
         const currentEntries = allHeatEntries.get(targetHeatId) || [];
+        
+        // Verificar capacidade máxima
+        const maxAthletes = targetHeat.athletes_per_heat || heatCapacities.get(targetHeatId) || athletesPerHeat;
+        
+        if (currentEntries.length >= maxAthletes) {
+          toast.error(`Bateria já está cheia (${maxAthletes}/${maxAthletes})`);
+          setActiveId(null);
+          return;
+        }
+
+        // Verificar se o atleta já está nesta bateria
+        const alreadyInHeat = currentEntries.some(e => e.registration_id === registrationId);
+        if (alreadyInHeat) {
+          toast.error("Este atleta já está nesta bateria");
+          setActiveId(null);
+          return;
+        }
+
         const maxLaneNumber = currentEntries.length > 0 
           ? Math.max(...currentEntries.map(e => e.lane_number || 0))
           : 0;
@@ -1634,6 +1660,24 @@ export default function HeatsNew() {
       const overHeatEntries = newEntriesMap.get(overHeatId) || [];
       const activeHeatEntries = newEntriesMap.get(activeHeatId) || [];
 
+      // Se estiver movendo para bateria diferente, verificar capacidade
+      if (activeHeatId !== overHeatId) {
+        const targetHeat = heats.find(h => h.id === overHeatId);
+        if (!targetHeat) {
+          setActiveId(null);
+          return;
+        }
+        
+        const maxAthletes = targetHeat.athletes_per_heat || heatCapacities.get(overHeatId) || athletesPerHeat;
+        
+        // Se a bateria de destino já está cheia (sem contar o atleta que está sendo movido da origem)
+        if (overHeatEntries.length >= maxAthletes) {
+          toast.error(`Bateria já está cheia (${maxAthletes}/${maxAthletes})`);
+          setActiveId(null);
+          return;
+        }
+      }
+
       const updatedActiveHeat = activeHeatEntries.filter(e => e.id !== activeEntryId);
       newEntriesMap.set(activeHeatId, updatedActiveHeat);
 
@@ -1651,8 +1695,27 @@ export default function HeatsNew() {
     } else if (overHeatMatch) {
       // Arrastando para área vazia da bateria
       const overHeatId = overHeatMatch[1];
+      
+      // Verificar capacidade máxima da bateria de destino
+      const targetHeat = heats.find(h => h.id === overHeatId);
+      if (!targetHeat) {
+        setActiveId(null);
+        return;
+      }
+      
       const activeHeatEntries = newEntriesMap.get(activeHeatId) || [];
       const overHeatEntries = newEntriesMap.get(overHeatId) || [];
+      
+      // Se estiver movendo para a mesma bateria, não precisa verificar capacidade (é apenas reordenação)
+      if (activeHeatId !== overHeatId) {
+        const maxAthletes = targetHeat.athletes_per_heat || heatCapacities.get(overHeatId) || athletesPerHeat;
+        
+        if (overHeatEntries.length >= maxAthletes) {
+          toast.error(`Bateria já está cheia (${maxAthletes}/${maxAthletes})`);
+          setActiveId(null);
+          return;
+        }
+      }
 
       const updatedActiveHeat = activeHeatEntries.filter(e => e.id !== activeEntryId);
       newEntriesMap.set(activeHeatId, updatedActiveHeat);
