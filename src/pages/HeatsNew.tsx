@@ -822,16 +822,34 @@ export default function HeatsNew() {
   const handleRemoveFromHeat = async (entryId: string, heatId: string) => {
     try {
       // Remover apenas da heat_entries (não exclui a inscrição)
-      await supabase
+      const { error } = await supabase
         .from("heat_entries")
         .delete()
         .eq("id", entryId);
 
+      if (error) throw error;
+
+      // Atualizar imediatamente o estado local para remover da lista de entries
+      setAllChampionshipEntries(prev => prev.filter(e => e.id !== entryId));
+      setHeatEntries(prev => prev.filter(e => e.id !== entryId));
+      
+      // Atualizar allHeatEntries também
+      setAllHeatEntries(prev => {
+        const newMap = new Map(prev);
+        const currentEntries = newMap.get(heatId) || [];
+        newMap.set(heatId, currentEntries.filter(e => e.id !== entryId));
+        return newMap;
+      });
+
       toast.success("Atleta removido da bateria!");
+      
+      // Recarregar dados para garantir sincronização com o banco
       await loadHeats();
     } catch (error: any) {
       console.error("Error removing from heat:", error);
       toast.error("Erro ao remover atleta da bateria");
+      // Em caso de erro, recarregar para garantir estado consistente
+      await loadHeats();
     }
   };
 
