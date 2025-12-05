@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar, Plus, Minus, ChevronDown, ChevronUp, Trash2, Edit, Settings } from 'lucide-react';
+import { Users, RefreshCw, Clock, Loader2, GripVertical, Calendar, Plus, Minus, ChevronDown, ChevronUp, Trash2, Edit, Settings, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -833,33 +833,98 @@ export default function HeatsNew() {
 
       if (error) throw error;
 
-      // Atualizar IMEDIATAMENTE todos os estados locais
-      // Isso faz o atleta aparecer instantaneamente na lista lateral
-      setAllChampionshipEntries(prev => prev.filter(e => e.id !== entryId));
-      setHeatEntries(prev => prev.filter(e => e.id !== entryId));
-      
-      // Atualizar o allHeatEntries também
-      setAllHeatEntries(prev => {
-        const newMap = new Map(prev);
-        const currentEntries = newMap.get(heatId) || [];
-        newMap.set(heatId, currentEntries.filter(e => e.id !== entryId));
-        return newMap;
-      });
-
-      // Atualizar os heats para refletir a mudança na contagem de ocupados
-      setHeats(prev => prev.map(h => {
-        if (h.id === heatId) {
-          return { ...h };
-        }
-        return h;
-      }));
-
       toast.success("Atleta removido da bateria!");
+      
+      // Recarregar TUDO para garantir sincronia
+      await loadHeats();
     } catch (error: any) {
       console.error("Error removing from heat:", error);
       toast.error("Erro ao remover atleta da bateria");
-      // Em caso de erro, recarregar para garantir estado consistente
       await loadHeats();
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      // Criar conteúdo do PDF como HTML
+      let htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Baterias - ${selectedChampionship?.name || 'Campeonato'}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { text-align: center; color: #333; }
+            .heat { page-break-inside: avoid; margin-bottom: 30px; border: 2px solid #333; padding: 15px; }
+            .heat-header { background: #e63946; color: white; padding: 10px; margin: -15px -15px 15px -15px; }
+            .heat-title { font-size: 20px; font-weight: bold; margin: 0; }
+            .heat-info { font-size: 14px; margin: 5px 0 0 0; }
+            .participant { padding: 8px; margin: 5px 0; background: #f8f9fa; border-left: 3px solid #e63946; }
+            .lane { font-weight: bold; color: #e63946; margin-right: 10px; }
+            @media print { .heat { page-break-inside: avoid; } }
+          </style>
+        </head>
+        <body>
+          <h1>Baterias - ${selectedChampionship?.name || 'Campeonato'}</h1>
+          <p style="text-align: center; color: #666;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+      `;
+
+      // Ordenar baterias por número
+      const sortedHeats = [...filteredHeats].sort((a, b) => a.heat_number - b.heat_number);
+
+      sortedHeats.forEach(heat => {
+        const entries = allHeatEntries.get(heat.id) || [];
+        const categoryInfo = categories.find(c => c.id === heat.category_id);
+        const wodInfo = wods.find(w => w.id === heat.wod_id);
+        const scheduledTime = heat.scheduled_time 
+          ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+          : '--:--';
+
+        htmlContent += `
+          <div class="heat">
+            <div class="heat-header">
+              <p class="heat-title">BATERIA ${heat.heat_number}</p>
+              <p class="heat-info">${categoryInfo?.name || ''} - ${wodInfo?.name || ''}</p>
+              <p class="heat-info">Horário: ${scheduledTime} | TimeCap: ${wodInfo?.time_cap || '--:--'}</p>
+            </div>
+        `;
+
+        entries.forEach((entry, idx) => {
+          const reg = registrations.find(r => r.id === entry.registration_id);
+          const participantName = reg?.team_name || reg?.athlete_name || 'Aguardando';
+          
+          htmlContent += `
+            <div class="participant">
+              <span class="lane">Raia ${entry.lane_number}:</span>
+              <span>${participantName}</span>
+            </div>
+          `;
+        });
+
+        htmlContent += `</div>`;
+      });
+
+      htmlContent += `
+        </body>
+        </html>
+      `;
+
+      // Criar um Blob e fazer download
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `baterias-${selectedChampionship?.name || 'campeonato'}-${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Arquivo HTML gerado! Abra e imprima como PDF no navegador (Ctrl+P)");
+    } catch (error: any) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Erro ao exportar baterias");
     }
   };
 
@@ -2279,15 +2344,25 @@ export default function HeatsNew() {
 
                   <div className="flex gap-2 ml-auto">
                     {filteredHeats.length > 0 && (
-                      <Button 
-                        onClick={handleRemoveSelectedHeats}
-                        variant="destructive"
-                        size="sm"
-                        disabled={selectedHeats.size === 0}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Excluir Selecionadas
-                      </Button>
+                      <>
+                        <Button 
+                          onClick={handleExportPDF}
+                          variant="default"
+                          size="sm"
+                        >
+                          <FileDown className="w-4 h-4 mr-2" />
+                          Exportar PDF
+                        </Button>
+                        <Button 
+                          onClick={handleRemoveSelectedHeats}
+                          variant="destructive"
+                          size="sm"
+                          disabled={selectedHeats.size === 0}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Excluir Selecionadas
+                        </Button>
+                      </>
                     )}
                     
                     <Button 
