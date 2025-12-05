@@ -484,7 +484,7 @@ export default function Leaderboard() {
               </SelectContent>
             </Select>
           </div>
-          {leaderboard.length > 0 && (
+          {selectedCategory && (
             <div className="text-sm text-muted-foreground">
               {leaderboard.length} participantes
             </div>
@@ -492,7 +492,7 @@ export default function Leaderboard() {
         </div>
       </Card>
 
-      {selectedCategory && leaderboard.length > 0 && (
+      {selectedCategory && (
         <>
           {/* Versão Desktop - Tabela completa */}
           <Card className="shadow-card overflow-hidden hidden md:block">
@@ -505,10 +505,6 @@ export default function Leaderboard() {
                   <TableHead className="min-w-[200px] sticky left-[84px] bg-muted/50 z-10">Atleta/Time</TableHead>
                   <TableHead className="text-center">Pontos</TableHead>
                   {wods
-                    .filter(wod => {
-                      // Verificar se há resultados para este WOD na categoria selecionada
-                      return wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory);
-                    })
                     .sort((a, b) => (a.order_num || 0) - (b.order_num || 0))
                     .map(wod => (
                       <TableHead key={wod.id} className="text-center min-w-[80px]">
@@ -522,11 +518,8 @@ export default function Leaderboard() {
               </TableHeader>
               <TableBody>
                 {leaderboard.map((entry) => {
-                  // Obter WODs com resultados para esta categoria, ordenados por order_num
-                  const wodsWithResults = wods
-                    .filter(wod => 
-                      wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory)
-                    )
+                  // Obter TODOS os WODs ordenados por order_num (não apenas os com resultados)
+                  const allWodsSorted = wods
                     .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
                   
                   return (
@@ -544,7 +537,7 @@ export default function Leaderboard() {
                       </TableCell>
                       <TableCell className="font-semibold text-sm sticky left-[148px] bg-card z-10 min-w-[200px]">
                         {entry.participantName}
-                        {entry.position === 1 && (
+                        {entry.position === 1 && entry.totalPoints > 0 && (
                           <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                             LÍDER
                           </span>
@@ -560,9 +553,9 @@ export default function Leaderboard() {
                           </span>
                         </div>
                       </TableCell>
-                      {wodsWithResults.map(wod => {
+                      {allWodsSorted.map(wod => {
                         const result = entry.wodResults.find(r => r.wod_id === wod.id);
-                        const position = result?.position;
+                        const position = result?.position || 0;
                         const points = result?.points || 0;
                         const status = result?.status;
                         const resultValue = result?.result;
@@ -599,7 +592,11 @@ export default function Leaderboard() {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-sm font-bold text-muted-foreground">0</span>
+                                <span className="text-xs text-muted-foreground">0pts</span>
+                                <span className="text-xs text-muted-foreground">0</span>
+                              </div>
                             )}
                           </TableCell>
                         );
@@ -616,10 +613,8 @@ export default function Leaderboard() {
           <div className="md:hidden space-y-3">
             <Accordion type="multiple" className="w-full">
               {leaderboard.map((entry) => {
-                const wodsWithResults = wods
-                  .filter(wod => 
-                    wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory)
-                  )
+                // Obter TODOS os WODs ordenados por order_num (não apenas os com resultados)
+                const allWodsSorted = wods
                   .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
 
                 return (
@@ -633,7 +628,7 @@ export default function Leaderboard() {
                           <div className="flex-1 min-w-0">
                             <div className="font-semibold text-sm truncate">
                               {entry.participantName}
-                              {entry.position === 1 && (
+                              {entry.position === 1 && entry.totalPoints > 0 && (
                                 <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                                   LÍDER
                                 </span>
@@ -653,9 +648,9 @@ export default function Leaderboard() {
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="pt-2 space-y-3 pb-2">
-                        {wodsWithResults.map(wod => {
+                        {allWodsSorted.map(wod => {
                           const result = entry.wodResults.find(r => r.wod_id === wod.id);
-                          const position = result?.position;
+                          const position = result?.position || 0;
                           const points = result?.points || 0;
                           const status = result?.status;
                           const resultValue = result?.result;
@@ -681,7 +676,7 @@ export default function Leaderboard() {
                                     <span className="text-xs text-destructive">DNF</span>
                                     <span className="text-xs text-muted-foreground">{points}pts</span>
                                   </div>
-                                ) : position ? (
+                                ) : position > 0 ? (
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className={`text-sm font-bold ${
                                       position === 1 ? 'text-accent' :
@@ -696,7 +691,11 @@ export default function Leaderboard() {
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-bold text-muted-foreground">0</span>
+                                    <span className="text-xs text-muted-foreground">0pts</span>
+                                    <span className="text-xs text-muted-foreground">0</span>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -710,15 +709,6 @@ export default function Leaderboard() {
             </Accordion>
           </div>
         </>
-      )}
-
-      {selectedCategory && leaderboard.length === 0 && (
-        <Card className="p-12 text-center shadow-card">
-          <Trophy className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            Nenhum resultado lançado para esta categoria ainda.
-          </p>
-        </Card>
       )}
     </div>
   );
