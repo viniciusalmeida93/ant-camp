@@ -14,6 +14,7 @@ interface Heat {
   id: string;
   heat_number: number;
   scheduled_time: string | null;
+  custom_name?: string | null; // ADICIONAR: nome customizado da bateria
   category_id: string;
   category_name: string;
   category_order?: number; // Ordem da categoria (order_index)
@@ -26,6 +27,7 @@ interface Heat {
     participant_name: string;
     lane_number: number | null;
     category_id?: string; // Categoria do participante
+    category_name?: string; // ADICIONAR: nome da categoria do participante
   }>;
   participant_categories?: string[]; // Categorias presentes na bateria (para baterias intercaladas)
 }
@@ -363,19 +365,21 @@ export default function PublicHeats() {
           
           console.log("Formatando bateria:", heat.id, "WOD:", wodName, "Ordem WOD:", wodOrder, "Categoria:", categoryName, "ID Categoria:", heat.category_id, "Ordem Categoria:", categoryOrder, "Dia:", dayNumber, "Entries:", entries.length, "Categorias presentes:", Array.from(heatCategories));
           
-          // Mapear participantes com mais detalhes
+          // Mapear participantes com mais detalhes (incluindo nome da categoria)
           const participants = entries
             .filter((entry: any) => entry.registrations) // Filtrar entries sem registration
             .map((entry: any) => {
               const reg = entry.registrations;
               // Para times, usar team_name; para individuais, usar athlete_name
               const participantName = reg.team_name || reg.athlete_name || 'Desconhecido';
-              console.log("Participante mapeado:", participantName, "Lane:", entry.lane_number, "Categoria:", reg.category_id);
+              const participantCategoryName = categoriesMap.get(reg.category_id) || '';
+              console.log("Participante mapeado:", participantName, "Lane:", entry.lane_number, "Categoria:", reg.category_id, "Nome categoria:", participantCategoryName);
               return {
                 participant_id: entry.registration_id,
                 participant_name: participantName,
                 lane_number: entry.lane_number,
                 category_id: reg.category_id, // Adicionar category_id do participante
+                category_name: participantCategoryName, // ADICIONAR: nome da categoria
               };
             })
             .sort((a, b) => (a.lane_number || 0) - (b.lane_number || 0)); // Ordenar por raia
@@ -386,6 +390,7 @@ export default function PublicHeats() {
             id: heat.id,
             heat_number: heat.heat_number,
             scheduled_time: heat.scheduled_time,
+            custom_name: heat.custom_name, // ADICIONAR: nome customizado
             category_id: heat.category_id,
             category_name: categoryName,
             category_order: categoryOrder, // Adicionar order_index da categoria
@@ -676,11 +681,8 @@ export default function PublicHeats() {
                       <CardTitle className="text-lg sm:text-xl truncate">
                         Bateria {heat.heat_number}
                       </CardTitle>
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                        {heat.category_name}
-                      </p>
-                      <p className="text-sm sm:text-base font-semibold truncate">
-                        {heat.wod_name}
+                      <p className="text-xs sm:text-sm font-semibold text-foreground">
+                        {heat.custom_name || `${heat.category_name} - ${heat.wod_name}`}
                       </p>
                     </div>
                     {isNextHeat && (
@@ -726,7 +728,10 @@ export default function PublicHeats() {
                           <span className="font-semibold text-xs sm:text-sm min-w-[1.5rem] sm:min-w-8 text-center bg-primary/10 text-primary rounded px-1">
                             {participant.lane_number || idx + 1}
                           </span>
-                          <span className="text-xs sm:text-sm font-medium truncate flex-1" title={participant.participant_name}>
+                          <span className="text-xs sm:text-sm font-medium truncate flex-1" title={`${participant.category_name ? participant.category_name + ' - ' : ''}${participant.participant_name}`}>
+                            {participant.category_name && (
+                              <span className="text-muted-foreground">{participant.category_name} - </span>
+                            )}
                             {participant.participant_name || 'Sem nome'}
                           </span>
                         </div>
