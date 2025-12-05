@@ -209,13 +209,15 @@ export default function HeatsNew() {
         .select("*")
         .eq("championship_id", selectedChampionship.id);
 
-      if (selectedCategory && selectedWOD) {
+      // Só aplicar filtros se não for 'all'
+      if (selectedCategory && selectedCategory !== 'all' && selectedWOD && selectedWOD !== 'all') {
         query = query.eq("category_id", selectedCategory).eq("wod_id", selectedWOD);
-      } else if (selectedCategory) {
+      } else if (selectedCategory && selectedCategory !== 'all') {
         query = query.eq("category_id", selectedCategory);
-      } else if (selectedWOD) {
+      } else if (selectedWOD && selectedWOD !== 'all') {
         query = query.eq("wod_id", selectedWOD);
       }
+      // Se ambos forem 'all' ou vazios, não aplica filtro (mostra todas)
 
       const { data: heatsData, error: heatsError } = await query.order("heat_number");
 
