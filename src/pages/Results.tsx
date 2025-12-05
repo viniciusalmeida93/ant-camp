@@ -256,7 +256,7 @@ export default function Results() {
         toast.success("Todos os resultados foram removidos");
         setSaving(false);
         // Recarregar resultados para limpar a interface
-        await loadResults();
+        await loadExistingResults();
         
         // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
         console.log('📢 Disparando evento para atualizar leaderboard...');
