@@ -484,12 +484,16 @@ export default function WODs() {
     }
   }, [editingWOD]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>, publish: boolean = false) => {
-    e.preventDefault();
+  const handleSubmit = async (publish: boolean = false) => {
+    if (!formRef.current) {
+      toast.error("Formulário não encontrado");
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const form = e.target as HTMLFormElement;
+      const form = formRef.current;
       const formData = new FormData(form);
       const applyAll = applyToAllCategories;
       
@@ -807,7 +811,7 @@ export default function WODs() {
             <DialogHeader>
               <DialogTitle>{editingWOD ? 'Editar' : 'Criar'} WOD</DialogTitle>
             </DialogHeader>
-            <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+            <form ref={formRef} onSubmit={(e) => { e.preventDefault(); }} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nome do WOD *</Label>
                 <Input 
@@ -1036,19 +1040,7 @@ export default function WODs() {
                 <Button 
                   type="button" 
                   variant="outline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const form = formRef.current;
-                    if (form) {
-                      const formEvent = new Event('submit', { bubbles: true, cancelable: true });
-                      const syntheticEvent = Object.assign(formEvent, {
-                        preventDefault: () => formEvent.preventDefault(),
-                        target: form,
-                        currentTarget: form,
-                      });
-                      handleSubmit(syntheticEvent as any, false);
-                    }
-                  }}
+                  onClick={() => handleSubmit(false)}
                   className="flex-1" 
                   disabled={saving}
                 >
@@ -1064,19 +1056,7 @@ export default function WODs() {
                 </Button>
                 <Button 
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const form = formRef.current;
-                    if (form) {
-                      const formEvent = new Event('submit', { bubbles: true, cancelable: true });
-                      const syntheticEvent = Object.assign(formEvent, {
-                        preventDefault: () => formEvent.preventDefault(),
-                        target: form,
-                        currentTarget: form,
-                      });
-                      handleSubmit(syntheticEvent as any, true);
-                    }
-                  }}
+                  onClick={() => handleSubmit(true)}
                   className="flex-1" 
                   disabled={saving}
                 >
