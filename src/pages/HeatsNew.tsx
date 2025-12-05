@@ -75,6 +75,8 @@ export default function HeatsNew() {
   const [championshipDays, setChampionshipDays] = useState<any[]>([]);
   const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(0);
   const [categoryIntervalMinutes, setCategoryIntervalMinutes] = useState<number>(0);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [selectedDayForExport, setSelectedDayForExport] = useState<string>('all');
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -869,8 +871,47 @@ export default function HeatsNew() {
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
+      // Buscar mapeamento de WODs por dia
+      const { data: dayWodsData } = await supabase
+        .from("championship_day_wods")
+        .select("championship_day_id, wod_id, championship_days(day_number)")
+        .eq("championship_days.championship_id", selectedChampionship?.id);
+
+      // Criar mapa de WOD -> Dia
+      const wodToDayMap = new Map<string, number>();
+      if (dayWodsData) {
+        dayWodsData.forEach((dw: any) => {
+          if (dw.championship_days && dw.wod_id) {
+            wodToDayMap.set(dw.wod_id, dw.championship_days.day_number);
+          }
+        });
+      }
+
+      // Filtrar baterias por dia selecionado
+      let heatsToExport = [...filteredHeats];
+      if (selectedDayForExport !== 'all') {
+        const dayNum = parseInt(selectedDayForExport);
+        heatsToExport = heatsToExport.filter(heat => {
+          const heatDay = wodToDayMap.get(heat.wod_id) || 1;
+          return heatDay === dayNum;
+        });
+      }
+
+      if (heatsToExport.length === 0) {
+        toast.error("Nenhuma bateria encontrada para exportar");
+        setShowExportDialog(false);
+        return;
+      }
+
+      // Ordenar baterias por número
+      const sortedHeats = heatsToExport.sort((a, b) => a.heat_number - b.heat_number);
+
+      const dayLabel = selectedDayForExport === 'all' 
+        ? 'Todos os Dias' 
+        : `Dia ${selectedDayForExport}`;
+
       // Criar conteúdo do PDF como HTML
       let htmlContent = `
         <!DOCTYPE html>
@@ -881,6 +922,7 @@ export default function HeatsNew() {
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
             h1 { text-align: center; color: #333; }
+            h2 { text-align: center; color: #666; font-size: 18px; }
             .heat { page-break-inside: avoid; margin-bottom: 30px; border: 2px solid #333; padding: 15px; }
             .heat-header { background: #e63946; color: white; padding: 10px; margin: -15px -15px 15px -15px; }
             .heat-title { font-size: 20px; font-weight: bold; margin: 0; }
@@ -892,11 +934,9 @@ export default function HeatsNew() {
         </head>
         <body>
           <h1>Baterias - ${selectedChampionship?.name || 'Campeonato'}</h1>
+          <h2>${dayLabel}</h2>
           <p style="text-align: center; color: #666;">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
       `;
-
-      // Ordenar baterias por número
-      const sortedHeats = [...filteredHeats].sort((a, b) => a.heat_number - b.heat_number);
 
       sortedHeats.forEach(heat => {
         const entries = allHeatEntries.get(heat.id) || [];
@@ -906,11 +946,15 @@ export default function HeatsNew() {
           ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
           : '--:--';
 
+        // Usar custom_name se existir, senão usar o padrão (igual na tela)
+        const heatDisplayName = heat.custom_name || 
+          (categoryInfo && wodInfo ? `${categoryInfo.name} - ${wodInfo.name}` : `BATERIA ${heat.heat_number}`);
+
         htmlContent += `
           <div class="heat">
             <div class="heat-header">
               <p class="heat-title">BATERIA ${heat.heat_number}</p>
-              <p class="heat-info">${categoryInfo?.name || ''} - ${wodInfo?.name || ''}</p>
+              <p class="heat-info">${heatDisplayName}</p>
               <p class="heat-info">Horário: ${scheduledTime} | TimeCap: ${wodInfo?.time_cap || '--:--'}</p>
             </div>
         `;
@@ -940,13 +984,14 @@ export default function HeatsNew() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `baterias-${selectedChampionship?.name || 'campeonato'}-${new Date().toISOString().split('T')[0]}.html`;
+      link.download = `baterias-${selectedChampionship?.name || 'campeonato'}-${dayLabel.replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.html`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
       toast.success("Arquivo HTML gerado! Abra e imprima como PDF no navegador (Ctrl+P)");
+      setShowExportDialog(false);
     } catch (error: any) {
       console.error("Error exporting PDF:", error);
       toast.error("Erro ao exportar baterias");
@@ -2377,7 +2422,7 @@ export default function HeatsNew() {
                     {filteredHeats.length > 0 && (
                       <>
                         <Button 
-                          onClick={handleExportPDF}
+                          onClick={() => setShowExportDialog(true)}
                           variant="default"
                           size="sm"
                         >
@@ -2989,6 +3034,59 @@ export default function HeatsNew() {
             </Button>
             <Button onClick={handleCreateHeat} disabled={!editHeatData.category_id || !editHeatData.wod_id}>
               Criar Bateria
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Exportação de PDF */}
+      <Dialog open={showExportDialog} onOpenChange={(open) => !open && setShowExportDialog(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Exportar Baterias em PDF</DialogTitle>
+            <DialogDescription>
+              Selecione qual dia deseja exportar
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="export-day">Dia do Campeonato</Label>
+              <Select 
+                value={selectedDayForExport} 
+                onValueChange={setSelectedDayForExport}
+              >
+                <SelectTrigger id="export-day">
+                  <SelectValue placeholder="Selecione o dia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Dias</SelectItem>
+                  {championshipDays.map(day => (
+                    <SelectItem key={day.id} value={day.day_number.toString()}>
+                      Dia {day.day_number} - {new Date(day.date).toLocaleDateString('pt-BR')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm">
+                <strong>Formato:</strong> HTML (pronto para impressão em PDF)
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Após baixar, abra o arquivo no navegador e pressione Ctrl+P para salvar como PDF
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleExportPDF}>
+              <FileDown className="w-4 h-4 mr-2" />
+              Gerar PDF
             </Button>
           </DialogFooter>
         </DialogContent>
