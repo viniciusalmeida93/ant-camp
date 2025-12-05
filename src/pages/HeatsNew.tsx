@@ -50,7 +50,7 @@ export default function HeatsNew() {
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [athletesPerHeat, setAthletesPerHeat] = useState<number>(4);
   const [startTime, setStartTime] = useState<string>('09:00');
-  const [transitionTime, setTransitionTime] = useState<number>(4);
+  const [transitionTime, setTransitionTime] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [allHeatEntries, setAllHeatEntries] = useState<Map<string, any[]>>(new Map());
   const [savingEdits, setSavingEdits] = useState(false);
@@ -72,8 +72,8 @@ export default function HeatsNew() {
     time_cap: '',
   });
   const [championshipDays, setChampionshipDays] = useState<any[]>([]);
-  const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(10);
-  const [categoryIntervalMinutes, setCategoryIntervalMinutes] = useState<number>(2);
+  const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(0);
+  const [categoryIntervalMinutes, setCategoryIntervalMinutes] = useState<number>(0);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -156,10 +156,24 @@ export default function HeatsNew() {
       setRegistrations(regsResult.data || []);
       setChampionshipDays(daysResult.data || []);
       
-      // Carregar intervalo entre provas do primeiro dia (ou usar padrão)
-      if (daysResult.data && daysResult.data.length > 0) {
-        const firstDay = daysResult.data[0];
-        setWodIntervalMinutes(firstDay.wod_interval_minutes || 10);
+      // Carregar configurações de intervalos do campeonato
+      const { data: champConfig } = await supabase
+        .from("championships")
+        .select("transition_time_minutes, category_interval_minutes, wod_interval_minutes")
+        .eq("id", selectedChampionship.id)
+        .single();
+      
+      // Carregar valores salvos ou usar 0 como padrão
+      if (champConfig) {
+        setTransitionTime(champConfig.transition_time_minutes || 0);
+        setCategoryIntervalMinutes(champConfig.category_interval_minutes || 0);
+        setWodIntervalMinutes(champConfig.wod_interval_minutes || 0);
+      } else {
+        // Se não houver configuração, tentar carregar do primeiro dia (compatibilidade)
+        if (daysResult.data && daysResult.data.length > 0) {
+          const firstDay = daysResult.data[0];
+          setWodIntervalMinutes(firstDay.wod_interval_minutes || 0);
+        }
       }
     } catch (error: any) {
       console.error("Error loading data:", error);
@@ -527,6 +541,12 @@ export default function HeatsNew() {
     if (!selectedChampionship) return;
 
     try {
+      // Salvar valor no banco
+      await supabase
+        .from("championships")
+        .update({ transition_time_minutes: transitionTime })
+        .eq("id", selectedChampionship.id);
+
       // Aplicar transição a todas as baterias recalculando horários
       const { data: allHeats } = await supabase
         .from("heats")
@@ -535,7 +555,7 @@ export default function HeatsNew() {
         .order("heat_number");
 
       if (!allHeats || allHeats.length === 0) {
-        toast.error("Nenhuma bateria para aplicar transição");
+        toast.success(`Transição de ${transitionTime} minutos salva!`);
         return;
       }
 
@@ -567,7 +587,7 @@ export default function HeatsNew() {
         currentTime = new Date(currentTime.getTime() + (wodDuration * 60000) + (transitionTime * 60000));
       }
 
-      toast.success(`Transição de ${transitionTime} minutos aplicada em todas as baterias!`);
+      toast.success(`Transição de ${transitionTime} minutos aplicada e salva!`);
       await loadHeats();
     } catch (error: any) {
       console.error("Error applying transition:", error);
@@ -576,24 +596,52 @@ export default function HeatsNew() {
   };
 
   const handleApplyWodInterval = async () => {
-    if (!selectedChampionship || championshipDays.length === 0) {
-      toast.error("Configure os dias do campeonato primeiro");
-      return;
-    }
+    if (!selectedChampionship) return;
 
     try {
-      // Atualizar todos os dias com o novo intervalo
-      for (const day of championshipDays) {
-        await supabase
-          .from("championship_days")
-          .update({ wod_interval_minutes: wodIntervalMinutes })
-          .eq("id", day.id);
+      // Salvar valor no banco (tanto em championships quanto em championship_days para compatibilidade)
+      await supabase
+        .from("championships")
+        .update({ wod_interval_minutes: wodIntervalMinutes })
+        .eq("id", selectedChampionship.id);
+
+      // Atualizar todos os dias com o novo intervalo (compatibilidade)
+      if (championshipDays.length > 0) {
+        for (const day of championshipDays) {
+          await supabase
+            .from("championship_days")
+            .update({ wod_interval_minutes: wodIntervalMinutes })
+            .eq("id", day.id);
+        }
       }
 
-      toast.success(`Intervalo entre provas de ${wodIntervalMinutes} minutos aplicado!`);
+      // Recalcular horários
+      await calculateAllHeatsSchedule();
+
+      toast.success(`Intervalo entre provas de ${wodIntervalMinutes} minutos aplicado e salvo!`);
     } catch (error: any) {
       console.error("Error applying wod interval:", error);
       toast.error("Erro ao aplicar intervalo entre provas");
+    }
+  };
+
+  const handleApplyCategoryInterval = async () => {
+    if (!selectedChampionship) return;
+
+    try {
+      // Salvar valor no banco
+      await supabase
+        .from("championships")
+        .update({ category_interval_minutes: categoryIntervalMinutes })
+        .eq("id", selectedChampionship.id);
+
+      // Recalcular horários
+      await calculateAllHeatsSchedule();
+
+      toast.success(`Tempo entre categorias de ${categoryIntervalMinutes} minutos aplicado e salvo!`);
+    } catch (error: any) {
+      console.error("Error applying category interval:", error);
+      toast.error("Erro ao aplicar tempo entre categorias");
     }
   };
 
@@ -1967,9 +2015,9 @@ export default function HeatsNew() {
                     type="number"
                     min="0"
                     value={categoryIntervalMinutes}
-                    onChange={(e) => setCategoryIntervalMinutes(parseInt(e.target.value) || 2)}
+                    onChange={(e) => setCategoryIntervalMinutes(parseInt(e.target.value) || 0)}
                   />
-                  <Button onClick={calculateAllHeatsSchedule} size="sm">
+                  <Button onClick={handleApplyCategoryInterval} size="sm">
                     APLICAR
                   </Button>
                 </div>
