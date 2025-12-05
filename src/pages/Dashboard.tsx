@@ -221,7 +221,7 @@ export default function Dashboard() {
 
       if (data) {
         setScheduleConfig({
-          startTime: '08:00', // Não usado mais, cada dia tem seu próprio horário
+          startTime: '', // Não usado mais, cada dia tem seu próprio horário
           breakIntervalMinutes: 5, // Valor padrão, não usado mais (cada dia tem seu próprio intervalo)
           enableBreak: data.enable_break || false,
           breakDurationMinutes: data.break_duration_minutes || 30,
@@ -602,7 +602,11 @@ export default function Dashboard() {
               dayStartTime = day.start_time;
             }
           } else {
-            dayStartTime = scheduleConfig.startTime || '08:00';
+            dayStartTime = day.start_time || ''; // Não usar valor padrão, apenas o que está configurado
+            if (!dayStartTime) {
+              console.log(`⚠️ Dia ${day.day_number} não tem horário de início configurado. Pulando cálculo automático.`);
+              continue; // Pular este dia se não tiver horário configurado
+            }
           }
           console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
         }
@@ -755,7 +759,12 @@ export default function Dashboard() {
         // Usar o primeiro dia ou criar um horário base
         const firstDay = championshipDays.length > 0 ? championshipDays[0] : null;
         const baseDate = firstDay?.date || selectedChampionship.date;
-        let baseStartTime = firstDay?.start_time || scheduleConfig.startTime || '08:00';
+        let baseStartTime = firstDay?.start_time || '';
+        if (!baseStartTime) {
+          console.log('⚠️ Nenhum horário de início configurado. Não é possível calcular horários automaticamente.');
+          toast.warning('Configure o horário de início nos dias do campeonato antes de calcular.');
+          return;
+        }
         
         // Garantir formato HH:MM
         if (typeof baseStartTime === 'string' && baseStartTime.includes(':')) {

@@ -49,7 +49,7 @@ export default function HeatsNew() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [athletesPerHeat, setAthletesPerHeat] = useState<number>(0);
-  const [startTime, setStartTime] = useState<string>('09:00');
+  const [startTime, setStartTime] = useState<string>('');
   const [transitionTime, setTransitionTime] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [allHeatEntries, setAllHeatEntries] = useState<Map<string, any[]>>(new Map());
@@ -639,10 +639,10 @@ export default function HeatsNew() {
         }
       }
 
-      // Recalcular horários
-      await calculateAllHeatsSchedule();
+      // NÃO recalcular horários automaticamente - apenas salvar configuração
+      // O usuário deve usar o botão de gerar baterias ou editar manualmente
 
-      toast.success(`Intervalo entre provas de ${wodIntervalMinutes} minutos aplicado e salvo!`);
+      toast.success(`Intervalo entre provas de ${wodIntervalMinutes} minutos salvo!`);
     } catch (error: any) {
       console.error("Error applying wod interval:", error);
       toast.error("Erro ao aplicar intervalo entre provas");
@@ -659,10 +659,10 @@ export default function HeatsNew() {
         .update({ category_interval_minutes: categoryIntervalMinutes })
         .eq("id", selectedChampionship.id);
 
-      // Recalcular horários
-      await calculateAllHeatsSchedule();
+      // NÃO recalcular horários automaticamente - apenas salvar configuração
+      // O usuário deve usar o botão de gerar baterias ou editar manualmente
 
-      toast.success(`Tempo entre categorias de ${categoryIntervalMinutes} minutos aplicado e salvo!`);
+      toast.success(`Tempo entre categorias de ${categoryIntervalMinutes} minutos salvo!`);
     } catch (error: any) {
       console.error("Error applying category interval:", error);
       toast.error("Erro ao aplicar tempo entre categorias");
@@ -985,21 +985,39 @@ export default function HeatsNew() {
         });
       }
 
-      const baseDate = championshipDays.length > 0 
-        ? new Date(championshipDays[0].date)
-        : new Date();
+      // IMPORTANTE: Respeitar horários manuais existentes
+      // Se a primeira bateria já tem horário definido, usar ele
+      // Caso contrário, só calcular se startTime estiver definido
+      const firstHeat = allHeats[0];
+      let currentTime: Date | null = null;
+      
+      if (firstHeat.scheduled_time) {
+        // Respeitar horário manual da primeira bateria
+        currentTime = new Date(firstHeat.scheduled_time);
+        console.log('✅ Usando horário manual da primeira bateria:', currentTime.toLocaleTimeString('pt-BR'));
+      } else if (startTime && startTime.trim() !== '') {
+        // Só calcular se startTime estiver definido pelo usuário
+        const baseDate = championshipDays.length > 0 
+          ? new Date(championshipDays[0].date)
+          : new Date();
+        const [startHours, startMins] = startTime.split(':');
+        currentTime = new Date(
+          baseDate.getFullYear(),
+          baseDate.getMonth(),
+          baseDate.getDate(),
+          parseInt(startHours),
+          parseInt(startMins),
+          0,
+          0
+        );
+        console.log('✅ Usando startTime do campo:', currentTime.toLocaleTimeString('pt-BR'));
+      } else {
+        // Se não há horário definido nem startTime, não recalcular automaticamente
+        console.log('⚠️ Nenhum horário definido. Não recalculando horários automaticamente.');
+        return;
+      }
 
-      // Hora de início (PRIMEIRA BATERIA começa exatamente nessa hora)
-      const [startHours, startMins] = startTime.split(':');
-      let currentTime = new Date(
-        baseDate.getFullYear(),
-        baseDate.getMonth(),
-        baseDate.getDate(),
-        parseInt(startHours),
-        parseInt(startMins),
-        0,
-        0
-      );
+      if (!currentTime) return;
 
       let previousWodId: string | null = null;
       let previousCategoryId: string | null = null;
@@ -1008,6 +1026,17 @@ export default function HeatsNew() {
       for (let i = 0; i < allHeats.length; i++) {
         const heat = allHeats[i];
         const isFirstHeat = i === 0;
+
+        // Se a bateria já tem horário manual e não é a primeira, pular (respeitar horário manual)
+        if (!isFirstHeat && heat.scheduled_time) {
+          // Manter horário manual existente e atualizar currentTime para continuar cálculo
+          const existingTime = new Date(heat.scheduled_time);
+          currentTime = new Date(existingTime);
+          previousWodId = heat.wod_id;
+          previousCategoryId = heat.category_id;
+          console.log(`⏭️ Bateria ${heat.heat_number} tem horário manual, mantendo: ${currentTime.toLocaleTimeString('pt-BR')}`);
+          continue;
+        }
 
         if (!isFirstHeat) {
           // Calcular tempo até esta bateria
@@ -1069,13 +1098,16 @@ export default function HeatsNew() {
           }
         }
 
-        // Atualizar horário da bateria
-        await supabase
-          .from("heats")
-          .update({ scheduled_time: currentTime.toISOString() })
-          .eq("id", heat.id);
-
-        console.log(`Bateria ${heat.heat_number}: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        // Atualizar horário da bateria apenas se não tiver horário manual
+        if (!heat.scheduled_time || isFirstHeat) {
+          await supabase
+            .from("heats")
+            .update({ scheduled_time: currentTime.toISOString() })
+            .eq("id", heat.id);
+          console.log(`Bateria ${heat.heat_number}: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        } else {
+          console.log(`⏭️ Bateria ${heat.heat_number} mantém horário manual: ${new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        }
 
         previousWodId = heat.wod_id;
         previousCategoryId = heat.category_id;
@@ -1159,6 +1191,17 @@ export default function HeatsNew() {
       let wodsCompleted: string[] = [];
 
       for (const heat of followingHeats) {
+        // Se a bateria já tem horário manual, pular (respeitar horário manual)
+        if (heat.scheduled_time) {
+          // Manter horário manual existente e atualizar currentTime para continuar cálculo
+          const existingTime = new Date(heat.scheduled_time);
+          currentTime = new Date(existingTime);
+          previousWodId = heat.wod_id;
+          previousCategoryId = heat.category_id;
+          console.log(`⏭️ Bateria ${heat.heat_number} tem horário manual, mantendo: ${currentTime.toLocaleTimeString('pt-BR')}`);
+          continue;
+        }
+        
         // Verificar se mudou de WOD
         if (heat.wod_id !== previousWodId) {
           console.log(`Recálculo: Mudança de WOD detectada`);
@@ -1201,11 +1244,16 @@ export default function HeatsNew() {
           console.log(`  + ${currentTransitionTime} min (transição entre baterias)`);
         }
 
-        // Atualizar horário da bateria
-        await supabase
-          .from("heats")
-          .update({ scheduled_time: currentTime.toISOString() })
-          .eq("id", heat.id);
+        // Atualizar horário da bateria apenas se não tiver horário manual
+        if (!heat.scheduled_time) {
+          await supabase
+            .from("heats")
+            .update({ scheduled_time: currentTime.toISOString() })
+            .eq("id", heat.id);
+          console.log(`Bateria ${heat.heat_number} recalculada: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        } else {
+          console.log(`⏭️ Bateria ${heat.heat_number} mantém horário manual: ${new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        }
 
         previousWodId = heat.wod_id;
         previousCategoryId = heat.category_id;
@@ -1496,8 +1544,8 @@ export default function HeatsNew() {
           )
         ).then(async () => {
           await loadHeats(); // Sincronizar
-          await calculateAllHeatsSchedule();
-          toast.success("Baterias reorganizadas e horários recalculados!");
+          // NÃO recalcular horários automaticamente após drag and drop
+          toast.success("Baterias reorganizadas!");
         }).catch((error) => {
           console.error("Erro ao persistir:", error);
           loadHeats(); // Reverter
@@ -2403,11 +2451,11 @@ export default function HeatsNew() {
                         .eq("id", newHeats[i].id);
                     }
                     
-                    // Recarregar e recalcular horários
+                    // Recarregar baterias
                     await loadHeats();
-                    await calculateAllHeatsSchedule();
+                    // NÃO recalcular horários automaticamente após drag and drop
                     
-                    toast.success("Baterias reorganizadas e horários recalculados!");
+                    toast.success("Baterias reorganizadas!");
                   } catch (error) {
                     console.error("Erro ao reordenar baterias:", error);
                     toast.error("Erro ao reorganizar baterias");
