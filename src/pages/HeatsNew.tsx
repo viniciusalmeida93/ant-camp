@@ -262,8 +262,9 @@ export default function HeatsNew() {
 
   /**
    * Intercala as baterias para preencher todas as raias
-   * Reorganiza atletas/times entre baterias para maximizar ocupação
-   * Pode misturar categorias se necessário para preencher raias
+   * Reorganiza atletas/times entre baterias do MESMO WOD para maximizar ocupação
+   * Pode misturar categorias APENAS dentro do mesmo WOD
+   * NÃO recalcula horários (mantém os tempos intactos)
    */
   const handleIntercalateHeats = async () => {
     if (!selectedChampionship) {
@@ -273,7 +274,7 @@ export default function HeatsNew() {
 
     setGenerating(true);
     try {
-      // Buscar todas as baterias do campeonato
+      // Buscar todas as baterias do campeonato ordenadas por WOD e heat_number
       const { data: allHeats } = await supabase
         .from("heats")
         .select("*")
@@ -289,7 +290,7 @@ export default function HeatsNew() {
       // Buscar todas as entradas de baterias
       const { data: allEntries } = await supabase
         .from("heat_entries")
-        .select("*, registrations(*)")
+        .select("*")
         .in("heat_id", allHeats.map(h => h.id));
 
       if (!allEntries) {
@@ -307,21 +308,7 @@ export default function HeatsNew() {
         entriesByHeat.get(entry.heat_id)!.push(entry);
       });
 
-      // Coletar todos os participantes disponíveis (com suas categorias)
-      const allParticipants: Array<{ entry: any; categoryId: string; heatId: string }> = [];
-      
-      allHeats.forEach(heat => {
-        const entries = entriesByHeat.get(heat.id) || [];
-        entries.forEach(entry => {
-          allParticipants.push({
-            entry,
-            categoryId: heat.category_id,
-            heatId: heat.id,
-          });
-        });
-      });
-
-      // Agrupar baterias por WOD (para manter mesma categoria quando possível)
+      // Agrupar baterias por WOD
       const heatsByWod = new Map<string, any[]>();
       allHeats.forEach(heat => {
         if (!heatsByWod.has(heat.wod_id)) {
@@ -330,57 +317,53 @@ export default function HeatsNew() {
         heatsByWod.get(heat.wod_id)!.push(heat);
       });
 
-      // Reorganizar participantes para preencher todas as raias
-      let participantIndex = 0;
-      
+      // Processar CADA WOD separadamente
       for (const [wodId, wodHeats] of heatsByWod.entries()) {
-        // Ordenar baterias por heat_number
+        // Ordenar baterias deste WOD por heat_number
         const sortedHeats = [...wodHeats].sort((a, b) => a.heat_number - b.heat_number);
         
+        // Coletar TODOS os participantes deste WOD (de todas as categorias)
+        const wodParticipants: Array<{ entry: any; categoryId: string }> = [];
+        
+        sortedHeats.forEach(heat => {
+          const entries = entriesByHeat.get(heat.id) || [];
+          entries.forEach(entry => {
+            wodParticipants.push({
+              entry,
+              categoryId: heat.category_id,
+            });
+          });
+        });
+
+        // Criar um pool de participantes disponíveis para redistribuir
+        // Marcar quais já foram usados (usando registration_id como identificador único)
+        const usedRegistrationIds = new Set<string>();
+
+        // Redistribuir participantes nas baterias deste WOD
         for (const heat of sortedHeats) {
           const capacity = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
-          
-          // Coletar participantes para esta bateria
           const heatParticipants: any[] = [];
-          
-          // Primeiro, tentar usar participantes da mesma categoria
-          const sameCategoryParticipants = allParticipants.filter(
-            p => p.categoryId === heat.category_id && !heatParticipants.includes(p.entry)
-          );
-          
-          // Preencher com participantes da mesma categoria
-          for (let i = 0; i < Math.min(capacity, sameCategoryParticipants.length); i++) {
-            if (participantIndex < allParticipants.length) {
-              const participant = sameCategoryParticipants[i];
-              if (participant && !heatParticipants.includes(participant.entry)) {
-                heatParticipants.push(participant.entry);
-                participantIndex++;
-              }
+
+          // Primeiro, tentar preencher com participantes da mesma categoria
+          for (const participant of wodParticipants) {
+            if (heatParticipants.length >= capacity) break;
+            const regId = participant.entry.registration_id;
+            if (usedRegistrationIds.has(regId)) continue;
+            
+            if (participant.categoryId === heat.category_id) {
+              heatParticipants.push(participant.entry);
+              usedRegistrationIds.add(regId);
             }
           }
-          
+
           // Se ainda faltar, preencher com participantes de outras categorias (mesmo WOD)
-          const otherCategoryParticipants = allParticipants.filter(
-            p => p.categoryId !== heat.category_id && 
-                 p.entry.heat_id && 
-                 allHeats.find(h => h.id === p.entry.heat_id)?.wod_id === wodId &&
-                 !heatParticipants.includes(p.entry)
-          );
-          
-          while (heatParticipants.length < capacity && otherCategoryParticipants.length > 0) {
-            const participant = otherCategoryParticipants.shift();
-            if (participant) {
-              heatParticipants.push(participant.entry);
-            }
-          }
-          
-          // Se ainda faltar, usar qualquer participante disponível
-          while (heatParticipants.length < capacity && participantIndex < allParticipants.length) {
-            const participant = allParticipants[participantIndex];
-            if (participant && !heatParticipants.includes(participant.entry)) {
-              heatParticipants.push(participant.entry);
-            }
-            participantIndex++;
+          for (const participant of wodParticipants) {
+            if (heatParticipants.length >= capacity) break;
+            const regId = participant.entry.registration_id;
+            if (usedRegistrationIds.has(regId)) continue;
+            
+            heatParticipants.push(participant.entry);
+            usedRegistrationIds.add(regId);
           }
 
           // Deletar entradas antigas desta bateria
@@ -404,14 +387,11 @@ export default function HeatsNew() {
         }
       }
 
-      // Recarregar dados
+      // Recarregar dados (SEM recalcular horários - mantém os tempos intactos)
       await loadHeats();
       await loadHeatEntries();
       
-      // Recalcular horários após intercalação
-      await calculateAllHeatsSchedule();
-      
-      toast.success("Baterias intercaladas e horários recalculados!");
+      toast.success("Baterias intercaladas! Horários mantidos intactos.");
     } catch (error: any) {
       console.error("Erro ao intercalar baterias:", error);
       toast.error("Erro ao intercalar baterias");
