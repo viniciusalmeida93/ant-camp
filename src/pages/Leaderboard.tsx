@@ -53,6 +53,8 @@ export default function Leaderboard() {
   useEffect(() => {
     if (!selectedCategory) return;
 
+    console.log('👂 Configurando listener para categoria:', selectedCategory);
+
     const channel = supabase
       .channel(`wod_results_changes_${selectedCategory}`)
       .on(
@@ -64,16 +66,17 @@ export default function Leaderboard() {
           filter: `category_id=eq.${selectedCategory}`
         },
         (payload) => {
-          console.log('Mudança detectada em wod_results:', payload.eventType);
-          // Pequeno delay para garantir que a transação foi concluída
-          setTimeout(() => {
-            loadLeaderboard();
-          }, 100);
+          console.log('🔔 Mudança detectada em wod_results:', payload.eventType, payload);
+          // Forçar recarregamento imediato
+          loadLeaderboard();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Status do listener:', status);
+      });
 
     return () => {
+      console.log('🔇 Removendo listener');
       supabase.removeChannel(channel);
     };
   }, [selectedCategory]);
@@ -94,13 +97,18 @@ export default function Leaderboard() {
   useEffect(() => {
     const handleResultsUpdate = () => {
       if (selectedCategory) {
-        console.log('Evento customizado recebido: wod_results_updated');
+        console.log('🔔 Evento customizado recebido: wod_results_updated - Forçando recarregamento...');
+        // Forçar recarregamento imediato
         loadLeaderboard();
       }
     };
 
     window.addEventListener('wod_results_updated', handleResultsUpdate);
-    return () => window.removeEventListener('wod_results_updated', handleResultsUpdate);
+    console.log('👂 Listener de evento customizado configurado');
+    return () => {
+      window.removeEventListener('wod_results_updated', handleResultsUpdate);
+      console.log('🔇 Listener de evento customizado removido');
+    };
   }, [selectedCategory]);
 
   const checkAuth = async () => {
@@ -141,6 +149,8 @@ export default function Leaderboard() {
     if (!selectedCategory) return;
 
     try {
+      console.log('🔄 Carregando leaderboard para categoria:', selectedCategory);
+      
       // Criar mapa de nomes dos participantes
       const participantNames = new Map<string, string>();
       registrations.forEach(reg => {
@@ -167,7 +177,7 @@ export default function Leaderboard() {
         toast.warning("Configure a pontuação desta categoria na aba 'Pontuação' primeiro");
       }
 
-      // Carregar resultados da categoria
+      // SEMPRE buscar dados mais recentes do banco (sem cache)
       const { data: resultsData, error: resultsError } = await supabase
         .from("wod_results")
         .select("*")
@@ -175,6 +185,8 @@ export default function Leaderboard() {
         .order("created_at");
 
       if (resultsError) throw resultsError;
+      
+      console.log('📊 Resultados encontrados:', resultsData?.length || 0);
       
       // Verificar se os resultados têm pontos calculados
       const resultsWithoutPoints = (resultsData || []).filter(r => !r.points && !r.position && r.status !== 'dns' && r.status !== 'dnf');
@@ -255,19 +267,26 @@ export default function Leaderboard() {
         // Calcular leaderboard com resultados atualizados
         const entries = calculateLeaderboard(updatedResults || []);
         setLeaderboard(entries);
+        console.log('✅ Leaderboard atualizado com', entries.length, 'participantes');
       } else {
+        // Se não há resultados para recalcular, apenas atualizar
         setWodResults(resultsData || []);
-        // Calcular leaderboard
+        
+        // Calcular leaderboard (mesmo que vazio, mostra todos zerados)
         const entries = calculateLeaderboard(resultsData || []);
         setLeaderboard(entries);
+        console.log('✅ Leaderboard atualizado. Resultados:', resultsData?.length || 0, 'Participantes:', entries.length);
       }
     } catch (error: any) {
-      console.error("Error loading leaderboard:", error);
+      console.error("❌ Error loading leaderboard:", error);
       toast.error("Erro ao carregar leaderboard");
     }
   };
 
   const calculateLeaderboard = (results: any[]): LeaderboardEntry[] => {
+    console.log('📊 Calculando leaderboard. Resultados recebidos:', results.length);
+    console.log('👥 Total de registros da categoria:', registrations.filter(r => r.category_id === selectedCategory).length);
+    
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any[]>();
     
@@ -331,8 +350,10 @@ export default function Leaderboard() {
     });
     
     // Depois, adicionar participantes SEM resultados (zerados)
+    let participantsWithoutResults = 0;
     registrations.forEach(reg => {
       if (reg.category_id === selectedCategory && !processedRegIds.has(reg.id)) {
+        participantsWithoutResults++;
         entries.push({
           registrationId: reg.id,
           participantName: reg.team_name || reg.athlete_name,
@@ -347,6 +368,10 @@ export default function Leaderboard() {
         });
       }
     });
+    
+    console.log('📈 Participantes com resultados:', participantMap.size);
+    console.log('📉 Participantes sem resultados (zerados):', participantsWithoutResults);
+    console.log('📊 Total de participantes no leaderboard:', entries.length);
 
     // Ordenar e atribuir posições
     entries.sort((a, b) => {

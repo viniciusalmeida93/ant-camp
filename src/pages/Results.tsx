@@ -236,6 +236,8 @@ export default function Results() {
 
       // Se não há resultados para inserir, apenas deletar os existentes e finalizar
       if (newResults.length === 0) {
+        console.log('🗑️ Removendo todos os resultados para', selectedCategory, selectedWOD);
+        
         // Garantir que todos os resultados foram deletados
         if (existing && existing.length > 0) {
           const { error: finalDeleteError } = await supabase
@@ -245,20 +247,25 @@ export default function Results() {
             .eq("wod_id", selectedWOD);
           
           if (finalDeleteError) {
-            console.error("Erro ao deletar resultados:", finalDeleteError);
+            console.error("❌ Erro ao deletar resultados:", finalDeleteError);
             throw finalDeleteError;
           }
+          console.log('✅ Resultados deletados:', existing.length);
         }
         
         toast.success("Todos os resultados foram removidos");
         setSaving(false);
         // Recarregar resultados para limpar a interface
         await loadResults();
-        // Pequeno delay para garantir que o listener do leaderboard seja acionado
+        
+        // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
+        console.log('📢 Disparando evento para atualizar leaderboard...');
+        window.dispatchEvent(new CustomEvent('wod_results_updated'));
+        
+        // Também disparar novamente após um pequeno delay para garantir
         setTimeout(() => {
-          // Forçar atualização do leaderboard através de um evento customizado
           window.dispatchEvent(new CustomEvent('wod_results_updated'));
-        }, 200);
+        }, 500);
         return;
       }
 
@@ -327,10 +334,14 @@ export default function Results() {
       toast.success("Resultados salvos e pontuação calculada!");
       await loadExistingResults();
       
-      // Disparar evento para atualizar o leaderboard
+      // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
+      console.log('📢 Disparando evento para atualizar leaderboard após salvar...');
+      window.dispatchEvent(new CustomEvent('wod_results_updated'));
+      
+      // Também disparar novamente após um pequeno delay para garantir
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('wod_results_updated'));
-      }, 200);
+      }, 500);
     } catch (error: any) {
       console.error("Error saving results:", error);
       toast.error("Erro ao salvar resultados");
