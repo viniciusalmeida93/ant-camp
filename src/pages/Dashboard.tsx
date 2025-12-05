@@ -484,10 +484,11 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Calcular horários automaticamente após salvar
-      await handleCalculateSchedule();
+      // NÃO recalcular horários automaticamente - apenas salvar as configurações
+      // Os horários serão recalculados apenas quando necessário (ex: ao gerar baterias)
+      // Isso preserva os horários que o usuário já definiu manualmente
 
-      toast.success("Configuração salva e horários calculados automaticamente!");
+      toast.success("Configuração salva com sucesso!");
     } catch (error: any) {
       console.error("Error saving schedule config:", error);
       toast.error("Erro ao salvar configuração");
@@ -565,18 +566,40 @@ export default function Dashboard() {
         const dayWodsList = dayWods.get(day.day_number) || [];
         if (dayWodsList.length === 0) continue;
 
-        // Horário de início do dia (priorizar start_time do dia, senão usar o global)
-        // Converter start_time do formato TIME do PostgreSQL (HH:MM:SS) para HH:MM
+        // Verificar se já existe uma primeira bateria com horário definido para este dia
+        // Se existir, usar esse horário como ponto de partida (respeitando o horário manual do usuário)
+        const firstHeatOfDay = (allHeats || [])
+          .filter(h => {
+            const heatDay = dayWodsList.find(w => w.id === h.wod_id);
+            return heatDay !== undefined;
+          })
+          .sort((a, b) => a.heat_number - b.heat_number)[0];
+
         let dayStartTime: string;
-        if (day.start_time) {
-          if (typeof day.start_time === 'string' && day.start_time.includes(':')) {
-            const parts = day.start_time.split(':');
-            dayStartTime = `${parts[0]}:${parts[1]}`;
-          } else {
-            dayStartTime = day.start_time;
-          }
+        let useExistingFirstHeatTime = false;
+
+        if (firstHeatOfDay && firstHeatOfDay.scheduled_time) {
+          // Usar o horário da primeira bateria existente
+          const firstHeatDate = new Date(firstHeatOfDay.scheduled_time);
+          const hours = firstHeatDate.getHours().toString().padStart(2, '0');
+          const mins = firstHeatDate.getMinutes().toString().padStart(2, '0');
+          dayStartTime = `${hours}:${mins}`;
+          useExistingFirstHeatTime = true;
+          console.log(`Dia ${day.day_number}: Usando horário da primeira bateria existente: ${dayStartTime}`);
         } else {
-          dayStartTime = scheduleConfig.startTime || '08:00';
+          // Horário de início do dia (priorizar start_time do dia, senão usar o global)
+          // Converter start_time do formato TIME do PostgreSQL (HH:MM:SS) para HH:MM
+          if (day.start_time) {
+            if (typeof day.start_time === 'string' && day.start_time.includes(':')) {
+              const parts = day.start_time.split(':');
+              dayStartTime = `${parts[0]}:${parts[1]}`;
+            } else {
+              dayStartTime = day.start_time;
+            }
+          } else {
+            dayStartTime = scheduleConfig.startTime || '08:00';
+          }
+          console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
         }
         
         // Criar data em horário LOCAL (não UTC)
@@ -584,8 +607,6 @@ export default function Dashboard() {
         const [year, month, dayNum] = day.date.split('-');
         const startTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum), parseInt(hours), parseInt(mins), 0, 0);
         let currentTime = new Date(startTime);
-        
-        console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
 
         // Para cada WOD do dia (em ordem)
         for (let wodIndex = 0; wodIndex < dayWodsList.length; wodIndex++) {
