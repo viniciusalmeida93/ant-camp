@@ -825,7 +825,7 @@ export default function HeatsNew() {
 
   const handleRemoveFromHeat = async (entryId: string, heatId: string) => {
     try {
-      // Buscar info da entry antes de remover para debug
+      // Buscar info da entry antes de remover
       const entryToRemove = allChampionshipEntries.find(e => e.id === entryId);
       console.log('[DEBUG] Removendo entry:', entryId, 'registration_id:', entryToRemove?.registration_id);
       
@@ -837,12 +837,31 @@ export default function HeatsNew() {
 
       if (error) throw error;
 
+      // ATUALIZAR IMEDIATAMENTE o estado local ANTES de recarregar
+      // Isso garante que o time apareça instantaneamente na lista lateral
+      console.log('[DEBUG] Atualizando estado local - removendo entry do allChampionshipEntries');
+      setAllChampionshipEntries(prev => {
+        const newEntries = prev.filter(e => e.id !== entryId);
+        console.log('[DEBUG] allChampionshipEntries:', prev.length, '->', newEntries.length);
+        return newEntries;
+      });
+      
+      setHeatEntries(prev => prev.filter(e => e.id !== entryId));
+      
+      setAllHeatEntries(prev => {
+        const newMap = new Map(prev);
+        const currentEntries = newMap.get(heatId) || [];
+        newMap.set(heatId, currentEntries.filter(e => e.id !== entryId));
+        return newMap;
+      });
+
       toast.success("Atleta removido da bateria!");
       
-      // Recarregar TUDO para garantir sincronia
-      console.log('[DEBUG] Recarregando heats após remoção...');
-      await loadHeats();
-      console.log('[DEBUG] allChampionshipEntries após reload:', allChampionshipEntries.length);
+      // Recarregar em segundo plano para sincronizar com banco
+      console.log('[DEBUG] Recarregando dados em background...');
+      loadHeats().then(() => {
+        console.log('[DEBUG] Dados sincronizados com o banco');
+      });
     } catch (error: any) {
       console.error("Error removing from heat:", error);
       toast.error("Erro ao remover atleta da bateria");
