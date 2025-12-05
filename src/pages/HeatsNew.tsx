@@ -103,14 +103,11 @@ export default function HeatsNew() {
 
   useEffect(() => {
     const filteredHeats = heats.filter(h => {
-      if (selectedCategory && selectedWOD) {
-        return h.category_id === selectedCategory && h.wod_id === selectedWOD;
-      } else if (selectedCategory) {
-        return h.category_id === selectedCategory;
-      } else if (selectedWOD) {
-        return h.wod_id === selectedWOD;
-      }
-      return true;
+      // Se "all" estiver selecionado, não filtra por aquele critério
+      const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
+      const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
+      
+      return categoryFilter && wodFilter;
     });
       
     if (filteredHeats.length > 0 && heatEntries.length > 0) {
@@ -794,6 +791,22 @@ export default function HeatsNew() {
     } catch (error: any) {
       console.error("Error updating capacity:", error);
       toast.error("Erro ao atualizar capacidade");
+    }
+  };
+
+  const handleRemoveFromHeat = async (entryId: string, heatId: string) => {
+    try {
+      // Remover apenas da heat_entries (não exclui a inscrição)
+      await supabase
+        .from("heat_entries")
+        .delete()
+        .eq("id", entryId);
+
+      toast.success("Atleta removido da bateria!");
+      await loadHeats();
+    } catch (error: any) {
+      console.error("Error removing from heat:", error);
+      toast.error("Erro ao remover atleta da bateria");
     }
   };
 
@@ -1949,16 +1962,19 @@ export default function HeatsNew() {
       opacity: isDragging ? 0.5 : 1,
     };
 
+    const handleRemoveClick = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      await handleRemoveFromHeat(entry.id, heatId);
+    };
+
     return (
       <div
         ref={setNodeRef}
         style={style}
         className={`flex items-center gap-2 p-2 rounded border ${isDragging ? 'bg-muted' : 'bg-background'} hover:bg-accent/50 transition-colors`}
-        {...attributes}
-        {...listeners}
       >
-        <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div {...attributes} {...listeners} className="flex items-center gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing">
+          <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <span className="font-bold text-sm flex-shrink-0">{laneNumber}</span>
           <span className="text-sm truncate flex-1">{fullName}</span>
           {lbEntry && lbEntry.position && (
@@ -1967,6 +1983,15 @@ export default function HeatsNew() {
             </Badge>
           )}
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRemoveClick}
+          className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+          title="Remover da bateria"
+        >
+          <Trash2 className="w-3 h-3" />
+        </Button>
       </div>
     );
   }
@@ -2004,11 +2029,31 @@ export default function HeatsNew() {
 
   // Filtrar competidores por busca
   const filteredCompetitors = registrations.filter(reg => {
-    // Se nenhuma categoria selecionada, não mostra ninguém
-    if (!selectedCategory) return false;
+    // Se nenhuma categoria selecionada ou vazio, não mostra ninguém
+    if (!selectedCategory || selectedCategory === '') return false;
     
-    // Se "all" estiver selecionado, mostra todos
-    if (selectedCategory !== 'all' && reg.category_id !== selectedCategory) return false;
+    // Se "all" estiver selecionado, mostra todos (mas filtra os que já estão em baterias)
+    if (selectedCategory === 'all') {
+      // Verificar se o atleta já está em alguma bateria
+      const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
+        entries.some(e => e.registration_id === reg.id)
+      );
+      // Se está em bateria, não mostrar na lista lateral
+      if (isInHeat) return false;
+      
+      const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
+      return name.includes(searchTerm.toLowerCase());
+    }
+    
+    // Se categoria específica selecionada, filtrar por categoria
+    if (reg.category_id !== selectedCategory) return false;
+    
+    // Verificar se o atleta já está em alguma bateria
+    const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
+      entries.some(e => e.registration_id === reg.id)
+    );
+    // Se está em bateria, não mostrar na lista lateral
+    if (isInHeat) return false;
     
     const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
     return name.includes(searchTerm.toLowerCase());
