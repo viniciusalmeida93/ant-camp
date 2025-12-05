@@ -45,6 +45,7 @@ export default function HeatsNew() {
   const [wodResults, setWodResults] = useState<any[]>([]);
   const [heats, setHeats] = useState<any[]>([]);
   const [heatEntries, setHeatEntries] = useState<any[]>([]);
+  const [allChampionshipEntries, setAllChampionshipEntries] = useState<any[]>([]); // Todas as entries do campeonato (para verificar disponibilidade)
   
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
@@ -221,6 +222,30 @@ export default function HeatsNew() {
       if (heatsError) throw heatsError;
 
       setHeats(heatsData || []);
+
+      // SEMPRE carregar TODAS as entries do campeonato (para verificar disponibilidade)
+      // Primeiro buscar todas as baterias do campeonato
+      const { data: allChampionshipHeats } = await supabase
+        .from("heats")
+        .select("id")
+        .eq("championship_id", selectedChampionship.id);
+
+      if (allChampionshipHeats && allChampionshipHeats.length > 0) {
+        const allHeatIds = allChampionshipHeats.map(h => h.id);
+        const { data: allEntriesData, error: allEntriesError } = await supabase
+          .from("heat_entries")
+          .select("*")
+          .in("heat_id", allHeatIds)
+          .order("lane_number");
+
+        if (!allEntriesError && allEntriesData) {
+          setAllChampionshipEntries(allEntriesData);
+        } else {
+          setAllChampionshipEntries([]);
+        }
+      } else {
+        setAllChampionshipEntries([]);
+      }
 
       // Inicializar heatCapacities com os valores de athletes_per_heat de cada bateria
       if (heatsData && heatsData.length > 0) {
@@ -1796,10 +1821,8 @@ export default function HeatsNew() {
     const categoryName = participantCategory?.name || '';
     const fullName = categoryName ? `${name} - ${categoryName}` : name;
 
-    // Verificar se o atleta já está em alguma bateria
-    const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
-      entries.some(e => e.registration_id === reg.id)
-    );
+    // Verificar se o atleta já está em alguma bateria (em TODAS as baterias do campeonato)
+    const isInHeat = allChampionshipEntries.some(e => e.registration_id === reg.id);
     
     const {
       attributes,
@@ -2028,33 +2051,26 @@ export default function HeatsNew() {
   }).sort((a, b) => a.heat_number - b.heat_number);
 
   // Filtrar competidores por busca
+  // IMPORTANTE: Mostrar apenas atletas que NÃO estão em nenhuma bateria
   const filteredCompetitors = registrations.filter(reg => {
     // Se nenhuma categoria selecionada ou vazio, não mostra ninguém
     if (!selectedCategory || selectedCategory === '') return false;
     
-    // Se "all" estiver selecionado, mostra todos (mas filtra os que já estão em baterias)
-    if (selectedCategory === 'all') {
-      // Verificar se o atleta já está em alguma bateria
-      const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
-        entries.some(e => e.registration_id === reg.id)
-      );
-      // Se está em bateria, não mostrar na lista lateral
-      if (isInHeat) return false;
-      
-      const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
-      return name.includes(searchTerm.toLowerCase());
-    }
+    // Verificar se o atleta já está em alguma bateria (em TODAS as baterias do campeonato)
+    // Usar allChampionshipEntries para verificar todas as baterias, não apenas as filtradas
+    const isInHeat = allChampionshipEntries.some(e => e.registration_id === reg.id);
     
-    // Se categoria específica selecionada, filtrar por categoria
-    if (reg.category_id !== selectedCategory) return false;
-    
-    // Verificar se o atleta já está em alguma bateria
-    const isInHeat = Array.from(allHeatEntries.values()).some(entries => 
-      entries.some(e => e.registration_id === reg.id)
-    );
-    // Se está em bateria, não mostrar na lista lateral
+    // Se está em bateria, não mostrar na lista lateral (só mostra os disponíveis)
     if (isInHeat) return false;
     
+    // Aplicar filtro de categoria
+    if (selectedCategory !== 'all') {
+      // Se categoria específica selecionada, filtrar por categoria
+      if (reg.category_id !== selectedCategory) return false;
+    }
+    // Se "all" estiver selecionado, não filtra por categoria (mostra todos os disponíveis)
+    
+    // Aplicar filtro de busca por nome
     const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
     return name.includes(searchTerm.toLowerCase());
   });
