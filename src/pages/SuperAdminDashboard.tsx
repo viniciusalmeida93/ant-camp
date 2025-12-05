@@ -153,7 +153,7 @@ export default function SuperAdminDashboard() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
@@ -181,7 +181,7 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      <div className="container mx-auto py-8 px-4">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         {/* Estatísticas Gerais */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>

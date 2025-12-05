@@ -259,7 +259,7 @@ export default function BulkImport() {
 
   if (!selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Selecione um campeonato primeiro.</p>
           <Button onClick={() => navigate("/app")}>
@@ -271,7 +271,7 @@ export default function BulkImport() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Importação em Massa</h1>
         <p className="text-muted-foreground">

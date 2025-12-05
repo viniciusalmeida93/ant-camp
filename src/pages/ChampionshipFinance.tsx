@@ -168,13 +168,13 @@ export default function ChampionshipFinance() {
   };
 
   if (loading) {
-    return <div className="container mx-auto px-4 py-8">Carregando...</div>;
+    return <div className="w-full mx-auto px-6 py-6 max-w-[98%]">Carregando...</div>;
   }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -188,7 +188,7 @@ export default function ChampionshipFinance() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         {/* Stats */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>

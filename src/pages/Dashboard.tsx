@@ -952,7 +952,7 @@ export default function Dashboard() {
 
   if (contextLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -963,7 +963,7 @@ export default function Dashboard() {
   // If no championships and no selected championship, show create screen
   if (championships.length === 0 && !selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <div className="text-center py-12">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -1079,7 +1079,7 @@ export default function Dashboard() {
 
   // Show championship selector and dashboard
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="flex items-start justify-between gap-4 mb-8 animate-fade-in flex-col md:flex-row md:items-center">
         <div>
           <h1 className="text-4xl font-bold mb-2">

@@ -43,7 +43,7 @@ export default function LinkPageConfig() {
   const [linkPage, setLinkPage] = useState<any>(null);
   const [buttons, setButtons] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    title: "Meus Links",
+    title: "",
     slug: "",
     banner_alt: "",
     theme_color: "#ED1B24",
@@ -68,7 +68,7 @@ export default function LinkPageConfig() {
       if (page) {
         setLinkPage(page);
         setFormData({
-          title: page.title || "Meus Links",
+          title: page.title || "",
           slug: page.slug || "",
           banner_alt: page.banner_alt || "",
           theme_color: page.theme_color || "#ED1B24",
@@ -303,7 +303,7 @@ export default function LinkPageConfig() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <div className="mb-6">
           <Button
             variant="ghost"
@@ -339,7 +339,7 @@ export default function LinkPageConfig() {
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
-                  placeholder="Meus Links"
+                  placeholder="Título da página de links"
                 />
               </div>
               <div>

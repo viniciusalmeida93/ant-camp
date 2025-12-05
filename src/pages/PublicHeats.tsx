@@ -583,7 +583,7 @@ export default function PublicHeats() {
   }
 
   return (
-    <div className="container mx-auto py-4 sm:py-8 px-4">
+    <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="mb-4 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 sm:mb-2">{championship.name}</h1>
         <p className="text-sm sm:text-base text-muted-foreground">

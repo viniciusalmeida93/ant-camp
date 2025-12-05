@@ -433,7 +433,7 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-4 sm:py-12 px-2 sm:px-4">
-      <div className="container mx-auto max-w-4xl px-2 sm:px-4">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <Card className="mb-8">
           <CardHeader>
             <div className="flex items-start justify-between">

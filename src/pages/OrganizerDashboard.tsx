@@ -235,7 +235,7 @@ export default function OrganizerDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
+        <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <img 
@@ -255,7 +255,7 @@ export default function OrganizerDashboard() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <Card>

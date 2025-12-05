@@ -98,7 +98,7 @@ export default function TestAsaasConnections() {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -114,7 +114,7 @@ export default function TestAsaasConnections() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl space-y-6">
+      <div className="w-full mx-auto px-6 py-6 max-w-[98%] space-y-6">
         <div className="flex justify-between items-center">
           <p className="text-sm text-muted-foreground">
             {integrations.length} integração(ões) ativa(s) encontrada(s)
