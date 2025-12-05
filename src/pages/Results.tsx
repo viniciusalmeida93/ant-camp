@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Calculator, Loader2 } from 'lucide-react';
+import { Save, Calculator, Loader2, Globe, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -175,7 +175,7 @@ export default function Results() {
     setResultInputs(new Map(resultInputs.set(participantId, updated)));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (publish: boolean = false) => {
     if (!selectedChampionship || !selectedCategory || !selectedWOD) {
       toast.error("Selecione categoria e WOD");
       return;
@@ -230,6 +230,7 @@ export default function Results() {
             result: input.result?.trim() || null,
             tiebreak_value: input.tiebreakValue?.trim() || null,
             status: input.status || 'completed',
+            is_published: publish, // Definir se está publicado ou não (false ao salvar, true ao publicar)
           });
         }
       });
@@ -331,7 +332,29 @@ export default function Results() {
         if (updateError) throw updateError;
       }
 
-      toast.success("Resultados salvos e pontuação calculada!");
+      // Se não estiver publicando, garantir que os resultados inseridos tenham is_published = false
+      // Se estiver publicando, atualizar para is_published = true
+      if (publish) {
+        const { error: publishError } = await supabase
+          .from("wod_results")
+          .update({ is_published: true })
+          .eq("category_id", selectedCategory)
+          .eq("wod_id", selectedWOD);
+
+        if (publishError) throw publishError;
+        toast.success("Resultados salvos, pontuação calculada e publicados no leaderboard!");
+      } else {
+        // Garantir que resultados salvos sem publicar tenham is_published = false
+        const { error: unpublishError } = await supabase
+          .from("wod_results")
+          .update({ is_published: false })
+          .eq("category_id", selectedCategory)
+          .eq("wod_id", selectedWOD);
+
+        if (unpublishError) throw unpublishError;
+        toast.success("Resultados salvos e pontuação calculada! (Não publicados ainda)");
+      }
+      
       await loadExistingResults();
       
       // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
@@ -579,10 +602,25 @@ export default function Results() {
             </Table>
           </div>
 
-          <Button onClick={handleSave} className="w-full mt-6 shadow-glow" disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />
-            {saving ? 'Salvando...' : 'Salvar e Calcular Pontuação'}
-          </Button>
+          <div className="flex gap-3 mt-6">
+            <Button 
+              onClick={() => handleSave(false)} 
+              variant="outline"
+              className="flex-1 shadow-glow" 
+              disabled={saving}
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              {saving ? 'Salvando...' : 'Salvar Resultados'}
+            </Button>
+            <Button 
+              onClick={() => handleSave(true)} 
+              className="flex-1 shadow-glow" 
+              disabled={saving}
+            >
+              <Globe className="w-4 h-4 mr-2" />
+              {saving ? 'Publicando...' : 'Publicar Resultados'}
+            </Button>
+          </div>
         </Card>
       )}
 

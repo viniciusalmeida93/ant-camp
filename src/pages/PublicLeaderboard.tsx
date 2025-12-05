@@ -290,11 +290,12 @@ export default function PublicLeaderboard() {
         console.error("Erro ao buscar scoring config:", configError);
       }
 
-      // Carregar resultados da categoria
+      // Carregar resultados da categoria - APENAS RESULTADOS PUBLICADOS
       const { data: resultsData, error: resultsError } = await supabase
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory)
+        .eq("is_published", true) // Apenas resultados publicados aparecem no leaderboard público
         .order("created_at");
 
       if (resultsError) {

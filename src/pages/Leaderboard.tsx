@@ -179,10 +179,12 @@ export default function Leaderboard() {
       }
 
       // SEMPRE buscar dados mais recentes do banco (sem cache)
+      // Para o leaderboard interno (admin), mostrar apenas resultados publicados
       const { data: resultsData, error: resultsError } = await supabase
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory)
+        .eq("is_published", true) // Apenas resultados publicados aparecem no leaderboard
         .order("created_at");
 
       if (resultsError) throw resultsError;
