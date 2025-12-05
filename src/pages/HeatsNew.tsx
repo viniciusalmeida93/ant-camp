@@ -225,7 +225,16 @@ export default function HeatsNew() {
 
       setHeats(heatsData || []);
 
+      // Inicializar heatCapacities com os valores de athletes_per_heat de cada bateria
       if (heatsData && heatsData.length > 0) {
+        const capacitiesMap = new Map<string, number>();
+        heatsData.forEach(heat => {
+          if (heat.athletes_per_heat) {
+            capacitiesMap.set(heat.id, heat.athletes_per_heat);
+          }
+        });
+        setHeatCapacities(capacitiesMap);
+        
         const heatIds = heatsData.map(h => h.id);
         const { data: entriesData, error: entriesError } = await supabase
           .from("heat_entries")
@@ -238,6 +247,7 @@ export default function HeatsNew() {
         }
       } else {
         setHeatEntries([]);
+        setHeatCapacities(new Map());
       }
     } catch (error: any) {
       console.error("Error loading heats:", error);
@@ -357,7 +367,8 @@ export default function HeatsNew() {
 
         // Redistribuir participantes nas baterias deste WOD
         for (const heat of sortedHeats) {
-          const capacity = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
+          // Usar o valor do banco primeiro, depois heatCapacities, depois padrão
+          const capacity = heat.athletes_per_heat || heatCapacities.get(heat.id) || athletesPerHeat;
           const heatParticipants: any[] = [];
 
           // Primeiro, tentar preencher com participantes da mesma categoria
@@ -407,10 +418,10 @@ export default function HeatsNew() {
       await loadHeats();
       await loadHeatEntries();
       
-      toast.success("Baterias intercaladas! Horários mantidos intactos.");
+      toast.success("Baterias intercaladas com sucesso!");
     } catch (error: any) {
       console.error("Erro ao intercalar baterias:", error);
-      toast.error("Erro ao intercalar baterias");
+      toast.error(`Erro ao intercalar baterias: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setGenerating(false);
     }
@@ -1212,6 +1223,13 @@ export default function HeatsNew() {
 
       toast.success("Bateria atualizada! Recalculando horários seguintes...");
       
+      // Atualizar heatCapacities imediatamente
+      setHeatCapacities(prev => {
+        const updated = new Map(prev);
+        updated.set(editingHeat.id, editHeatData.athletes_per_heat);
+        return updated;
+      });
+      
       // Recalcular todas as baterias seguintes
       await recalculateScheduleAfterHeat(editingHeat.id);
       
@@ -1864,7 +1882,8 @@ export default function HeatsNew() {
                 <div className="space-y-4">
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
-                      const maxAthletes = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
+                      // Usar sempre o valor do banco primeiro, depois heatCapacities, depois padrão
+                      const maxAthletes = heat.athletes_per_heat || heatCapacities.get(heat.id) || athletesPerHeat;
                       const scheduledTime = heat.scheduled_time 
                         ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                         : startTime;

@@ -49,6 +49,44 @@ export default function Leaderboard() {
     }
   }, [selectedCategory, wodResults]);
 
+  // Listener para mudanças em tempo real na tabela wod_results
+  useEffect(() => {
+    if (!selectedCategory) return;
+
+    const channel = supabase
+      .channel('wod_results_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wod_results',
+          filter: `category_id=eq.${selectedCategory}`
+        },
+        () => {
+          // Recarregar leaderboard quando houver mudanças
+          loadLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedCategory]);
+
+  // Recarregar quando a página ganha foco (por exemplo, quando volta da página de Results)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (selectedCategory) {
+        loadLeaderboard();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedCategory]);
+
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
