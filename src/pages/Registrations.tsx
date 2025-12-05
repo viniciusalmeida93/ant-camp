@@ -262,7 +262,7 @@ export default function Registrations() {
       if (catsError) throw catsError;
       setCategories(cats || []);
 
-      // Load registrations ordenadas por data de criação (mais antigas primeiro para ordem de inscrição)
+      // Load registrations ordenadas por order_index ou created_at (fallback)
       // Apenas mostrar inscrições pagas (payment_status = 'approved')
       const { data: regs, error: regsError } = await supabase
         .from("registrations")
@@ -272,20 +272,33 @@ export default function Registrations() {
         `)
         .eq("championship_id", selectedChampionship.id)
         .eq("payment_status", "approved") // Apenas inscrições pagas
-        .order("created_at", { ascending: true }); // Ordem crescente: mais antigas primeiro
+        .order("order_index", { ascending: true, nullsLast: false }) // Ordenar por order_index primeiro
+        .order("created_at", { ascending: true }); // Fallback para created_at se order_index for NULL
 
       if (regsError) throw regsError;
       
-      // Calcular ordem de inscrição por categoria
+      // Calcular ordem de inscrição por categoria baseado em order_index ou created_at
       const registrationsWithOrder = (regs || []).map((reg, index) => {
-        // Contar quantas inscrições anteriores existem na mesma categoria
+        // Se order_index não existe, calcular baseado em created_at
+        if (reg.order_index === null || reg.order_index === undefined) {
+          const sameCategoryRegs = (regs || []).filter(r => 
+            r.category_id === reg.category_id && 
+            (r.order_index === null || r.order_index === undefined) &&
+            new Date(r.created_at).getTime() <= new Date(reg.created_at).getTime()
+          );
+          return {
+            ...reg,
+            registrationOrder: sameCategoryRegs.length, // Ordem dentro da categoria
+          };
+        }
+        // Se order_index existe, usar ele diretamente
         const sameCategoryRegs = (regs || []).filter(r => 
           r.category_id === reg.category_id && 
-          new Date(r.created_at).getTime() <= new Date(reg.created_at).getTime()
+          (r.order_index === null || r.order_index === undefined || r.order_index <= reg.order_index)
         );
         return {
           ...reg,
-          registrationOrder: sameCategoryRegs.length, // Ordem dentro da categoria
+          registrationOrder: reg.order_index || sameCategoryRegs.length,
         };
       });
       
@@ -495,12 +508,47 @@ export default function Registrations() {
     }
 
     const newRegistrations = arrayMove(filteredRegistrations, oldIndex, newIndex);
-    setFilteredRegistrations(newRegistrations);
     
-    // Atualizar ordem no banco de dados (usando um campo de ordem se existir)
-    // Por enquanto, vamos apenas atualizar a ordem localmente
-    // Se precisar salvar no banco, podemos adicionar um campo 'order' na tabela registrations
-    toast.success("Ordem das inscrições atualizada!");
+    // Obter a categoria do item movido (assumindo que todas as inscrições filtradas são da mesma categoria)
+    // Se houver filtro por categoria, usar essa categoria
+    const movedReg = newRegistrations[newIndex];
+    const categoryId = movedReg.category_id;
+    
+    // Filtrar apenas inscrições da mesma categoria e atualizar order_index
+    const sameCategoryRegs = newRegistrations.filter(r => r.category_id === categoryId);
+    
+    try {
+      // Atualizar order_index no banco de dados para todas as inscrições desta categoria
+      for (let i = 0; i < sameCategoryRegs.length; i++) {
+        const reg = sameCategoryRegs[i];
+        await supabase
+          .from("registrations")
+          .update({ order_index: i + 1 })
+          .eq("id", reg.id);
+      }
+
+      // Atualizar estado local com nova ordem
+      const updatedRegistrations = newRegistrations.map((reg, index) => {
+        if (reg.category_id === categoryId) {
+          const categoryIndex = sameCategoryRegs.findIndex(r => r.id === reg.id);
+          return {
+            ...reg,
+            registrationOrder: categoryIndex !== -1 ? categoryIndex + 1 : reg.registrationOrder,
+            order_index: categoryIndex !== -1 ? categoryIndex + 1 : reg.order_index,
+          };
+        }
+        return reg;
+      });
+      
+      setFilteredRegistrations(updatedRegistrations);
+      
+      toast.success("Ordem das inscrições atualizada e salva!");
+    } catch (error: any) {
+      console.error("Erro ao salvar ordem:", error);
+      toast.error("Erro ao salvar ordem das inscrições");
+      // Reverter para ordem anterior em caso de erro
+      await loadData();
+    }
   };
 
   const handleSendEmail = async (reg: any) => {
