@@ -48,7 +48,7 @@ export default function HeatsNew() {
   
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
-  const [athletesPerHeat, setAthletesPerHeat] = useState<number>(4);
+  const [athletesPerHeat, setAthletesPerHeat] = useState<number>(0);
   const [startTime, setStartTime] = useState<string>('09:00');
   const [transitionTime, setTransitionTime] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -1566,10 +1566,9 @@ export default function HeatsNew() {
     );
   }
 
-  function SortableHeatCard({ heat, children, onRenderDragHandle }: { 
+  function SortableHeatCard({ heat, children }: { 
     heat: any; 
-    children: React.ReactNode;
-    onRenderDragHandle?: (listeners: any, attributes: any) => React.ReactNode;
+    children: (listeners: any, attributes: any) => React.ReactNode;
   }) {
     const {
       attributes,
@@ -1590,8 +1589,7 @@ export default function HeatsNew() {
 
     return (
       <div ref={setNodeRef} style={style}>
-        {onRenderDragHandle ? onRenderDragHandle(listeners, attributes) : null}
-        {children}
+        {children(listeners, attributes)}
       </div>
     );
   }
@@ -1996,21 +1994,20 @@ export default function HeatsNew() {
                         <SortableHeatCard 
                           key={heat.id} 
                           heat={heat}
-                          onRenderDragHandle={(listeners, attributes) => (
-                            <div className="absolute left-2 top-4">
-                              <div 
-                                {...attributes} 
-                                {...listeners} 
-                                className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent/50 rounded"
-                                title="Arrastar para reorganizar"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <GripVertical className="w-4 h-4 text-muted-foreground" />
-                              </div>
-                            </div>
-                          )}
                         >
-                          <Card className="p-4 relative">
+                          {(listeners, attributes) => (
+                            <Card className="p-4 relative">
+                              <div className="absolute left-2 top-4 z-10">
+                                <div 
+                                  {...attributes} 
+                                  {...listeners} 
+                                  className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent/50 rounded"
+                                  title="Arrastar para reorganizar"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <GripVertical className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                              </div>
                           <Collapsible open={isExpanded} onOpenChange={() => toggleHeatExpand(heat.id)}>
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3 flex-1 pl-8">
@@ -2134,6 +2131,7 @@ export default function HeatsNew() {
                             </CollapsibleContent>
                           </Collapsible>
                         </Card>
+                          )}
                         </SortableHeatCard>
                       );
                     })}
