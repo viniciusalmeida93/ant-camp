@@ -225,12 +225,15 @@ export default function HeatsNew() {
 
       // SEMPRE carregar TODAS as entries do campeonato (para verificar disponibilidade)
       // Primeiro buscar todas as baterias do campeonato
-      const { data: allChampionshipHeats } = await supabase
+      const { data: allChampionshipHeats, error: allHeatsError } = await supabase
         .from("heats")
         .select("id")
         .eq("championship_id", selectedChampionship.id);
 
-      if (allChampionshipHeats && allChampionshipHeats.length > 0) {
+      if (allHeatsError) {
+        console.error("Error loading all championship heats:", allHeatsError);
+        setAllChampionshipEntries([]);
+      } else if (allChampionshipHeats && allChampionshipHeats.length > 0) {
         const allHeatIds = allChampionshipHeats.map(h => h.id);
         const { data: allEntriesData, error: allEntriesError } = await supabase
           .from("heat_entries")
@@ -241,6 +244,7 @@ export default function HeatsNew() {
         if (!allEntriesError && allEntriesData) {
           setAllChampionshipEntries(allEntriesData);
         } else {
+          console.error("Error loading all championship entries:", allEntriesError);
           setAllChampionshipEntries([]);
         }
       } else {
@@ -829,21 +833,10 @@ export default function HeatsNew() {
 
       if (error) throw error;
 
-      // Atualizar imediatamente o estado local para remover da lista de entries
-      setAllChampionshipEntries(prev => prev.filter(e => e.id !== entryId));
-      setHeatEntries(prev => prev.filter(e => e.id !== entryId));
-      
-      // Atualizar allHeatEntries também
-      setAllHeatEntries(prev => {
-        const newMap = new Map(prev);
-        const currentEntries = newMap.get(heatId) || [];
-        newMap.set(heatId, currentEntries.filter(e => e.id !== entryId));
-        return newMap;
-      });
-
       toast.success("Atleta removido da bateria!");
       
       // Recarregar dados para garantir sincronização com o banco
+      // Isso vai atualizar o allChampionshipEntries corretamente
       await loadHeats();
     } catch (error: any) {
       console.error("Error removing from heat:", error);
