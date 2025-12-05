@@ -855,12 +855,24 @@ export default function HeatsNew() {
 
       if (!allHeats || allHeats.length === 0) return;
 
-      // Buscar configurações de pausa do campeonato
-      const { data: champConfig } = await supabase
-        .from("championships")
-        .select("enable_break, break_duration_minutes, break_after_wod_number")
-        .eq("id", selectedChampionship.id)
-        .single();
+      // Buscar configurações de pausa dos DIAS (não do campeonato)
+      const { data: daysConfig } = await supabase
+        .from("championship_days")
+        .select("*, championship_day_wods(wod_id, order_num)")
+        .eq("championship_id", selectedChampionship.id)
+        .order("day_number");
+
+      // Criar mapa de WOD -> Dia para saber qual dia cada WOD pertence
+      const wodToDayMap = new Map<string, any>();
+      if (daysConfig) {
+        daysConfig.forEach(day => {
+          if (day.championship_day_wods) {
+            day.championship_day_wods.forEach((dayWod: any) => {
+              wodToDayMap.set(dayWod.wod_id, day);
+            });
+          }
+        });
+      }
 
       const baseDate = championshipDays.length > 0 
         ? new Date(championshipDays[0].date)
@@ -911,16 +923,25 @@ export default function HeatsNew() {
             console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
             
             // Verificar se deve aplicar PAUSA após o WOD anterior
-            if (champConfig?.enable_break && previousWodId) {
-              const previousWod = wods.find(w => w.id === previousWodId);
-              const previousWodOrderNum = previousWod?.order_num || 0;
+            // Buscar configuração de pausa do DIA ao qual o WOD anterior pertence
+            if (previousWodId) {
+              const previousWodDay = wodToDayMap.get(previousWodId);
               
-              console.log(`  Verificando pausa: WOD anterior order_num=${previousWodOrderNum}, break_after=${champConfig.break_after_wod_number}`);
-              
-              if (previousWodOrderNum === champConfig.break_after_wod_number) {
-                const pausaDuration = champConfig.break_duration_minutes || 30;
-                currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
-                console.log(`  + ${pausaDuration} min (PAUSA após WOD ${previousWodOrderNum})`);
+              if (previousWodDay?.enable_break) {
+                // Buscar o order_num do WOD anterior dentro do dia
+                const previousWodDayWods = previousWodDay.championship_day_wods || [];
+                const previousWodInDay = previousWodDayWods.find((dw: any) => dw.wod_id === previousWodId);
+                const previousWodOrderInDay = previousWodInDay?.order_num || 0;
+                
+                const breakAfterWodNumber = previousWodDay.break_after_wod_number;
+                const breakDuration = previousWodDay.break_duration_minutes || 30;
+                
+                console.log(`  Verificando pausa do DIA: WOD anterior order_in_day=${previousWodOrderInDay}, break_after=${breakAfterWodNumber}, duration=${breakDuration}`);
+                
+                if (previousWodOrderInDay === breakAfterWodNumber) {
+                  currentTime = new Date(currentTime.getTime() + (breakDuration * 60000));
+                  console.log(`  + ${breakDuration} min (PAUSA do DIA após WOD ${previousWodOrderInDay})`);
+                }
               }
             }
           } 
@@ -984,12 +1005,24 @@ export default function HeatsNew() {
 
       if (!followingHeats || followingHeats.length === 0) return;
 
-      // Buscar configurações de pausa
-      const { data: champConfig } = await supabase
-        .from("championships")
-        .select("enable_break, break_duration_minutes, break_after_wod_number")
-        .eq("id", selectedChampionship.id)
-        .single();
+      // Buscar configurações de pausa dos DIAS
+      const { data: daysConfig } = await supabase
+        .from("championship_days")
+        .select("*, championship_day_wods(wod_id, order_num)")
+        .eq("championship_id", selectedChampionship.id)
+        .order("day_number");
+
+      // Criar mapa de WOD -> Dia
+      const wodToDayMap = new Map<string, any>();
+      if (daysConfig) {
+        daysConfig.forEach(day => {
+          if (day.championship_day_wods) {
+            day.championship_day_wods.forEach((dayWod: any) => {
+              wodToDayMap.set(dayWod.wod_id, day);
+            });
+          }
+        });
+      }
 
       // Calcular o fim da bateria editada (início + timecap)
       const timeCap = editedHeat.wods?.time_cap || '10:00';
@@ -1015,15 +1048,22 @@ export default function HeatsNew() {
           currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
           console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
           
-          // Verificar se deve aplicar PAUSA após o WOD anterior
-          if (champConfig?.enable_break && previousWodId) {
-            const previousWod = wods.find(w => w.id === previousWodId);
-            const previousWodOrderNum = previousWod?.order_num || 0;
+          // Verificar se deve aplicar PAUSA após o WOD anterior (usar configuração do DIA)
+          if (previousWodId) {
+            const previousWodDay = wodToDayMap.get(previousWodId);
             
-            if (previousWodOrderNum === champConfig.break_after_wod_number) {
-              const pausaDuration = champConfig.break_duration_minutes || 30;
-              currentTime = new Date(currentTime.getTime() + (pausaDuration * 60000));
-              console.log(`  + ${pausaDuration} min (PAUSA após WOD ${previousWodOrderNum})`);
+            if (previousWodDay?.enable_break) {
+              const previousWodDayWods = previousWodDay.championship_day_wods || [];
+              const previousWodInDay = previousWodDayWods.find((dw: any) => dw.wod_id === previousWodId);
+              const previousWodOrderInDay = previousWodInDay?.order_num || 0;
+              
+              const breakAfterWodNumber = previousWodDay.break_after_wod_number;
+              const breakDuration = previousWodDay.break_duration_minutes || 30;
+              
+              if (previousWodOrderInDay === breakAfterWodNumber) {
+                currentTime = new Date(currentTime.getTime() + (breakDuration * 60000));
+                console.log(`  + ${breakDuration} min (PAUSA do DIA após WOD ${previousWodOrderInDay})`);
+              }
             }
           }
         }
