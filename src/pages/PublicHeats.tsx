@@ -728,11 +728,11 @@ export default function PublicHeats() {
                           <span className="font-semibold text-xs sm:text-sm min-w-[1.5rem] sm:min-w-8 text-center bg-primary/10 text-primary rounded px-1">
                             {participant.lane_number || idx + 1}
                           </span>
-                          <span className="text-xs sm:text-sm font-medium truncate flex-1" title={`${participant.category_name ? participant.category_name + ' - ' : ''}${participant.participant_name}`}>
-                            {participant.category_name && (
-                              <span className="text-muted-foreground">{participant.category_name} - </span>
-                            )}
+                          <span className="text-xs sm:text-sm font-medium truncate flex-1" title={`${participant.participant_name}${participant.category_name ? ' - ' + participant.category_name : ''}`}>
                             {participant.participant_name || 'Sem nome'}
+                            {participant.category_name && (
+                              <span className="text-muted-foreground"> - {participant.category_name}</span>
+                            )}
                           </span>
                         </div>
                       ))}
