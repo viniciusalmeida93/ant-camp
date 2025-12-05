@@ -894,6 +894,26 @@ export default function HeatsNew() {
     if (!selectedChampionship) return;
 
     try {
+      // Recarregar configurações de intervalos do campeonato ANTES de calcular
+      const { data: champConfig } = await supabase
+        .from("championships")
+        .select("transition_time_minutes, category_interval_minutes, wod_interval_minutes")
+        .eq("id", selectedChampionship.id)
+        .single();
+      
+      // Atualizar estados com valores do banco
+      if (champConfig) {
+        const transition = champConfig.transition_time_minutes ?? 0;
+        const categoryInterval = champConfig.category_interval_minutes ?? 0;
+        const wodInterval = champConfig.wod_interval_minutes ?? 0;
+        
+        setTransitionTime(transition);
+        setCategoryIntervalMinutes(categoryInterval);
+        setWodIntervalMinutes(wodInterval);
+        
+        console.log(`Valores carregados: transição=${transition}, categoria=${categoryInterval}, provas=${wodInterval}`);
+      }
+
       // Buscar TODAS as baterias ordenadas por heat_number
       const { data: allHeats } = await supabase
         .from("heats")
@@ -902,6 +922,11 @@ export default function HeatsNew() {
         .order("heat_number");
 
       if (!allHeats || allHeats.length === 0) return;
+      
+      // Usar valores atualizados (do estado ou do banco)
+      const currentTransitionTime = champConfig?.transition_time_minutes ?? transitionTime ?? 0;
+      const currentCategoryInterval = champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0;
+      const currentWodInterval = champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0;
 
       // Buscar configurações de pausa dos DIAS (não do campeonato)
       const { data: daysConfig } = await supabase
@@ -967,8 +992,8 @@ export default function HeatsNew() {
             }
 
             // Aplicar intervalo entre provas
-            currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
-            console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
+            currentTime = new Date(currentTime.getTime() + (currentWodInterval * 60000));
+            console.log(`  + ${currentWodInterval} min (intervalo entre provas)`);
             
             // Verificar se deve aplicar PAUSA após o WOD anterior
             // Buscar configuração de pausa do DIA ao qual o WOD anterior pertence
@@ -996,13 +1021,13 @@ export default function HeatsNew() {
           // Se mudou apenas de categoria (mesmo WOD)
           else if (heat.category_id !== previousCategoryId) {
             console.log(`Mudança de categoria detectada: ${previousCategoryId} -> ${heat.category_id}`);
-            currentTime = new Date(currentTime.getTime() + (categoryIntervalMinutes * 60000));
-            console.log(`  + ${categoryIntervalMinutes} min (intervalo entre categorias)`);
+            currentTime = new Date(currentTime.getTime() + (currentCategoryInterval * 60000));
+            console.log(`  + ${currentCategoryInterval} min (intervalo entre categorias)`);
           } 
           // Mesma categoria e mesmo WOD = apenas transição entre baterias
           else {
-            currentTime = new Date(currentTime.getTime() + (transitionTime * 60000));
-            console.log(`  + ${transitionTime} min (transição entre baterias)`);
+            currentTime = new Date(currentTime.getTime() + (currentTransitionTime * 60000));
+            console.log(`  + ${currentTransitionTime} min (transição entre baterias)`);
           }
         }
 
@@ -1034,6 +1059,17 @@ export default function HeatsNew() {
     if (!selectedChampionship) return;
 
     try {
+      // Recarregar configurações de intervalos do campeonato ANTES de calcular
+      const { data: champConfig } = await supabase
+        .from("championships")
+        .select("transition_time_minutes, category_interval_minutes, wod_interval_minutes")
+        .eq("id", selectedChampionship.id)
+        .single();
+      
+      const currentTransitionTime = champConfig?.transition_time_minutes ?? transitionTime ?? 0;
+      const currentCategoryInterval = champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0;
+      const currentWodInterval = champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0;
+
       // Buscar a bateria editada
       const { data: editedHeat } = await supabase
         .from("heats")
@@ -1093,8 +1129,8 @@ export default function HeatsNew() {
           wodsCompleted.push(previousWodId);
 
           // Adicionar intervalo entre provas
-          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
-          console.log(`  + ${wodIntervalMinutes} min (intervalo entre provas)`);
+          currentTime = new Date(currentTime.getTime() + (currentWodInterval * 60000));
+          console.log(`  + ${currentWodInterval} min (intervalo entre provas)`);
           
           // Verificar se deve aplicar PAUSA após o WOD anterior (usar configuração do DIA)
           if (previousWodId) {
@@ -1118,13 +1154,13 @@ export default function HeatsNew() {
         // Se mudou apenas de categoria (mesmo WOD)
         else if (heat.category_id !== previousCategoryId) {
           console.log(`Recálculo: Mudança de categoria detectada`);
-          currentTime = new Date(currentTime.getTime() + (categoryIntervalMinutes * 60000));
-          console.log(`  + ${categoryIntervalMinutes} min (intervalo entre categorias)`);
+          currentTime = new Date(currentTime.getTime() + (currentCategoryInterval * 60000));
+          console.log(`  + ${currentCategoryInterval} min (intervalo entre categorias)`);
         }
         // Mesma categoria e mesmo WOD = apenas transição entre baterias
         else {
-          currentTime = new Date(currentTime.getTime() + (transitionTime * 60000));
-          console.log(`  + ${transitionTime} min (transição entre baterias)`);
+          currentTime = new Date(currentTime.getTime() + (currentTransitionTime * 60000));
+          console.log(`  + ${currentTransitionTime} min (transição entre baterias)`);
         }
 
         // Atualizar horário da bateria
