@@ -415,8 +415,8 @@ export default function HeatsNew() {
       }
 
       // Recarregar dados (SEM recalcular horários - mantém os tempos intactos)
+      // loadHeats() já carrega as entradas automaticamente
       await loadHeats();
-      await loadHeatEntries();
       
       toast.success("Baterias intercaladas com sucesso!");
     } catch (error: any) {

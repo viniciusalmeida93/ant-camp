@@ -54,18 +54,21 @@ export default function Leaderboard() {
     if (!selectedCategory) return;
 
     const channel = supabase
-      .channel('wod_results_changes')
+      .channel(`wod_results_changes_${selectedCategory}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: '*', // INSERT, UPDATE, DELETE
           schema: 'public',
           table: 'wod_results',
           filter: `category_id=eq.${selectedCategory}`
         },
-        () => {
-          // Recarregar leaderboard quando houver mudanças
-          loadLeaderboard();
+        (payload) => {
+          console.log('Mudança detectada em wod_results:', payload.eventType);
+          // Pequeno delay para garantir que a transação foi concluída
+          setTimeout(() => {
+            loadLeaderboard();
+          }, 100);
         }
       )
       .subscribe();
@@ -85,6 +88,19 @@ export default function Leaderboard() {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedCategory]);
+
+  // Listener para evento customizado quando resultados são atualizados
+  useEffect(() => {
+    const handleResultsUpdate = () => {
+      if (selectedCategory) {
+        console.log('Evento customizado recebido: wod_results_updated');
+        loadLeaderboard();
+      }
+    };
+
+    window.addEventListener('wod_results_updated', handleResultsUpdate);
+    return () => window.removeEventListener('wod_results_updated', handleResultsUpdate);
   }, [selectedCategory]);
 
   const checkAuth = async () => {

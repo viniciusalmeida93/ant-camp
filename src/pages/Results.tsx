@@ -209,7 +209,7 @@ export default function Results() {
         if (deleteError) throw deleteError;
       }
 
-      // Criar novos resultados
+      // Criar novos resultados apenas para participantes com dados preenchidos
       const participants = getParticipants();
       const newResults: any[] = [];
       
@@ -217,19 +217,48 @@ export default function Results() {
         const input = resultInputs.get(participant.id);
         if (!input) return;
         
-        newResults.push({
-          wod_id: selectedWOD,
-          category_id: selectedCategory,
-          registration_id: participant.id,
-          result: input.result || null,
-          tiebreak_value: input.tiebreakValue || null,
-          status: input.status || 'completed',
-        });
+        // Só adicionar se houver resultado, tiebreak ou status diferente de 'completed'
+        const hasResult = input.result && input.result.trim() !== '';
+        const hasTiebreak = input.tiebreakValue && input.tiebreakValue.trim() !== '';
+        const hasStatus = input.status && input.status !== 'completed';
+        
+        if (hasResult || hasTiebreak || hasStatus) {
+          newResults.push({
+            wod_id: selectedWOD,
+            category_id: selectedCategory,
+            registration_id: participant.id,
+            result: input.result?.trim() || null,
+            tiebreak_value: input.tiebreakValue?.trim() || null,
+            status: input.status || 'completed',
+          });
+        }
       });
 
+      // Se não há resultados para inserir, apenas deletar os existentes e finalizar
       if (newResults.length === 0) {
-        toast.error("Nenhum resultado para salvar");
+        // Garantir que todos os resultados foram deletados
+        if (existing && existing.length > 0) {
+          const { error: finalDeleteError } = await supabase
+            .from("wod_results")
+            .delete()
+            .eq("category_id", selectedCategory)
+            .eq("wod_id", selectedWOD);
+          
+          if (finalDeleteError) {
+            console.error("Erro ao deletar resultados:", finalDeleteError);
+            throw finalDeleteError;
+          }
+        }
+        
+        toast.success("Todos os resultados foram removidos");
         setSaving(false);
+        // Recarregar resultados para limpar a interface
+        await loadResults();
+        // Pequeno delay para garantir que o listener do leaderboard seja acionado
+        setTimeout(() => {
+          // Forçar atualização do leaderboard através de um evento customizado
+          window.dispatchEvent(new CustomEvent('wod_results_updated'));
+        }, 200);
         return;
       }
 
@@ -297,6 +326,11 @@ export default function Results() {
 
       toast.success("Resultados salvos e pontuação calculada!");
       await loadExistingResults();
+      
+      // Disparar evento para atualizar o leaderboard
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('wod_results_updated'));
+      }, 200);
     } catch (error: any) {
       console.error("Error saving results:", error);
       toast.error("Erro ao salvar resultados");
