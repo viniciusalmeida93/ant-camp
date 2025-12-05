@@ -525,6 +525,37 @@ export default function WODs() {
         estimatedDuration = minutes + Math.ceil(seconds / 60) + 2; // time_cap + 2min de transição
       }
       
+      // Validações antes de prosseguir
+      const wodName = formData.get('name') as string;
+      const wodDescription = formData.get('description') as string;
+      
+      if (!wodName || wodName.trim() === '') {
+        toast.error("Nome do WOD é obrigatório");
+        setSaving(false);
+        return;
+      }
+      
+      if (!wodDescription || wodDescription.trim() === '') {
+        toast.error("Descrição do WOD é obrigatória");
+        setSaving(false);
+        return;
+      }
+      
+      if (!timeCap || timeCap.trim() === '') {
+        toast.error("Time Cap é obrigatório");
+        setSaving(false);
+        return;
+      }
+      
+      if (!selectedChampionship || !selectedChampionship.id) {
+        toast.error("Campeonato não selecionado");
+        setSaving(false);
+        return;
+      }
+      
+      // Garantir que estimatedDuration seja válido (baseEstimatedDuration para variações)
+      const baseEstimatedDuration = estimatedDuration > 0 ? estimatedDuration : 15;
+      
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
@@ -598,6 +629,20 @@ export default function WODs() {
         }
       }
 
+      // Validar se temos categories antes de processar variações
+      if (!categories || categories.length === 0) {
+        console.warn("Nenhuma categoria encontrada, pulando variações");
+        setIsDialogOpen(false);
+        setEditingWOD(null);
+        setWodType('for-time');
+        setCategoryVariations(createEmptyVariations());
+        setVariationCategoriesWithData([]);
+        setApplyToAllCategories(false);
+        await loadWODs();
+        setSaving(false);
+        return;
+      }
+
       if (wodId) {
         const variationsToUpsert = categories
           .map(cat => {
@@ -608,9 +653,16 @@ export default function WODs() {
             // Se applyAll está desativado, só criar se houver dados personalizados
             if (!hasData && !applyAll) return null;
 
-            const parsedVariationDuration = variation?.estimatedDuration?.trim()
-              ? parseInt(variation.estimatedDuration, 10)
-              : NaN;
+            // Calcular duração estimada para esta variação
+            let parsedVariationDuration = NaN;
+            if (variation?.estimatedDuration?.trim()) {
+              const parsed = parseInt(variation.estimatedDuration.trim(), 10);
+              if (!isNaN(parsed) && parsed > 0) {
+                parsedVariationDuration = parsed;
+              }
+            }
+            
+            // Usar duração da variação se válida, senão usar a base
             const estimatedDurationMinutes = Number.isFinite(parsedVariationDuration) && parsedVariationDuration > 0
               ? parsedVariationDuration
               : baseEstimatedDuration;
@@ -726,9 +778,25 @@ export default function WODs() {
         message: errorMessage,
         code: error?.code,
         details: error?.details,
-        hint: error?.hint
+        hint: error?.hint,
+        stack: error?.stack
       });
-      toast.error(`Erro ao salvar WOD: ${errorMessage}`);
+      
+      // Mensagem de erro mais amigável
+      let userMessage = "Erro ao salvar WOD";
+      if (errorMessage.includes("is not defined")) {
+        userMessage = "Erro interno: variável não definida. Por favor, recarregue a página e tente novamente.";
+      } else if (errorMessage.includes("validation") || errorMessage.includes("required")) {
+        userMessage = "Dados inválidos. Verifique se todos os campos obrigatórios foram preenchidos.";
+      } else if (errorMessage.includes("permission") || errorMessage.includes("policy")) {
+        userMessage = "Você não tem permissão para realizar esta ação.";
+      } else if (errorMessage.includes("duplicate") || errorMessage.includes("unique")) {
+        userMessage = "Já existe um WOD com este nome ou dados duplicados.";
+      } else {
+        userMessage = `Erro ao salvar WOD: ${errorMessage}`;
+      }
+      
+      toast.error(userMessage);
     } finally {
       setSaving(false);
     }
