@@ -9,7 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { calculateLeaderboard } from '@/lib/scoring';
+// REMOVIDO: Usando função local que inclui todos os registros mesmo sem resultados
+// import { calculateLeaderboard } from '@/lib/scoring';
 
 interface LeaderboardEntry {
   registrationId: string;
@@ -198,14 +199,12 @@ export default function Leaderboard() {
         setWodResults(updatedResults || []);
         
         // Calcular leaderboard com resultados atualizados
-        const presetType = configData?.preset_type;
-        const entries = calculateLeaderboard(updatedResults || [], selectedCategory, participantNames, presetType);
+        const entries = calculateLeaderboard(updatedResults || []);
         setLeaderboard(entries);
       } else {
         setWodResults(resultsData || []);
         // Calcular leaderboard
-        const presetType = configData?.preset_type;
-        const entries = calculateLeaderboard(resultsData || [], selectedCategory, participantNames, presetType);
+        const entries = calculateLeaderboard(resultsData || []);
         setLeaderboard(entries);
       }
     } catch (error: any) {
@@ -555,7 +554,7 @@ export default function Leaderboard() {
                       </TableCell>
                       {allWodsSorted.map(wod => {
                         const result = entry.wodResults.find(r => r.wod_id === wod.id);
-                        const position = result?.position || 0;
+                        const position = result?.position;
                         const points = result?.points || 0;
                         const status = result?.status;
                         const resultValue = result?.result;
@@ -572,7 +571,7 @@ export default function Leaderboard() {
                                 <span className="text-xs text-destructive">DNF</span>
                                 <span className="text-xs text-muted-foreground">{points}pts</span>
                               </div>
-                            ) : position ? (
+                            ) : position && position > 0 ? (
                               <div className="flex flex-col items-center gap-0.5">
                                 <span className={`text-sm font-bold ${
                                   position === 1 ? 'text-accent' :
@@ -650,7 +649,7 @@ export default function Leaderboard() {
                       <div className="pt-2 space-y-3 pb-2">
                         {allWodsSorted.map(wod => {
                           const result = entry.wodResults.find(r => r.wod_id === wod.id);
-                          const position = result?.position || 0;
+                          const position = result?.position;
                           const points = result?.points || 0;
                           const status = result?.status;
                           const resultValue = result?.result;
@@ -676,7 +675,7 @@ export default function Leaderboard() {
                                     <span className="text-xs text-destructive">DNF</span>
                                     <span className="text-xs text-muted-foreground">{points}pts</span>
                                   </div>
-                                ) : position > 0 ? (
+                                ) : position && position > 0 ? (
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className={`text-sm font-bold ${
                                       position === 1 ? 'text-accent' :
