@@ -23,6 +23,7 @@ interface LeaderboardEntry {
   thirdPlaces: number;
   lastWodPosition?: number;
   wodResults: any[];
+  orderIndex?: number | null;
 }
 
 export default function Leaderboard() {
@@ -346,6 +347,7 @@ export default function Leaderboard() {
         thirdPlaces,
         lastWodPosition,
         wodResults: sortedResults,
+        orderIndex: reg.order_index,
       });
     });
     
@@ -365,6 +367,7 @@ export default function Leaderboard() {
           thirdPlaces: 0,
           lastWodPosition: undefined,
           wodResults: [],
+          orderIndex: reg.order_index,
         });
       }
     });
@@ -374,7 +377,20 @@ export default function Leaderboard() {
     console.log('📊 Total de participantes no leaderboard:', entries.length);
 
     // Ordenar e atribuir posições
+    // IMPORTANTE: Usar order_index como critério de desempate e para ordenar participantes sem resultados
     entries.sort((a, b) => {
+      // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
+      if (a.totalPoints === 0 && b.totalPoints === 0) {
+        if (a.orderIndex !== null && a.orderIndex !== undefined && 
+            b.orderIndex !== null && b.orderIndex !== undefined) {
+          return a.orderIndex - b.orderIndex;
+        }
+        // Se apenas um tem order_index, ele vem primeiro
+        if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+        if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+        return 0;
+      }
+      
       // 1. Mais pontos
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
       
@@ -387,10 +403,23 @@ export default function Leaderboard() {
       // 4. Mais terceiros lugares
       if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
       
-      // 5. Melhor posição no último WOD
-      if (a.lastWodPosition && b.lastWodPosition) {
+      // 5. Melhor posição no último WOD (menor número é melhor)
+      if (a.lastWodPosition !== undefined && b.lastWodPosition !== undefined) {
         return a.lastWodPosition - b.lastWodPosition;
       }
+      
+      if (a.lastWodPosition !== undefined) return -1;
+      if (b.lastWodPosition !== undefined) return 1;
+      
+      // 6. Usar order_index como desempate final (menor order_index = melhor posição manual)
+      if (a.orderIndex !== null && a.orderIndex !== undefined && 
+          b.orderIndex !== null && b.orderIndex !== undefined) {
+        return a.orderIndex - b.orderIndex;
+      }
+      
+      // Se apenas um tem order_index, ele vem primeiro
+      if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+      if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
       
       return 0;
     });

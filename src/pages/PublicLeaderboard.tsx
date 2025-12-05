@@ -20,6 +20,7 @@ interface LeaderboardEntry {
   thirdPlaces: number;
   lastWodPosition?: number;
   wodResults: any[];
+  orderIndex?: number | null;
 }
 
 export default function PublicLeaderboard() {
@@ -94,7 +95,7 @@ export default function PublicLeaderboard() {
       const [catsResult, wodsResult, regsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", champ.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", champ.id).order("order_num"),
-        supabase.from("registrations").select("*").eq("championship_id", champ.id).eq("status", "approved"),
+        supabase.from("registrations").select("*").eq("championship_id", champ.id).eq("status", "approved").order("order_index", { ascending: true, nullsLast: true }).order("created_at", { ascending: true }),
       ]);
 
       if (catsResult.error) throw catsResult.error;
@@ -181,6 +182,7 @@ export default function PublicLeaderboard() {
           ...r,
           wodId: r.wod_id,
         })),
+        orderIndex: reg.order_index,
       });
     });
     
@@ -198,12 +200,26 @@ export default function PublicLeaderboard() {
           thirdPlaces: 0,
           lastWodPosition: undefined,
           wodResults: [],
+          orderIndex: reg.order_index,
         });
       }
     });
 
     // Ordenar e atribuir posições
+    // IMPORTANTE: Usar order_index como critério de desempate e para ordenar participantes sem resultados
     entries.sort((a, b) => {
+      // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
+      if (a.totalPoints === 0 && b.totalPoints === 0) {
+        if (a.orderIndex !== null && a.orderIndex !== undefined && 
+            b.orderIndex !== null && b.orderIndex !== undefined) {
+          return a.orderIndex - b.orderIndex;
+        }
+        // Se apenas um tem order_index, ele vem primeiro
+        if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+        if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+        return 0;
+      }
+      
       // 1. Mais pontos
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
       
@@ -224,6 +240,16 @@ export default function PublicLeaderboard() {
       if (a.lastWodPosition !== undefined) return -1;
       if (b.lastWodPosition !== undefined) return 1;
       
+      // 6. Usar order_index como desempate final (menor order_index = melhor posição manual)
+      if (a.orderIndex !== null && a.orderIndex !== undefined && 
+          b.orderIndex !== null && b.orderIndex !== undefined) {
+        return a.orderIndex - b.orderIndex;
+      }
+      
+      // Se apenas um tem order_index, ele vem primeiro
+      if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+      if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+      
       return 0;
     });
 
@@ -240,11 +266,14 @@ export default function PublicLeaderboard() {
 
     try {
       // Buscar registrations novamente para garantir que temos os dados atualizados
+      // Ordenar por order_index para manter a ordem definida manualmente
       const { data: regsData, error: regsError } = await supabase
         .from("registrations")
         .select("*")
         .eq("championship_id", championship.id)
-        .eq("status", "approved");
+        .eq("status", "approved")
+        .order("order_index", { ascending: true, nullsLast: true })
+        .order("created_at", { ascending: true });
 
       if (regsError) {
         console.error("Erro ao buscar registrations:", regsError);
