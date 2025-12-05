@@ -963,10 +963,15 @@ export default function HeatsNew() {
           const reg = registrations.find(r => r.id === entry.registration_id);
           const participantName = reg?.team_name || reg?.athlete_name || 'Aguardando';
           
+          // Buscar categoria do participante
+          const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
+          const categoryName = participantCategory?.name || '';
+          const fullName = categoryName ? `${participantName} - ${categoryName}` : participantName;
+          
           htmlContent += `
             <div class="participant">
               <span class="lane">Raia ${entry.lane_number}:</span>
-              <span>${participantName}</span>
+              <span>${fullName}</span>
             </div>
           `;
         });
