@@ -1325,29 +1325,116 @@ export default function HeatsNew() {
       }
       
       try {
-        // Buscar TODAS as baterias ordenadas por heat_number
-        const { data: allHeatsOrdered } = await supabase
-          .from("heats")
-          .select("*")
-          .eq("championship_id", selectedChampionship?.id)
-          .order("heat_number");
+        // Calcular filtros atuais e baterias filtradas
+        const hasCategoryFilter = selectedCategory && selectedCategory !== 'all';
+        const hasWodFilter = selectedWOD && selectedWOD !== 'all';
+        const hasFilters = hasCategoryFilter || hasWodFilter;
         
-        if (!allHeatsOrdered) return;
+        // Calcular filteredHeats dentro da função para ter acesso aos valores atuais
+        const currentFilteredHeats = heats.filter(h => {
+          const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
+          const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
+          return categoryFilter && wodFilter;
+        }).sort((a, b) => a.heat_number - b.heat_number);
         
-        const activeIndex = allHeatsOrdered.findIndex(h => h.id === activeHeatId);
-        const overIndex = allHeatsOrdered.findIndex(h => h.id === overHeatId);
-        
-        if (activeIndex === -1 || overIndex === -1) return;
-        
-        // Reordenar array
-        const newHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
-        
-        // Atualizar heat_number no banco para TODAS as baterias
-        for (let i = 0; i < newHeats.length; i++) {
-          await supabase
+        if (hasFilters) {
+          // Se há filtros aplicados, trabalhar apenas com as baterias filtradas
+          // Mas precisamos atualizar a ordem dentro do contexto global
+          const activeIndex = currentFilteredHeats.findIndex(h => h.id === activeHeatId);
+          const overIndex = currentFilteredHeats.findIndex(h => h.id === overHeatId);
+          
+          if (activeIndex === -1 || overIndex === -1) {
+            setActiveId(null);
+            return;
+          }
+          
+          // Reordenar apenas as baterias filtradas
+          const reorderedFiltered = arrayMove(currentFilteredHeats, activeIndex, overIndex);
+          
+          // Buscar todas as baterias para atualizar a ordem completa
+          const { data: allHeats } = await supabase
             .from("heats")
-            .update({ heat_number: i + 1 })
-            .eq("id", newHeats[i].id);
+            .select("*")
+            .eq("championship_id", selectedChampionship?.id)
+            .order("heat_number");
+          
+          if (!allHeats) {
+            setActiveId(null);
+            return;
+          }
+          
+          // Criar um mapa das novas posições das baterias filtradas
+          const filteredHeatIds = new Set(reorderedFiltered.map(h => h.id));
+          
+          // Separar baterias filtradas e não filtradas
+          const nonFilteredHeats = allHeats.filter(h => !filteredHeatIds.has(h.id));
+          
+          // Encontrar onde inserir as baterias filtradas (mantendo a ordem relativa das não filtradas)
+          // Vamos posicionar as baterias filtradas na mesma região onde estavam antes
+          const minFilteredHeatNumber = Math.min(...currentFilteredHeats.map(h => h.heat_number));
+          const maxFilteredHeatNumber = Math.max(...currentFilteredHeats.map(h => h.heat_number));
+          
+          // Ordenar baterias não filtradas
+          const sortedNonFiltered = nonFilteredHeats.sort((a, b) => a.heat_number - b.heat_number);
+          
+          // Reconstruir array completo mantendo ordem
+          const allHeatsReordered: any[] = [];
+          
+          // Adicionar baterias antes da região filtrada
+          for (const heat of sortedNonFiltered) {
+            if (heat.heat_number < minFilteredHeatNumber) {
+              allHeatsReordered.push(heat);
+            }
+          }
+          
+          // Adicionar baterias filtradas reordenadas
+          allHeatsReordered.push(...reorderedFiltered);
+          
+          // Adicionar baterias depois da região filtrada
+          for (const heat of sortedNonFiltered) {
+            if (heat.heat_number > maxFilteredHeatNumber) {
+              allHeatsReordered.push(heat);
+            }
+          }
+          
+          // Atualizar heat_number de todas as baterias
+          for (let i = 0; i < allHeatsReordered.length; i++) {
+            await supabase
+              .from("heats")
+              .update({ heat_number: i + 1 })
+              .eq("id", allHeatsReordered[i].id);
+          }
+        } else {
+          // Se não há filtros, reordenar todas as baterias normalmente
+          const { data: allHeatsOrdered } = await supabase
+            .from("heats")
+            .select("*")
+            .eq("championship_id", selectedChampionship?.id)
+            .order("heat_number");
+          
+          if (!allHeatsOrdered) {
+            setActiveId(null);
+            return;
+          }
+          
+          const activeIndex = allHeatsOrdered.findIndex(h => h.id === activeHeatId);
+          const overIndex = allHeatsOrdered.findIndex(h => h.id === overHeatId);
+          
+          if (activeIndex === -1 || overIndex === -1) {
+            setActiveId(null);
+            return;
+          }
+          
+          // Reordenar array
+          const newHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
+          
+          // Atualizar heat_number no banco para TODAS as baterias
+          for (let i = 0; i < newHeats.length; i++) {
+            await supabase
+              .from("heats")
+              .update({ heat_number: i + 1 })
+              .eq("id", newHeats[i].id);
+          }
         }
         
         // Recarregar e recalcular horários
@@ -1997,16 +2084,15 @@ export default function HeatsNew() {
                         >
                           {(listeners, attributes) => (
                             <Card className="p-4 relative">
-                              <div className="absolute left-2 top-4 z-10">
-                                <div 
-                                  {...attributes} 
-                                  {...listeners} 
-                                  className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent/50 rounded"
-                                  title="Arrastar para reorganizar"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <GripVertical className="w-4 h-4 text-muted-foreground" />
-                                </div>
+                              <div 
+                                {...attributes} 
+                                {...listeners} 
+                                className="absolute left-2 top-4 z-20 cursor-grab active:cursor-grabbing p-2 hover:bg-accent/50 rounded transition-colors"
+                                title="Arrastar para reorganizar"
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                              >
+                                <GripVertical className="w-5 h-5 text-muted-foreground hover:text-foreground" />
                               </div>
                           <Collapsible open={isExpanded} onOpenChange={() => toggleHeatExpand(heat.id)}>
                             <div className="flex items-center justify-between mb-3">
@@ -2192,7 +2278,7 @@ export default function HeatsNew() {
                     type="number"
                     min="0"
                     value={wodIntervalMinutes}
-                    onChange={(e) => setWodIntervalMinutes(parseInt(e.target.value) || 10)}
+                    onChange={(e) => setWodIntervalMinutes(parseInt(e.target.value) || 0)}
                   />
                   <Button onClick={handleApplyWodInterval} size="sm">
                     APLICAR
