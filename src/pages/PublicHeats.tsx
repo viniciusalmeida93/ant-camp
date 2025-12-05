@@ -510,15 +510,20 @@ export default function PublicHeats() {
       console.log("Baterias após filtro de dia:", filtered.map(h => ({ id: h.id, wod: h.wod_name, day: h.day_number })));
     }
 
-    // Ordenar por: 1) ordem do WOD (order_num), 2) horário, 3) número da bateria (sequencial global)
-    // Quando filtrar por categoria, manter ordem sequencial global para baterias intercaladas
+    // Ordenar exatamente como na página interna (HeatsNew.tsx)
+    // Quando filtrar por categoria: ordenar por WOD primeiro, depois heat_number (mantém ordem sequencial global)
+    // Isso garante que baterias intercaladas apareçam na posição correta:
+    // - Filtrar "iniciante feminino": baterias 01, 02, 03 (03 é mista, aparece como última)
+    // - Filtrar "iniciante masculino": baterias 03, 04 (03 é mista, aparece como primeira)
     filtered.sort((a, b) => {
+      // 1) Dia da prova (se houver)
       const dayA = a.day_number ?? 9999;
       const dayB = b.day_number ?? 9999;
       if (dayA !== dayB) {
         return dayA - dayB;
       }
 
+      // 2) Horário agendado
       if (a.scheduled_time && b.scheduled_time) {
         const diff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
         if (diff !== 0) return diff;
@@ -528,25 +533,27 @@ export default function PublicHeats() {
         return 1;
       }
 
+      // 3) Ordem do WOD (order_num) - SEMPRE verificar WOD primeiro, mesmo quando filtrar por categoria
       const wodOrderA = a.wod_order ?? 9999;
       const wodOrderB = b.wod_order ?? 9999;
       if (wodOrderA !== wodOrderB) {
         return wodOrderA - wodOrderB;
       }
 
-      // Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
+      // 4) Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
       // Isso garante que baterias intercaladas apareçam na posição correta dentro da categoria
       if (selectedCategory !== "all") {
         return a.heat_number - b.heat_number;
       }
 
-      // Sem filtro de categoria: ordenar por categoria original, depois número
+      // 5) Sem filtro de categoria: ordenar por categoria original, depois número
       const categoryOrderA = a.category_order ?? 9999;
       const categoryOrderB = b.category_order ?? 9999;
       if (categoryOrderA !== categoryOrderB) {
         return categoryOrderA - categoryOrderB;
       }
 
+      // 6) Número da bateria como último critério
       return a.heat_number - b.heat_number;
     });
 
