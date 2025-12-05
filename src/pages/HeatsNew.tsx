@@ -2063,10 +2063,10 @@ export default function HeatsNew() {
 
   // Filtrar competidores por busca
   // IMPORTANTE: Mostrar apenas atletas que NÃO estão em nenhuma bateria
+  // Se selectedCategory estiver vazio, tratar como 'all' para mostrar todos
+  const effectiveCategory = selectedCategory || 'all';
+  
   const filteredCompetitors = registrations.filter(reg => {
-    // Se nenhuma categoria selecionada ou vazio, não mostra ninguém
-    if (!selectedCategory || selectedCategory === '') return false;
-    
     // Verificar se o atleta já está em alguma bateria (em TODAS as baterias do campeonato)
     // Usar allChampionshipEntries para verificar todas as baterias, não apenas as filtradas
     const isInHeat = allChampionshipEntries.some(e => e.registration_id === reg.id);
@@ -2075,15 +2075,19 @@ export default function HeatsNew() {
     if (isInHeat) return false;
     
     // Aplicar filtro de categoria
-    if (selectedCategory !== 'all') {
+    if (effectiveCategory !== 'all') {
       // Se categoria específica selecionada, filtrar por categoria
-      if (reg.category_id !== selectedCategory) return false;
+      if (reg.category_id !== effectiveCategory) return false;
     }
-    // Se "all" estiver selecionado, não filtra por categoria (mostra todos os disponíveis)
+    // Se "all" estiver selecionado (ou vazio), não filtra por categoria (mostra todos os disponíveis)
     
-    // Aplicar filtro de busca por nome
-    const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
-    return name.includes(searchTerm.toLowerCase());
+    // Aplicar filtro de busca por nome (se houver busca)
+    if (searchTerm && searchTerm.trim() !== '') {
+      const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
+      if (!name.includes(searchTerm.toLowerCase())) return false;
+    }
+    
+    return true;
   });
 
   // Ordenar competidores
@@ -2129,7 +2133,12 @@ export default function HeatsNew() {
                     <Label className="text-sm font-semibold">Competidores</Label>
                     <p className="text-xs text-muted-foreground mb-3">Categoria e WOD</p>
                     
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <Select 
+                      value={selectedCategory || 'all'} 
+                      onValueChange={(value) => {
+                        setSelectedCategory(value);
+                      }}
+                    >
                     <SelectTrigger className="mb-2">
                       <SelectValue placeholder="Categoria" />
                     </SelectTrigger>
