@@ -833,7 +833,8 @@ export default function HeatsNew() {
 
       if (error) throw error;
 
-      // Atualizar IMEDIATAMENTE o estado local para que o atleta apareça na lista lateral
+      // Atualizar IMEDIATAMENTE todos os estados locais
+      // Isso faz o atleta aparecer instantaneamente na lista lateral
       setAllChampionshipEntries(prev => prev.filter(e => e.id !== entryId));
       setHeatEntries(prev => prev.filter(e => e.id !== entryId));
       
@@ -845,10 +846,15 @@ export default function HeatsNew() {
         return newMap;
       });
 
+      // Atualizar os heats para refletir a mudança na contagem de ocupados
+      setHeats(prev => prev.map(h => {
+        if (h.id === heatId) {
+          return { ...h };
+        }
+        return h;
+      }));
+
       toast.success("Atleta removido da bateria!");
-      
-      // Recarregar dados em segundo plano para garantir sincronização com o banco
-      loadHeats();
     } catch (error: any) {
       console.error("Error removing from heat:", error);
       toast.error("Erro ao remover atleta da bateria");
