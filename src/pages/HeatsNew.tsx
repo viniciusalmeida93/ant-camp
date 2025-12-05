@@ -1314,6 +1314,56 @@ export default function HeatsNew() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
+    // Verificar se são baterias sendo arrastadas (reordenar baterias)
+    if (activeId.startsWith('heat-card-') && overId.startsWith('heat-card-')) {
+      const activeHeatId = activeId.replace('heat-card-', '');
+      const overHeatId = overId.replace('heat-card-', '');
+      
+      if (activeHeatId === overHeatId) {
+        setActiveId(null);
+        return;
+      }
+      
+      try {
+        // Buscar TODAS as baterias ordenadas por heat_number
+        const { data: allHeatsOrdered } = await supabase
+          .from("heats")
+          .select("*")
+          .eq("championship_id", selectedChampionship?.id)
+          .order("heat_number");
+        
+        if (!allHeatsOrdered) return;
+        
+        const activeIndex = allHeatsOrdered.findIndex(h => h.id === activeHeatId);
+        const overIndex = allHeatsOrdered.findIndex(h => h.id === overHeatId);
+        
+        if (activeIndex === -1 || overIndex === -1) return;
+        
+        // Reordenar array
+        const newHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
+        
+        // Atualizar heat_number no banco para TODAS as baterias
+        for (let i = 0; i < newHeats.length; i++) {
+          await supabase
+            .from("heats")
+            .update({ heat_number: i + 1 })
+            .eq("id", newHeats[i].id);
+        }
+        
+        // Recarregar e recalcular horários
+        await loadHeats();
+        await calculateAllHeatsSchedule();
+        
+        toast.success("Baterias reorganizadas e horários recalculados!");
+      } catch (error) {
+        console.error("Erro ao reordenar baterias:", error);
+        toast.error("Erro ao reorganizar baterias");
+      } finally {
+        setActiveId(null);
+      }
+      return;
+    }
+
     // Verificar se é um atleta da sidebar sendo arrastado
     const isSidebarAthlete = activeId.startsWith('sidebar-athlete-');
     const activeMatch = activeId.match(/^heat-(.+?)-entry-(.+)$/);
@@ -1512,6 +1562,36 @@ export default function HeatsNew() {
         {lbEntry?.position && (
           <Badge variant="secondary" className="text-xs">{lbEntry.position}º</Badge>
         )}
+      </div>
+    );
+  }
+
+  function SortableHeatCard({ heat, children, onRenderDragHandle }: { 
+    heat: any; 
+    children: React.ReactNode;
+    onRenderDragHandle?: (listeners: any, attributes: any) => React.ReactNode;
+  }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id: `heat-card-${heat.id}`,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style}>
+        {onRenderDragHandle ? onRenderDragHandle(listeners, attributes) : null}
+        {children}
       </div>
     );
   }
@@ -1879,7 +1959,11 @@ export default function HeatsNew() {
                   </p>
                 </Card>
               ) : (
-                <div className="space-y-4">
+                <SortableContext 
+                  items={filteredHeats.map(h => `heat-card-${h.id}`)} 
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-4">
                     {filteredHeats.map(heat => {
                       const currentEntries = allHeatEntries.get(heat.id) || [];
                       // Usar sempre o valor do banco primeiro, depois heatCapacities, depois padrão
@@ -1909,10 +1993,27 @@ export default function HeatsNew() {
                       const isExpanded = expandedHeats.has(heat.id);
 
                       return (
-                        <Card key={heat.id} className="p-4">
+                        <SortableHeatCard 
+                          key={heat.id} 
+                          heat={heat}
+                          onRenderDragHandle={(listeners, attributes) => (
+                            <div className="absolute left-2 top-4">
+                              <div 
+                                {...attributes} 
+                                {...listeners} 
+                                className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent/50 rounded"
+                                title="Arrastar para reorganizar"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <GripVertical className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            </div>
+                          )}
+                        >
+                          <Card className="p-4 relative">
                           <Collapsible open={isExpanded} onOpenChange={() => toggleHeatExpand(heat.id)}>
                             <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-3 flex-1">
+                              <div className="flex items-center gap-3 flex-1 pl-8">
                                 <input
                                   type="checkbox"
                                   checked={selectedHeats.has(heat.id)}
@@ -2033,9 +2134,11 @@ export default function HeatsNew() {
                             </CollapsibleContent>
                           </Collapsible>
                         </Card>
+                        </SortableHeatCard>
                       );
                     })}
                   </div>
+                </SortableContext>
               )}
             </div>
           </div>
