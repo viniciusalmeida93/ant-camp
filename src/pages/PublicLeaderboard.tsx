@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trophy, Medal, Minus, Loader2 } from "lucide-react";
-import { calculateLeaderboard } from "@/lib/scoring";
+import { Trophy, Minus, Loader2 } from "lucide-react";
+// REMOVIDO: Usando função local que inclui todos os registros mesmo sem resultados
+// import { calculateLeaderboard } from "@/lib/scoring";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -114,6 +115,126 @@ export default function PublicLeaderboard() {
     }
   };
 
+  const calculateLeaderboardLocal = (results: any[], regs: any[]): LeaderboardEntry[] => {
+    // Agrupar resultados por registration_id
+    const participantMap = new Map<string, any[]>();
+    
+    results.forEach(result => {
+      const regId = result.registration_id;
+      if (!regId) return;
+      
+      if (!participantMap.has(regId)) {
+        participantMap.set(regId, []);
+      }
+      participantMap.get(regId)!.push(result);
+    });
+
+    // Criar entradas do leaderboard
+    // IMPORTANTE: Incluir TODOS os registros da categoria, mesmo sem resultados
+    const entries: LeaderboardEntry[] = [];
+    const processedRegIds = new Set<string>();
+    
+    // Filtrar registros apenas da categoria selecionada
+    const categoryRegs = regs.filter(r => r.category_id === selectedCategory);
+    
+    // Primeiro, processar participantes com resultados
+    participantMap.forEach((wodResults, registrationId) => {
+      const reg = categoryRegs.find(r => r.id === registrationId);
+      if (!reg) return;
+      
+      processedRegIds.add(registrationId);
+
+      const totalPoints = wodResults.reduce((sum, r) => sum + (r.points || 0), 0);
+      const firstPlaces = wodResults.filter(r => r.position === 1).length;
+      const secondPlaces = wodResults.filter(r => r.position === 2).length;
+      const thirdPlaces = wodResults.filter(r => r.position === 3).length;
+      
+      // Ordenar resultados por ordem dos WODs (order_num) e depois por created_at
+      const sortedResults = [...wodResults].sort((a, b) => {
+        const wodA = wods.find(w => w.id === a.wod_id);
+        const wodB = wods.find(w => w.id === b.wod_id);
+        const orderA = wodA?.order_num || 0;
+        const orderB = wodB?.order_num || 0;
+        
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      
+      const lastWodPosition = sortedResults.length > 0 
+        ? sortedResults[sortedResults.length - 1].position 
+        : undefined;
+      
+      entries.push({
+        registrationId,
+        participantName: reg.team_name || reg.athlete_name || 'Desconhecido',
+        categoryId: selectedCategory,
+        totalPoints,
+        position: 0, // será calculado depois
+        firstPlaces,
+        secondPlaces,
+        thirdPlaces,
+        lastWodPosition,
+        wodResults: sortedResults.map(r => ({
+          ...r,
+          wodId: r.wod_id,
+        })),
+      });
+    });
+    
+    // Depois, adicionar participantes SEM resultados (zerados)
+    categoryRegs.forEach(reg => {
+      if (!processedRegIds.has(reg.id)) {
+        entries.push({
+          registrationId: reg.id,
+          participantName: reg.team_name || reg.athlete_name || 'Desconhecido',
+          categoryId: selectedCategory,
+          totalPoints: 0,
+          position: 0, // será calculado depois
+          firstPlaces: 0,
+          secondPlaces: 0,
+          thirdPlaces: 0,
+          lastWodPosition: undefined,
+          wodResults: [],
+        });
+      }
+    });
+
+    // Ordenar e atribuir posições
+    entries.sort((a, b) => {
+      // 1. Mais pontos
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      
+      // 2. Mais primeiros lugares
+      if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
+      
+      // 3. Mais segundos lugares
+      if (b.secondPlaces !== a.secondPlaces) return b.secondPlaces - a.secondPlaces;
+      
+      // 4. Mais terceiros lugares
+      if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
+      
+      // 5. Melhor posição no último WOD (menor número é melhor)
+      if (a.lastWodPosition !== undefined && b.lastWodPosition !== undefined) {
+        return a.lastWodPosition - b.lastWodPosition;
+      }
+      
+      if (a.lastWodPosition !== undefined) return -1;
+      if (b.lastWodPosition !== undefined) return 1;
+      
+      return 0;
+    });
+
+    // Atribuir posições finais
+    entries.forEach((entry, index) => {
+      entry.position = index + 1;
+    });
+
+    return entries;
+  };
+
   const loadLeaderboard = async () => {
     if (!selectedCategory || !championship) return;
 
@@ -163,27 +284,10 @@ export default function PublicLeaderboard() {
       });
 
       console.log("Participantes mapeados:", participantNames.size);
+      console.log("Resultados carregados:", resultsData?.length || 0);
 
-      // Converter resultados para formato esperado pela função calculateLeaderboard
-      const resultsForScoring = (resultsData || []).map((r: any) => ({
-        id: r.id,
-        wodId: r.wod_id,
-        categoryId: r.category_id,
-        registrationId: r.registration_id,
-        result: r.result,
-        tiebreakValue: r.tiebreak_value,
-        status: r.status,
-        points: r.points,
-        position: r.position,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      }));
-
-      console.log("Resultados formatados:", resultsForScoring.length);
-
-      // Calcular leaderboard
-      const presetType = configData?.preset_type;
-      const entries = calculateLeaderboard(resultsForScoring, selectedCategory, participantNames, presetType);
+      // Calcular leaderboard usando função local que inclui todos os participantes
+      const entries = calculateLeaderboardLocal(resultsData || [], regsData || []);
       
       // Garantir que os wodResults tenham tanto wodId quanto wod_id para compatibilidade
       const entriesWithBothIds = entries.map(entry => ({
@@ -195,7 +299,7 @@ export default function PublicLeaderboard() {
         })),
       }));
       
-      console.log("Leaderboard calculado:", entriesWithBothIds.length);
+      console.log("Leaderboard calculado:", entriesWithBothIds.length, "participantes");
       setLeaderboard(entriesWithBothIds);
     } catch (error: any) {
       console.error("Error loading leaderboard:", error);
@@ -208,30 +312,7 @@ export default function PublicLeaderboard() {
   };
 
   const getPositionBadge = (position: number) => {
-    if (position === 1) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-accent" />
-          <span className="text-base font-bold">1º</span>
-        </div>
-      );
-    }
-    if (position === 2) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-muted-foreground" />
-          <span className="text-base font-bold">2º</span>
-        </div>
-      );
-    }
-    if (position === 3) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Medal className="w-4 h-4 text-amber-600" />
-          <span className="text-base font-bold">3º</span>
-        </div>
-      );
-    }
+    // Sem medalhas, apenas número da posição
     return <span className="text-sm font-bold">{position}º</span>;
   };
 
@@ -283,7 +364,7 @@ export default function PublicLeaderboard() {
               </SelectContent>
             </Select>
           </div>
-          {leaderboard.length > 0 && (
+          {selectedCategory && (
             <div className="text-sm text-muted-foreground">
               {leaderboard.length} participantes
             </div>
@@ -291,7 +372,7 @@ export default function PublicLeaderboard() {
         </div>
       </Card>
 
-      {selectedCategory && leaderboard.length > 0 && (
+      {selectedCategory && (
         <>
           {/* Versão Desktop - Tabela completa */}
           <Card className="shadow-card overflow-hidden hidden md:block">
@@ -304,10 +385,6 @@ export default function PublicLeaderboard() {
                   <TableHead className="min-w-[200px] sticky left-[84px] bg-muted/50 z-10">Atleta/Time</TableHead>
                   <TableHead className="text-center">Pontos</TableHead>
                   {wods
-                    .filter(wod => {
-                      // Verificar se há resultados para este WOD na categoria selecionada
-                      return wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory);
-                    })
                     .sort((a, b) => (a.order_num || 0) - (b.order_num || 0))
                     .map(wod => (
                       <TableHead key={wod.id} className="text-center min-w-[80px]">
@@ -321,11 +398,8 @@ export default function PublicLeaderboard() {
               </TableHeader>
               <TableBody>
                 {leaderboard.map((entry) => {
-                  // Obter WODs com resultados para esta categoria, ordenados por order_num
-                  const wodsWithResults = wods
-                    .filter(wod => 
-                      wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory)
-                    )
+                  // Sempre mostrar TODOS os WODs, ordenados por order_num
+                  const allWodsSorted = [...wods]
                     .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
                   
                   return (
@@ -359,7 +433,7 @@ export default function PublicLeaderboard() {
                   </span>
                 </div>
                       </TableCell>
-                      {wodsWithResults.map(wod => {
+                      {allWodsSorted.map(wod => {
                         const result = entry.wodResults.find(r => {
                           // Verificar tanto wod_id quanto wodId (formato do banco vs formato convertido)
                           return (r.wod_id === wod.id) || (r.wodId === wod.id);
@@ -381,7 +455,7 @@ export default function PublicLeaderboard() {
                                 <span className="text-xs text-destructive">DNF</span>
                                 <span className="text-xs text-muted-foreground">{points}pts</span>
                               </div>
-                            ) : position ? (
+                            ) : position && position > 0 ? (
                               <div className="flex flex-col items-center gap-0.5">
                                 <span className={`text-sm font-bold ${
                                   position === 1 ? 'text-accent' :
@@ -401,7 +475,11 @@ export default function PublicLeaderboard() {
                   )}
                 </div>
                             ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-sm font-bold text-muted-foreground">0</span>
+                                <span className="text-xs text-muted-foreground">0pts</span>
+                                <span className="text-xs text-muted-foreground">0</span>
+                              </div>
                             )}
                           </TableCell>
                         );
@@ -418,10 +496,8 @@ export default function PublicLeaderboard() {
           <div className="md:hidden space-y-3">
             <Accordion type="multiple" className="w-full">
               {leaderboard.map((entry) => {
-                const wodsWithResults = wods
-                  .filter(wod => 
-                    wodResults.some(r => r.wod_id === wod.id && r.category_id === selectedCategory)
-                  )
+                // Sempre mostrar TODOS os WODs, ordenados por order_num
+                const allWodsSorted = [...wods]
                   .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
 
                 return (
@@ -455,7 +531,7 @@ export default function PublicLeaderboard() {
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="pt-2 space-y-3 pb-2">
-                        {wodsWithResults.map(wod => {
+                        {allWodsSorted.map(wod => {
                           const result = entry.wodResults.find(r => {
                             // Verificar tanto wod_id quanto wodId (formato do banco vs formato convertido)
                             return (r.wod_id === wod.id) || (r.wodId === wod.id);
@@ -486,7 +562,7 @@ export default function PublicLeaderboard() {
                                     <span className="text-xs text-destructive">DNF</span>
                                     <span className="text-xs text-muted-foreground">{points}pts</span>
                                   </div>
-                                ) : position ? (
+                                ) : position && position > 0 ? (
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className={`text-sm font-bold ${
                                       position === 1 ? 'text-accent' :
@@ -501,7 +577,11 @@ export default function PublicLeaderboard() {
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-bold text-muted-foreground">0</span>
+                                    <span className="text-xs text-muted-foreground">0pts</span>
+                                    <span className="text-xs text-muted-foreground">0</span>
+                                  </div>
                   )}
                 </div>
                 </div>
@@ -515,15 +595,6 @@ export default function PublicLeaderboard() {
             </Accordion>
           </div>
         </>
-      )}
-
-      {selectedCategory && leaderboard.length === 0 && (
-        <Card className="p-12 text-center shadow-card">
-          <Trophy className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            Nenhum resultado lançado para esta categoria ainda.
-          </p>
-      </Card>
       )}
     </div>
   );
