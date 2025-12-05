@@ -825,6 +825,10 @@ export default function HeatsNew() {
 
   const handleRemoveFromHeat = async (entryId: string, heatId: string) => {
     try {
+      // Buscar info da entry antes de remover para debug
+      const entryToRemove = allChampionshipEntries.find(e => e.id === entryId);
+      console.log('[DEBUG] Removendo entry:', entryId, 'registration_id:', entryToRemove?.registration_id);
+      
       // Remover apenas da heat_entries (não exclui a inscrição)
       const { error } = await supabase
         .from("heat_entries")
@@ -836,7 +840,9 @@ export default function HeatsNew() {
       toast.success("Atleta removido da bateria!");
       
       // Recarregar TUDO para garantir sincronia
+      console.log('[DEBUG] Recarregando heats após remoção...');
       await loadHeats();
+      console.log('[DEBUG] allChampionshipEntries após reload:', allChampionshipEntries.length);
     } catch (error: any) {
       console.error("Error removing from heat:", error);
       toast.error("Erro ao remover atleta da bateria");
@@ -2153,6 +2159,12 @@ export default function HeatsNew() {
     // Usar allChampionshipEntries para verificar todas as baterias, não apenas as filtradas
     const isInHeat = allChampionshipEntries.some(e => e.registration_id === reg.id);
     
+    // DEBUG: Log para verificar se está filtrando corretamente
+    const name = reg.team_name || reg.athlete_name || '';
+    if (name.toLowerCase().includes('fé') || name.toLowerCase().includes('alpha')) {
+      console.log(`[DEBUG] ${name} - isInHeat: ${isInHeat}, category: ${reg.category_id}, effectiveCategory: ${effectiveCategory}`);
+    }
+    
     // Se está em bateria, não mostrar na lista lateral (só mostra os disponíveis)
     if (isInHeat) return false;
     
@@ -2165,8 +2177,8 @@ export default function HeatsNew() {
     
     // Aplicar filtro de busca por nome (se houver busca)
     if (searchTerm && searchTerm.trim() !== '') {
-      const name = (reg.team_name || reg.athlete_name || '').toLowerCase();
-      if (!name.includes(searchTerm.toLowerCase())) return false;
+      const searchName = (reg.team_name || reg.athlete_name || '').toLowerCase();
+      if (!searchName.includes(searchTerm.toLowerCase())) return false;
     }
     
     return true;
