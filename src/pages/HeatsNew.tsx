@@ -260,6 +260,166 @@ export default function HeatsNew() {
       }));
   };
 
+  /**
+   * Intercala as baterias para preencher todas as raias
+   * Reorganiza atletas/times entre baterias para maximizar ocupação
+   * Pode misturar categorias se necessário para preencher raias
+   */
+  const handleIntercalateHeats = async () => {
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      // Buscar todas as baterias do campeonato
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number");
+
+      if (!allHeats || allHeats.length === 0) {
+        toast.error("Não há baterias para intercalar");
+        setGenerating(false);
+        return;
+      }
+
+      // Buscar todas as entradas de baterias
+      const { data: allEntries } = await supabase
+        .from("heat_entries")
+        .select("*, registrations(*)")
+        .in("heat_id", allHeats.map(h => h.id));
+
+      if (!allEntries) {
+        toast.error("Erro ao buscar entradas");
+        setGenerating(false);
+        return;
+      }
+
+      // Agrupar entradas por bateria
+      const entriesByHeat = new Map<string, any[]>();
+      allEntries.forEach(entry => {
+        if (!entriesByHeat.has(entry.heat_id)) {
+          entriesByHeat.set(entry.heat_id, []);
+        }
+        entriesByHeat.get(entry.heat_id)!.push(entry);
+      });
+
+      // Coletar todos os participantes disponíveis (com suas categorias)
+      const allParticipants: Array<{ entry: any; categoryId: string; heatId: string }> = [];
+      
+      allHeats.forEach(heat => {
+        const entries = entriesByHeat.get(heat.id) || [];
+        entries.forEach(entry => {
+          allParticipants.push({
+            entry,
+            categoryId: heat.category_id,
+            heatId: heat.id,
+          });
+        });
+      });
+
+      // Agrupar baterias por WOD (para manter mesma categoria quando possível)
+      const heatsByWod = new Map<string, any[]>();
+      allHeats.forEach(heat => {
+        if (!heatsByWod.has(heat.wod_id)) {
+          heatsByWod.set(heat.wod_id, []);
+        }
+        heatsByWod.get(heat.wod_id)!.push(heat);
+      });
+
+      // Reorganizar participantes para preencher todas as raias
+      let participantIndex = 0;
+      
+      for (const [wodId, wodHeats] of heatsByWod.entries()) {
+        // Ordenar baterias por heat_number
+        const sortedHeats = [...wodHeats].sort((a, b) => a.heat_number - b.heat_number);
+        
+        for (const heat of sortedHeats) {
+          const capacity = heatCapacities.get(heat.id) || heat.athletes_per_heat || athletesPerHeat;
+          
+          // Coletar participantes para esta bateria
+          const heatParticipants: any[] = [];
+          
+          // Primeiro, tentar usar participantes da mesma categoria
+          const sameCategoryParticipants = allParticipants.filter(
+            p => p.categoryId === heat.category_id && !heatParticipants.includes(p.entry)
+          );
+          
+          // Preencher com participantes da mesma categoria
+          for (let i = 0; i < Math.min(capacity, sameCategoryParticipants.length); i++) {
+            if (participantIndex < allParticipants.length) {
+              const participant = sameCategoryParticipants[i];
+              if (participant && !heatParticipants.includes(participant.entry)) {
+                heatParticipants.push(participant.entry);
+                participantIndex++;
+              }
+            }
+          }
+          
+          // Se ainda faltar, preencher com participantes de outras categorias (mesmo WOD)
+          const otherCategoryParticipants = allParticipants.filter(
+            p => p.categoryId !== heat.category_id && 
+                 p.entry.heat_id && 
+                 allHeats.find(h => h.id === p.entry.heat_id)?.wod_id === wodId &&
+                 !heatParticipants.includes(p.entry)
+          );
+          
+          while (heatParticipants.length < capacity && otherCategoryParticipants.length > 0) {
+            const participant = otherCategoryParticipants.shift();
+            if (participant) {
+              heatParticipants.push(participant.entry);
+            }
+          }
+          
+          // Se ainda faltar, usar qualquer participante disponível
+          while (heatParticipants.length < capacity && participantIndex < allParticipants.length) {
+            const participant = allParticipants[participantIndex];
+            if (participant && !heatParticipants.includes(participant.entry)) {
+              heatParticipants.push(participant.entry);
+            }
+            participantIndex++;
+          }
+
+          // Deletar entradas antigas desta bateria
+          await supabase
+            .from("heat_entries")
+            .delete()
+            .eq("heat_id", heat.id);
+
+          // Criar novas entradas
+          if (heatParticipants.length > 0) {
+            const newEntries = heatParticipants.map((entry, index) => ({
+              heat_id: heat.id,
+              registration_id: entry.registration_id,
+              lane_number: index + 1,
+            }));
+
+            await supabase
+              .from("heat_entries")
+              .insert(newEntries);
+          }
+        }
+      }
+
+      // Recarregar dados
+      await loadHeats();
+      await loadHeatEntries();
+      
+      // Recalcular horários após intercalação
+      await calculateAllHeatsSchedule();
+      
+      toast.success("Baterias intercaladas e horários recalculados!");
+    } catch (error: any) {
+      console.error("Erro ao intercalar baterias:", error);
+      toast.error("Erro ao intercalar baterias");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleGenerateHeats = async () => {
     if (!selectedChampionship) {
       toast.error("Selecione um campeonato");
@@ -1232,6 +1392,50 @@ export default function HeatsNew() {
     );
   }
 
+  function SortableTableRow({ heat, heatDisplayName, timeCap, scheduledTime, endTime, transitionTime }: { 
+    heat: any; 
+    heatDisplayName: string; 
+    timeCap: string; 
+    scheduledTime: string; 
+    endTime: string; 
+    transitionTime: number;
+  }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({
+      id: `heat-${heat.id}`,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <TableRow ref={setNodeRef} style={style}>
+        <TableCell>
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <GripVertical className="w-4 h-4 text-muted-foreground" />
+          </div>
+        </TableCell>
+        <TableCell className="font-bold">{heat.heat_number}</TableCell>
+        <TableCell className="font-medium">
+          {heatDisplayName}
+        </TableCell>
+        <TableCell>{timeCap}</TableCell>
+        <TableCell>{scheduledTime}</TableCell>
+        <TableCell>{endTime}</TableCell>
+        <TableCell>{transitionTime}min</TableCell>
+      </TableRow>
+    );
+  }
+
   function HeatDropZone({ heatId, children }: { heatId: string; children: React.ReactNode }) {
     const { setNodeRef, isOver } = useDroppable({
       id: `heat-dropzone-${heatId}`,
@@ -1520,6 +1724,16 @@ export default function HeatsNew() {
                     )}
                     
                     <Button 
+                      onClick={handleIntercalateHeats} 
+                      variant="outline" 
+                      size="sm"
+                      disabled={generating || filteredHeats.length === 0}
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                      Intercalar
+                    </Button>
+                    
+                    <Button 
                       onClick={handleOpenCreateHeat} 
                       variant="outline" 
                       size="sm"
@@ -1766,67 +1980,112 @@ export default function HeatsNew() {
           </Card>
 
           <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead className="w-24">Bateria</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="w-24">TimeCap</TableHead>
-                  <TableHead className="w-24">Início</TableHead>
-                  <TableHead className="w-24">Término</TableHead>
-                  <TableHead className="w-24">Transição</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredHeats.length === 0 ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={async (event: DragEndEvent) => {
+                const { active, over } = event;
+                
+                if (!over || active.id === over.id) return;
+                
+                const activeId = active.id.toString();
+                const overId = over.id.toString();
+                
+                // Verificar se são IDs de baterias (formato: heat-{id})
+                if (activeId.startsWith('heat-') && overId.startsWith('heat-')) {
+                  const activeHeatId = activeId.replace('heat-', '');
+                  const overHeatId = overId.replace('heat-', '');
+                  
+                  // Buscar TODAS as baterias ordenadas por heat_number
+                  const { data: allHeatsOrdered } = await supabase
+                    .from("heats")
+                    .select("*")
+                    .eq("championship_id", selectedChampionship?.id)
+                    .order("heat_number");
+                  
+                  if (!allHeatsOrdered) return;
+                  
+                  const activeIndex = allHeatsOrdered.findIndex(h => h.id === activeHeatId);
+                  const overIndex = allHeatsOrdered.findIndex(h => h.id === overHeatId);
+                  
+                  if (activeIndex === -1 || overIndex === -1) return;
+                  
+                  // Reordenar array
+                  const newHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
+                  
+                  // Atualizar heat_number no banco para TODAS as baterias
+                  try {
+                    for (let i = 0; i < newHeats.length; i++) {
+                      await supabase
+                        .from("heats")
+                        .update({ heat_number: i + 1 })
+                        .eq("id", newHeats[i].id);
+                    }
+                    
+                    // Recarregar e recalcular horários
+                    await loadHeats();
+                    await calculateAllHeatsSchedule();
+                    
+                    toast.success("Baterias reorganizadas e horários recalculados!");
+                  } catch (error) {
+                    console.error("Erro ao reordenar baterias:", error);
+                    toast.error("Erro ao reorganizar baterias");
+                  }
+                }
+              }}
+            >
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Nenhuma bateria gerada ainda
-                    </TableCell>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="w-24">Bateria</TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead className="w-24">TimeCap</TableHead>
+                    <TableHead className="w-24">Início</TableHead>
+                    <TableHead className="w-24">Término</TableHead>
+                    <TableHead className="w-24">Transição</TableHead>
                   </TableRow>
-                ) : (
-                  filteredHeats.map(heat => {
-                    const wodInfo = wods.find(w => w.id === heat.wod_id);
-                    const categoryInfo = categories.find(c => c.id === heat.category_id);
-                    const timeCap = wodInfo?.time_cap || '10:00';
-                    
-                    // Calcular horário de término
-                    const timecapMinutes = timeCap.includes(':') 
-                      ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
-                      : parseInt(timeCap) || 10;
-                    
-                    const startDate = heat.scheduled_time ? new Date(heat.scheduled_time) : new Date();
-                    const endDate = new Date(startDate.getTime() + timecapMinutes * 60000);
-                    
-                    const scheduledTime = heat.scheduled_time 
-                      ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
-                      : startTime;
-                    const endTime = endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-                    
-                    // Nome da bateria (custom ou padrão)
-                    const heatDisplayName = heat.custom_name || 
-                      (categoryInfo && wodInfo ? `${categoryInfo.name} - ${wodInfo.name}` : `BATERIA ${heat.heat_number}`);
-                    
-                    return (
-                      <TableRow key={heat.id}>
-                        <TableCell>
-                          <GripVertical className="w-4 h-4 text-muted-foreground" />
-                        </TableCell>
-                        <TableCell className="font-bold">{heat.heat_number}</TableCell>
-                        <TableCell className="font-medium">
-                          {heatDisplayName}
-                        </TableCell>
-                        <TableCell>{timeCap}</TableCell>
-                        <TableCell>{scheduledTime}</TableCell>
-                        <TableCell>{endTime}</TableCell>
-                        <TableCell>{transitionTime}min</TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredHeats.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Nenhuma bateria gerada ainda
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <SortableContext items={filteredHeats.map(h => `heat-${h.id}`)} strategy={verticalListSortingStrategy}>
+                      {filteredHeats.map(heat => {
+                        const wodInfo = wods.find(w => w.id === heat.wod_id);
+                        const categoryInfo = categories.find(c => c.id === heat.category_id);
+                        const timeCap = wodInfo?.time_cap || '10:00';
+                        
+                        // Calcular horário de término
+                        const timecapMinutes = timeCap.includes(':') 
+                          ? parseInt(timeCap.split(':')[0]) + (parseInt(timeCap.split(':')[1]) / 60)
+                          : parseInt(timeCap) || 10;
+                        
+                        const startDate = heat.scheduled_time ? new Date(heat.scheduled_time) : new Date();
+                        const endDate = new Date(startDate.getTime() + timecapMinutes * 60000);
+                        
+                        const scheduledTime = heat.scheduled_time 
+                          ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+                          : startTime;
+                        const endTime = endDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        
+                        // Nome da bateria (custom ou padrão)
+                        const heatDisplayName = heat.custom_name || 
+                          (categoryInfo && wodInfo ? `${categoryInfo.name} - ${wodInfo.name}` : `BATERIA ${heat.heat_number}`);
+                        
+                        return (
+                          <SortableTableRow key={heat.id} heat={heat} heatDisplayName={heatDisplayName} timeCap={timeCap} scheduledTime={scheduledTime} endTime={endTime} transitionTime={transitionTime} />
+                        );
+                      })}
+                    </SortableContext>
+                  )}
+                </TableBody>
+              </Table>
+            </DndContext>
           </Card>
         </TabsContent>
       </Tabs>
