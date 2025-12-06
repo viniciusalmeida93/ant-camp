@@ -575,7 +575,7 @@ export default function PublicLeaderboard() {
                             {getPositionBadge(entry.position)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-sm truncate">
+                            <div className="font-semibold text-sm truncate text-left">
                               {entry.participantName}
                               {entry.position === 1 && (
                                 <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">

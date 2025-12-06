@@ -689,7 +689,7 @@ export default function Leaderboard() {
                             {getPositionBadge(entry.position)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-sm truncate">
+                            <div className="font-semibold text-sm truncate text-left">
                               {entry.participantName}
                               {entry.position === 1 && entry.totalPoints > 0 && (
                                 <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
@@ -698,7 +698,7 @@ export default function Leaderboard() {
                               )}
                             </div>
                           </div>
-                          <div className="flex-shrink-0 text-right">
+                          <div className="flex-shrink-0 text-left">
                             <div className="text-base font-bold text-primary">
                               {entry.totalPoints}
                             </div>
@@ -728,19 +728,19 @@ export default function Leaderboard() {
                                   </div>
                                 )}
                               </div>
-                              <div className="text-right">
+                              <div className="text-left">
                                 {status === 'dns' ? (
-                                  <div className="flex flex-col items-end">
+                                  <div className="flex flex-col items-start">
                                     <span className="text-xs text-muted-foreground">DNS</span>
                                     <span className="text-xs text-muted-foreground">0pts</span>
                                   </div>
                                 ) : status === 'dnf' ? (
-                                  <div className="flex flex-col items-end">
+                                  <div className="flex flex-col items-start">
                                     <span className="text-xs text-destructive">DNF</span>
                                     <span className="text-xs text-muted-foreground">{points}pts</span>
                                   </div>
                                 ) : position && position > 0 ? (
-                                  <div className="flex flex-col items-end gap-0.5">
+                                  <div className="flex flex-col items-start gap-0.5">
                                     <span className={`text-sm font-bold ${
                                       position === 1 ? 'text-accent' :
                                       position === 2 ? 'text-muted-foreground' :
@@ -754,7 +754,7 @@ export default function Leaderboard() {
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="flex flex-col items-end gap-0.5">
+                                  <div className="flex flex-col items-start gap-0.5">
                                     <span className="text-sm font-bold text-muted-foreground">0</span>
                                     <span className="text-xs text-muted-foreground">0pts</span>
                                     <span className="text-xs text-muted-foreground">0</span>
