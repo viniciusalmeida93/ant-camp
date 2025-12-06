@@ -779,17 +779,45 @@ export default function HeatsNew() {
           }
 
           console.log(`🔄 Reorganizando ${categoryWodHeats.length} baterias de ${category.name} + ${wod.name}`);
+          console.log(`🔍 Categoria ID: ${category.id}, Nome: ${category.name}`);
 
           // Buscar atletas desta categoria
           const categoryRegs = registrations.filter(r => r.category_id === category.id);
           
+          // DEBUG ESPECÍFICO PARA INICIANTE FEMININO
+          if (category.name.toUpperCase().includes('INICIANTE') && category.name.toUpperCase().includes('FEMININO')) {
+            console.log(`🔍 DEBUG INICIANTE FEMININO:`);
+            console.log(`  - Total de registrations no sistema: ${registrations.length}`);
+            console.log(`  - Registrations com category_id = ${category.id}: ${categoryRegs.length}`);
+            console.log(`  - Todos os category_id únicos:`, [...new Set(registrations.map(r => r.category_id))]);
+            console.log(`  - Categorias disponíveis:`, categories.map(c => ({ id: c.id, name: c.name })));
+            
+            // Verificar se há registrations com category_id diferente mas nome similar
+            const similarRegs = registrations.filter(r => {
+              const regCategory = categories.find(c => c.id === r.category_id);
+              return regCategory && regCategory.name.toUpperCase().includes('INICIANTE') && regCategory.name.toUpperCase().includes('FEMININO');
+            });
+            console.log(`  - Registrations de categorias similares: ${similarRegs.length}`);
+            if (similarRegs.length > 0) {
+              console.log(`  - IDs das categorias similares:`, [...new Set(similarRegs.map(r => r.category_id))]);
+            }
+          }
+          
           if (categoryRegs.length === 0) {
-            console.log(`⚠️ Nenhum atleta encontrado para ${category.name}`);
+            console.log(`⚠️ Nenhum atleta encontrado para ${category.name} (ID: ${category.id})`);
+            console.log(`⚠️ Verificando se há registrations com category_id diferente...`);
+            const allRegs = registrations.map(r => ({ 
+              id: r.id, 
+              category_id: r.category_id, 
+              nome: r.team_name || r.athlete_name,
+              categoria_nome: categories.find(c => c.id === r.category_id)?.name 
+            }));
+            console.log(`⚠️ Todas as registrations:`, allRegs);
             continue;
           }
 
           console.log(`📋 ${category.name}: ${categoryRegs.length} atletas encontrados`);
-          console.log(`📋 order_index dos atletas:`, categoryRegs.map(r => ({ nome: r.team_name || r.athlete_name, order_index: r.order_index })));
+          console.log(`📋 order_index dos atletas:`, categoryRegs.map(r => ({ nome: r.team_name || r.athlete_name, order_index: r.order_index, category_id: r.category_id })));
 
           // Ordenar atletas por order_index
           // IMPORTANTE: order_index MAIOR = melhor colocado (1º lugar tem maior order_index)
