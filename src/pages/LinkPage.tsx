@@ -309,9 +309,9 @@ export default function LinkPage() {
       <Dialog open={isWodDialogOpen} onOpenChange={setIsWodDialogOpen}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>WODs do Campeonato</DialogTitle>
-          <DialogDescription>
-            Selecione a categoria e a prova para ver os detalhes e adaptações específicas.
+          <DialogTitle className="text-lg sm:text-xl">WODs</DialogTitle>
+          <DialogDescription className="text-sm">
+            Selecione a categoria e a prova
           </DialogDescription>
         </DialogHeader>
 

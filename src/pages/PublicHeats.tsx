@@ -589,17 +589,16 @@ export default function PublicHeats() {
 
   return (
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-      <div className="mb-4 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 sm:mb-2">{championship.name}</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Programação de Baterias
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold mb-1">{championship.name}</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Baterias
         </p>
 
         {/* Filtros */}
-        <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4 bg-card rounded-lg border">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4 bg-card rounded-lg border">
             <div className="space-y-2">
-              <Label htmlFor="filter-category" className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
+              <Label htmlFor="filter-category" className="text-sm">
                 Categoria
               </Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -618,8 +617,7 @@ export default function PublicHeats() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="filter-wod" className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
+              <Label htmlFor="filter-wod" className="text-sm">
                 Prova
               </Label>
               <Select value={selectedWod} onValueChange={setSelectedWod}>
@@ -638,8 +636,7 @@ export default function PublicHeats() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="filter-day" className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
+              <Label htmlFor="filter-day" className="text-sm">
                 Dia
               </Label>
               <Select value={selectedDay} onValueChange={setSelectedDay}>

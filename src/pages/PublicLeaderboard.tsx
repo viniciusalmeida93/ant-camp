@@ -371,17 +371,17 @@ export default function PublicLeaderboard() {
 
   return (
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-      <div className="flex items-center justify-between mb-8 animate-fade-in">
+      <div className="flex items-center justify-between mb-6 animate-fade-in">
         <div className="flex items-center gap-3">
-          <Trophy className="w-8 h-8 text-primary" />
+          <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
           <div>
-            <h1 className="text-4xl font-bold">{championship.name}</h1>
-            <p className="text-muted-foreground">Leaderboard ao Vivo</p>
+            <h1 className="text-xl sm:text-2xl font-bold">{championship.name}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Leaderboard</p>
           </div>
         </div>
       </div>
 
-      <Card className="p-6 shadow-card mb-6">
+      <Card className="p-4 sm:p-6 shadow-card mb-6">
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -395,11 +395,6 @@ export default function PublicLeaderboard() {
               </SelectContent>
             </Select>
           </div>
-          {selectedCategory && (
-            <div className="text-sm text-muted-foreground">
-              {leaderboard.length} participantes
-            </div>
-          )}
         </div>
       </Card>
 
@@ -524,15 +519,15 @@ export default function PublicLeaderboard() {
         </Card>
 
           {/* Versão Mobile - Lista com Accordion */}
-          <div className="md:hidden space-y-3">
-            <Accordion type="multiple" className="w-full">
+          <div className="md:hidden space-y-4">
+            <Accordion type="multiple" className="w-full space-y-3">
               {leaderboard.map((entry) => {
                 // Sempre mostrar TODOS os WODs, ordenados por order_num
                 const allWodsSorted = [...wods]
                   .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
 
                 return (
-                  <AccordionItem key={entry.registrationId} value={entry.registrationId} className="border rounded-lg px-4 bg-card">
+                  <AccordionItem key={entry.registrationId} value={entry.registrationId} className="border rounded-lg px-4 bg-card mb-3">
                     <AccordionTrigger className="hover:no-underline">
                       <div className="flex items-center justify-between w-full pr-4">
                         <div className="flex items-center gap-3 flex-1">
@@ -561,7 +556,7 @@ export default function PublicLeaderboard() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="pt-2 space-y-3 pb-2">
+                      <div className="pt-2 space-y-2 pb-2">
                         {allWodsSorted.map(wod => {
                           const result = entry.wodResults.find(r => {
                             // Verificar tanto wod_id quanto wodId (formato do banco vs formato convertido)
@@ -575,7 +570,7 @@ export default function PublicLeaderboard() {
                           return (
                             <div key={wod.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
                               <div className="flex-1">
-                                <div className="font-semibold text-sm">{wod.name}</div>
+                                <div className="font-medium text-xs">{wod.name}</div>
                                 {resultValue && (
                                   <div className="text-xs text-muted-foreground mt-0.5">
                                     Resultado: {resultValue}

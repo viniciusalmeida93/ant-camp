@@ -719,15 +719,15 @@ export default function Leaderboard() {
         </Card>
 
           {/* Versão Mobile - Lista com Accordion */}
-          <div className="md:hidden space-y-3">
-            <Accordion type="multiple" className="w-full">
+          <div className="md:hidden space-y-4">
+            <Accordion type="multiple" className="w-full space-y-3">
               {leaderboard.map((entry) => {
                 // Obter TODOS os WODs ordenados por order_num (não apenas os com resultados)
                 const allWodsSorted = wods
                   .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
 
                 return (
-                  <AccordionItem key={entry.registrationId} value={entry.registrationId} className="border rounded-lg px-4 bg-card">
+                  <AccordionItem key={entry.registrationId} value={entry.registrationId} className="border rounded-lg px-4 bg-card mb-3">
                     <AccordionTrigger className="hover:no-underline">
                       <div className="flex items-center justify-between w-full pr-4">
                         <div className="flex items-center gap-3 flex-1">
@@ -756,7 +756,7 @@ export default function Leaderboard() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="pt-2 space-y-3 pb-2">
+                      <div className="pt-2 space-y-2 pb-2">
                         {allWodsSorted.map(wod => {
                           const result = entry.wodResults.find(r => r.wod_id === wod.id);
                           const position = result?.position;
@@ -767,7 +767,7 @@ export default function Leaderboard() {
                           return (
                             <div key={wod.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
                               <div className="flex-1">
-                                <div className="font-semibold text-sm">{wod.name}</div>
+                                <div className="font-medium text-xs">{wod.name}</div>
                                 {resultValue && (
                                   <div className="text-xs text-muted-foreground mt-0.5">
                                     Resultado: {resultValue}
