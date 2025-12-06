@@ -118,6 +118,10 @@ export default function PublicLeaderboard() {
   };
 
   const calculateLeaderboardLocal = (results: any[], regs: any[], presetType?: string): LeaderboardEntry[] => {
+    // Garantir que presetType seja sempre uma string válida
+    const validPresetType = presetType && typeof presetType === 'string' ? presetType : 'crossfit-games';
+    console.log("🔍 calculateLeaderboardLocal chamado com presetType:", presetType, "| validPresetType:", validPresetType);
+    
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any[]>();
     
@@ -209,7 +213,9 @@ export default function PublicLeaderboard() {
     // Ordenar e atribuir posições
     // Para "simple-order": menor pontuação ganha (ordem crescente)
     // Para outros sistemas: maior pontuação ganha (ordem decrescente)
-    const isSimpleOrder = presetType === 'simple-order';
+    const validPresetType = presetType && typeof presetType === 'string' ? presetType : 'crossfit-games';
+    const isSimpleOrder = validPresetType === 'simple-order';
+    console.log("🔄 Ordenando leaderboard. Preset recebido:", presetType, "| Preset válido:", validPresetType, "| isSimpleOrder:", isSimpleOrder);
     
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
@@ -226,7 +232,11 @@ export default function PublicLeaderboard() {
       
       // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
-        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+        const result = isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+        if (Math.abs(a.totalPoints - b.totalPoints) <= 5) { // Log apenas para valores próximos para debug
+          console.log(`🔄 Comparando: ${a.participantName} (${a.totalPoints} pts) vs ${b.participantName} (${b.totalPoints} pts) | Result: ${result} | isSimpleOrder: ${isSimpleOrder}`);
+        }
+        return result;
       }
       
       // 2. Mais primeiros lugares
@@ -323,7 +333,11 @@ export default function PublicLeaderboard() {
       console.log("Resultados carregados:", resultsData?.length || 0);
 
       // Calcular leaderboard usando função local que inclui todos os participantes
-      const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], configData?.preset_type);
+      const presetType = configData?.preset_type || 'crossfit-games';
+      console.log("📊 Preset de pontuação detectado:", presetType);
+      console.log("📊 ConfigData completo:", configData);
+      
+      const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], presetType);
       
       // Garantir que os wodResults tenham tanto wodId quanto wod_id para compatibilidade
       const entriesWithBothIds = entries.map(entry => ({
@@ -335,7 +349,12 @@ export default function PublicLeaderboard() {
         })),
       }));
       
-      console.log("Leaderboard calculado:", entriesWithBothIds.length, "participantes");
+      console.log("📊 Leaderboard calculado:", entriesWithBothIds.length, "participantes");
+      console.log("📊 Primeiros 3 participantes (para debug):", entriesWithBothIds.slice(0, 3).map(e => ({
+        nome: e.participantName,
+        pontos: e.totalPoints,
+        posicao: e.position
+      })));
       setLeaderboard(entriesWithBothIds);
     } catch (error: any) {
       console.error("Error loading leaderboard:", error);
