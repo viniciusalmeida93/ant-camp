@@ -117,7 +117,7 @@ export default function PublicLeaderboard() {
     }
   };
 
-  const calculateLeaderboardLocal = (results: any[], regs: any[]): LeaderboardEntry[] => {
+  const calculateLeaderboardLocal = (results: any[], regs: any[], presetType?: string): LeaderboardEntry[] => {
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any[]>();
     
@@ -207,7 +207,10 @@ export default function PublicLeaderboard() {
     });
 
     // Ordenar e atribuir posições
-    // IMPORTANTE: Usar order_index como critério de desempate e para ordenar participantes sem resultados
+    // Para "simple-order": menor pontuação ganha (ordem crescente)
+    // Para outros sistemas: maior pontuação ganha (ordem decrescente)
+    const isSimpleOrder = presetType === 'simple-order';
+    
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
@@ -221,8 +224,10 @@ export default function PublicLeaderboard() {
         return 0;
       }
       
-      // 1. Mais pontos
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      // 1. Pontos (invertido para simple-order: menor é melhor)
+      if (b.totalPoints !== a.totalPoints) {
+        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+      }
       
       // 2. Mais primeiros lugares
       if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
@@ -318,7 +323,7 @@ export default function PublicLeaderboard() {
       console.log("Resultados carregados:", resultsData?.length || 0);
 
       // Calcular leaderboard usando função local que inclui todos os participantes
-      const entries = calculateLeaderboardLocal(resultsData || [], regsData || []);
+      const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], configData?.preset_type);
       
       // Garantir que os wodResults tenham tanto wodId quanto wod_id para compatibilidade
       const entriesWithBothIds = entries.map(entry => ({

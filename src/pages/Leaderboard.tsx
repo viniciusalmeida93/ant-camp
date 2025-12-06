@@ -179,28 +179,26 @@ export default function Leaderboard() {
       }
 
       // SEMPRE buscar dados mais recentes do banco (sem cache)
-      // Para o leaderboard interno (admin), mostrar apenas resultados publicados
+      // Para o leaderboard interno (admin), mostrar TODOS os resultados salvos (publicados ou não)
       const { data: resultsData, error: resultsError } = await supabase
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory)
-        .eq("is_published", true) // Apenas resultados publicados aparecem no leaderboard
+        // Removido filtro is_published - mostrar todos os resultados salvos
         .order("created_at");
 
       if (resultsError) throw resultsError;
       
       console.log('📊 Resultados encontrados:', resultsData?.length || 0);
       
-      // Verificar se os resultados têm pontos calculados
-      const resultsWithoutPoints = (resultsData || []).filter(r => !r.points && !r.position && r.status !== 'dns' && r.status !== 'dnf');
-      
-      // Se houver resultados sem pontos e houver config, recalcular
-      if (resultsWithoutPoints.length > 0 && configData) {
-        console.log(`Recalculando pontos para ${resultsWithoutPoints.length} resultados...`);
+      // SEMPRE recalcular pontos usando a configuração atual (mesmo que já existam pontos salvos)
+      // Isso garante que mudanças na configuração de pontuação sejam refletidas imediatamente
+      if (configData && resultsData && resultsData.length > 0) {
+        console.log(`🔄 Recalculando pontos para ${resultsData.length} resultados usando configuração atual...`);
         
         // Agrupar por WOD
         const resultsByWod = new Map<string, any[]>();
-        resultsData?.forEach(result => {
+        resultsData.forEach(result => {
           const wodId = result.wod_id;
           if (!resultsByWod.has(wodId)) {
             resultsByWod.set(wodId, []);
@@ -208,7 +206,7 @@ export default function Leaderboard() {
           resultsByWod.get(wodId)!.push(result);
         });
 
-        // Recalcular pontos para cada WOD
+        // Recalcular pontos para cada WOD usando a configuração atual
         const { calculateWODPoints } = await import('@/lib/scoring');
         
         for (const [wodId, wodResults] of resultsByWod) {
@@ -228,7 +226,7 @@ export default function Leaderboard() {
             updatedAt: r.updated_at,
           }));
 
-          // Calcular pontos
+          // Calcular pontos usando a configuração ATUAL
           const pointsTable = configData.points_table;
           const scoringConfig = {
             id: configData.id,
@@ -245,7 +243,7 @@ export default function Leaderboard() {
 
           const resultsWithPoints = calculateWODPoints(resultsForScoring, scoringConfig, wod.type);
 
-          // Atualizar no banco
+          // Atualizar no banco com os novos pontos
           for (const result of resultsWithPoints) {
             await supabase
               .from("wod_results")
@@ -268,15 +266,15 @@ export default function Leaderboard() {
         setWodResults(updatedResults || []);
         
         // Calcular leaderboard com resultados atualizados
-        const entries = calculateLeaderboard(updatedResults || []);
+        const entries = calculateLeaderboard(updatedResults || [], configData?.preset_type);
         setLeaderboard(entries);
-        console.log('✅ Leaderboard atualizado com', entries.length, 'participantes');
+        console.log('✅ Leaderboard atualizado com', entries.length, 'participantes (pontos recalculados)');
       } else {
-        // Se não há resultados para recalcular, apenas atualizar
+        // Se não há config ou resultados, apenas atualizar
         setWodResults(resultsData || []);
         
         // Calcular leaderboard (mesmo que vazio, mostra todos zerados)
-        const entries = calculateLeaderboard(resultsData || []);
+        const entries = calculateLeaderboard(resultsData || [], configData?.preset_type);
         setLeaderboard(entries);
         console.log('✅ Leaderboard atualizado. Resultados:', resultsData?.length || 0, 'Participantes:', entries.length);
       }
@@ -286,9 +284,10 @@ export default function Leaderboard() {
     }
   };
 
-  const calculateLeaderboard = (results: any[]): LeaderboardEntry[] => {
+  const calculateLeaderboard = (results: any[], presetType?: string): LeaderboardEntry[] => {
     console.log('📊 Calculando leaderboard. Resultados recebidos:', results.length);
     console.log('👥 Total de registros da categoria:', registrations.filter(r => r.category_id === selectedCategory).length);
+    console.log('⚙️ Preset de pontuação:', presetType || 'não definido');
     
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any[]>();
@@ -379,7 +378,10 @@ export default function Leaderboard() {
     console.log('📊 Total de participantes no leaderboard:', entries.length);
 
     // Ordenar e atribuir posições
-    // IMPORTANTE: Usar order_index como critério de desempate e para ordenar participantes sem resultados
+    // Para "simple-order": menor pontuação ganha (ordem crescente)
+    // Para outros sistemas: maior pontuação ganha (ordem decrescente)
+    const isSimpleOrder = presetType === 'simple-order';
+    
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
@@ -393,8 +395,10 @@ export default function Leaderboard() {
         return 0;
       }
       
-      // 1. Mais pontos
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      // 1. Pontos (invertido para simple-order: menor é melhor)
+      if (b.totalPoints !== a.totalPoints) {
+        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+      }
       
       // 2. Mais primeiros lugares
       if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
