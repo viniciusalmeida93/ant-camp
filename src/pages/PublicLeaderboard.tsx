@@ -210,9 +210,12 @@ export default function PublicLeaderboard() {
       }
     });
 
-    // Ordenar e atribuir posições - SIMPLIFICADO MÁXIMO
-    const presetLower = (presetType || '').toString().trim().toLowerCase();
-    console.log("🚀 PRESET:", presetType, "→ Normalizado:", presetLower, "→ Contém 'simple'?", presetLower.includes('simple'));
+    // Ordenar e atribuir posições
+    // Para "simple-order": menor pontuação ganha (ordem crescente)
+    // Para outros sistemas: maior pontuação ganha (ordem decrescente)
+    // USAR MESMA LÓGICA DO INTERNO QUE FUNCIONA
+    const isSimpleOrder = presetType === 'simple-order';
+    console.log("🚀 PRESET:", presetType, "| isSimpleOrder:", isSimpleOrder);
     
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
@@ -226,15 +229,9 @@ export default function PublicLeaderboard() {
         return 0;
       }
       
-      // 1. Pontos - VERIFICAÇÃO ULTRA SIMPLES: se preset contém "simple", inverter
+      // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
-        const useAscending = presetLower.includes('simple');
-        const result = useAscending 
-          ? (a.totalPoints - b.totalPoints)  // Simple: menor primeiro (crescente)
-          : (b.totalPoints - a.totalPoints); // Outros: maior primeiro (decrescente)
-        
-        console.log(`📊 ${a.participantName}(${a.totalPoints}) vs ${b.participantName}(${b.totalPoints}) | Ascendente: ${useAscending} | Resultado: ${result > 0 ? 'B vem primeiro' : 'A vem primeiro'}`);
-        return result;
+        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
       }
       
       // 2. Mais primeiros lugares
