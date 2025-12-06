@@ -278,10 +278,32 @@ export default function PublicLeaderboard() {
       return 0;
     });
 
-    // Atribuir posições finais
+    // Atribuir posições finais com suporte a empates
+    // Se duas equipes têm a mesma pontuação (e mesmos critérios de desempate), ficam na mesma posição
+    let currentPosition = 1;
     entries.forEach((entry, index) => {
-      entry.position = index + 1;
+      if (index > 0) {
+        const previous = entries[index - 1];
+        // Verificar se é empate (mesma pontuação total E mesmos critérios de desempate)
+        const isTie = 
+          entry.totalPoints === previous.totalPoints &&
+          entry.firstPlaces === previous.firstPlaces &&
+          entry.secondPlaces === previous.secondPlaces &&
+          entry.thirdPlaces === previous.thirdPlaces &&
+          entry.lastWodPosition === previous.lastWodPosition;
+        
+        if (!isTie) {
+          currentPosition = index + 1;
+        }
+      }
+      entry.position = currentPosition;
     });
+    
+    console.log("📊 Posições atribuídas. Primeiros 5:", entries.slice(0, 5).map(e => ({ 
+      pos: e.position, 
+      nome: e.participantName, 
+      pontos: e.totalPoints 
+    })));
 
     return entries;
   };
