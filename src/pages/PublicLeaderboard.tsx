@@ -216,7 +216,11 @@ export default function PublicLeaderboard() {
     // Normalizar preset para garantir match
     const normalizedPreset = (presetType || '').toString().toLowerCase().trim();
     const isSimpleOrder = normalizedPreset.includes('simple');
-    console.log("🚀 PRESET RAW:", presetType, "| NORMALIZADO:", normalizedPreset, "| IS SIMPLE:", isSimpleOrder);
+    console.log("🎯 VERIFICAÇÃO DE ORDENAÇÃO:");
+    console.log("   - presetType recebido:", presetType);
+    console.log("   - normalizedPreset:", normalizedPreset);
+    console.log("   - isSimpleOrder:", isSimpleOrder);
+    console.log("   - Total de entries:", entries.length);
     
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
@@ -232,8 +236,13 @@ export default function PublicLeaderboard() {
       
       // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
+        // ORDEM SIMPLES: menor pontuação vem PRIMEIRO (a - b = crescente)
+        // OUTROS: maior pontuação vem PRIMEIRO (b - a = decrescente)
         const result = isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
-        console.log(`📊 Comparando: ${a.participantName}(${a.totalPoints}pts) vs ${b.participantName}(${b.totalPoints}pts) | Simple=${isSimpleOrder} | Result=${result}`);
+        if (a.totalPoints <= 11 && b.totalPoints <= 11) { // Log apenas primeiros para debug
+          console.log(`   📊 ${a.participantName}(${a.totalPoints}pts) vs ${b.participantName}(${b.totalPoints}pts)`);
+          console.log(`      → isSimple: ${isSimpleOrder}, calc: ${isSimpleOrder ? 'a-b' : 'b-a'} = ${result}, vencedor: ${result < 0 ? 'A' : 'B'}`);
+        }
         return result;
       }
       
@@ -357,6 +366,7 @@ export default function PublicLeaderboard() {
       console.log("📊 CONFIG DO BANCO:", JSON.stringify(configData));
       console.log("📊 preset_type BRUTO:", configData?.preset_type, "| Tipo:", typeof configData?.preset_type);
       console.log("📊 preset_type PROCESSADO:", presetType);
+      console.log("📊 Normalizado:", presetType.toLowerCase().trim());
       console.log("📊 Contém 'simple'?:", presetType.toLowerCase().includes('simple'));
       console.log("════════════════════════════════════════════════");
       
