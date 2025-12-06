@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Anti-cache headers AGRESSIVOS -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <link rel="alternate icon" href="/favicon.webp" />
     <link rel="apple-touch-icon" href="/favicon.webp" />
@@ -20,5 +26,30 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Force reload em mobile se versão antiga -->
+    <script>
+      // Versão atual do app (atualizar quando houver mudanças críticas)
+      const APP_VERSION = '2024-12-06-CRITICAL-FIX';
+      const storedVersion = localStorage.getItem('app_version');
+      
+      if (storedVersion !== APP_VERSION) {
+        console.log('🔄 Nova versão detectada. Limpando cache...');
+        localStorage.setItem('app_version', APP_VERSION);
+        
+        // Limpar cache em mobile
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+          });
+        }
+        
+        // Force reload apenas uma vez
+        if (!sessionStorage.getItem('force_reloaded')) {
+          sessionStorage.setItem('force_reloaded', 'true');
+          window.location.reload(true);
+        }
+      }
+    </script>
   </body>
 </html>
