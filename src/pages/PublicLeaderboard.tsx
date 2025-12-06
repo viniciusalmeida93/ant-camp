@@ -213,10 +213,11 @@ export default function PublicLeaderboard() {
     // Ordenar e atribuir posições
     // Para "simple-order": menor pontuação ganha (ordem crescente)
     // Para outros sistemas: maior pontuação ganha (ordem decrescente)
-    const validPresetType = presetType && typeof presetType === 'string' ? presetType : 'crossfit-games';
+    const validPresetType = presetType && typeof presetType === 'string' ? presetType.trim().toLowerCase() : 'crossfit-games';
     const isSimpleOrder = validPresetType === 'simple-order';
     console.log("🔄 Ordenando leaderboard. Preset recebido:", presetType, "| Preset válido:", validPresetType, "| isSimpleOrder:", isSimpleOrder);
     
+    // FORÇAR ordenação correta - garantir que não haja problema de cache ou timing
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
@@ -232,7 +233,15 @@ export default function PublicLeaderboard() {
       
       // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
-        const result = isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+        // FORÇAR comparação correta baseada em isSimpleOrder
+        let result: number;
+        if (isSimpleOrder) {
+          // Ordem simples: menor pontuação = melhor (ordem crescente)
+          result = a.totalPoints - b.totalPoints;
+        } else {
+          // Outros sistemas: maior pontuação = melhor (ordem decrescente)
+          result = b.totalPoints - a.totalPoints;
+        }
         if (Math.abs(a.totalPoints - b.totalPoints) <= 5) { // Log apenas para valores próximos para debug
           console.log(`🔄 Comparando: ${a.participantName} (${a.totalPoints} pts) vs ${b.participantName} (${b.totalPoints} pts) | Result: ${result} | isSimpleOrder: ${isSimpleOrder}`);
         }
@@ -333,9 +342,13 @@ export default function PublicLeaderboard() {
       console.log("Resultados carregados:", resultsData?.length || 0);
 
       // Calcular leaderboard usando função local que inclui todos os participantes
-      const presetType = configData?.preset_type || 'crossfit-games';
+      // Garantir que presetType seja sempre uma string válida (importante para mobile)
+      const presetType = (configData && configData.preset_type && typeof configData.preset_type === 'string') 
+        ? configData.preset_type 
+        : 'crossfit-games';
       console.log("📊 Preset de pontuação detectado:", presetType);
       console.log("📊 ConfigData completo:", configData);
+      console.log("📊 preset_type raw:", configData?.preset_type);
       
       const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], presetType);
       
