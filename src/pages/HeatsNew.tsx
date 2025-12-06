@@ -1952,6 +1952,12 @@ export default function HeatsNew() {
         // Persistir no banco
         setActiveId(null); // Liberar imediatamente para melhor UX
         
+        // Toast IMEDIATO
+        toast.success("🔄 Reorganizando...", {
+          description: "Salvando nova ordem",
+          duration: 1500,
+        });
+        
         console.log('💾 Salvando nova ordem de', newOrderedHeats.length, 'baterias...');
         
         const updatePromises = newOrderedHeats.map((heat, idx) => {
@@ -1975,9 +1981,9 @@ export default function HeatsNew() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
               console.error('❌ SESSÃO EXPIRADA!');
-              toast.error("Sessão expirada. Faça login novamente.");
+              toast.error("❌ Sessão expirada. Faça login novamente.");
             } else {
-              toast.error("Erro ao salvar nova ordem - verifique permissões");
+              toast.error("❌ Erro ao salvar - verifique permissões");
             }
             
             await loadHeats(); // Reverter
@@ -1986,11 +1992,14 @@ export default function HeatsNew() {
           
           console.log("✅ Ordem das baterias salva com sucesso!");
           await loadHeats(); // Sincronizar
-          toast.success("Baterias reorganizadas!");
+          toast.success("✅ Baterias reorganizadas!", {
+            description: "Nova ordem salva com sucesso",
+            duration: 3000,
+          });
         }).catch((error) => {
           console.error("❌ Erro ao persistir:", error);
           loadHeats(); // Reverter
-          toast.error("Erro ao salvar nova ordem");
+          toast.error("❌ Erro ao salvar nova ordem");
         });
         
         toast.success("Reorganizando...");
@@ -2069,7 +2078,13 @@ export default function HeatsNew() {
           });
 
         console.log(`✅ Atleta ${registrationId} adicionado à bateria ${targetHeatId}`);
-        toast.success("Atleta adicionado à bateria!");
+        
+        // Toast IMEDIATO antes de recarregar
+        toast.success("✅ Atleta adicionado!", {
+          description: "Atualizando lista...",
+          duration: 2000,
+        });
+        
         await loadHeats();
       } catch (error: any) {
         console.error("Error adding athlete:", error);
