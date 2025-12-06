@@ -210,14 +210,10 @@ export default function PublicLeaderboard() {
       }
     });
 
-    // Ordenar e atribuir posições
-    // Para "simple-order": menor pontuação ganha (ordem crescente)
-    // Para outros sistemas: maior pontuação ganha (ordem decrescente)
-    const validPresetType = presetType && typeof presetType === 'string' ? presetType.trim().toLowerCase() : 'crossfit-games';
-    const isSimpleOrder = validPresetType === 'simple-order';
-    console.log("🔄 Ordenando leaderboard. Preset recebido:", presetType, "| Preset válido:", validPresetType, "| isSimpleOrder:", isSimpleOrder);
+    // Ordenar e atribuir posições - SIMPLIFICADO MÁXIMO
+    const presetLower = (presetType || '').toString().trim().toLowerCase();
+    console.log("🚀 PRESET:", presetType, "→ Normalizado:", presetLower, "→ Contém 'simple'?", presetLower.includes('simple'));
     
-    // FORÇAR ordenação correta - garantir que não haja problema de cache ou timing
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
@@ -225,26 +221,19 @@ export default function PublicLeaderboard() {
             b.orderIndex !== null && b.orderIndex !== undefined) {
           return a.orderIndex - b.orderIndex;
         }
-        // Se apenas um tem order_index, ele vem primeiro
         if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
         if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
         return 0;
       }
       
-      // 1. Pontos (invertido para simple-order: menor é melhor)
+      // 1. Pontos - VERIFICAÇÃO ULTRA SIMPLES: se preset contém "simple", inverter
       if (b.totalPoints !== a.totalPoints) {
-        // FORÇAR comparação correta baseada em isSimpleOrder
-        let result: number;
-        if (isSimpleOrder) {
-          // Ordem simples: menor pontuação = melhor (ordem crescente)
-          result = a.totalPoints - b.totalPoints;
-        } else {
-          // Outros sistemas: maior pontuação = melhor (ordem decrescente)
-          result = b.totalPoints - a.totalPoints;
-        }
-        if (Math.abs(a.totalPoints - b.totalPoints) <= 5) { // Log apenas para valores próximos para debug
-          console.log(`🔄 Comparando: ${a.participantName} (${a.totalPoints} pts) vs ${b.participantName} (${b.totalPoints} pts) | Result: ${result} | isSimpleOrder: ${isSimpleOrder}`);
-        }
+        const useAscending = presetLower.includes('simple');
+        const result = useAscending 
+          ? (a.totalPoints - b.totalPoints)  // Simple: menor primeiro (crescente)
+          : (b.totalPoints - a.totalPoints); // Outros: maior primeiro (decrescente)
+        
+        console.log(`📊 ${a.participantName}(${a.totalPoints}) vs ${b.participantName}(${b.totalPoints}) | Ascendente: ${useAscending} | Resultado: ${result > 0 ? 'B vem primeiro' : 'A vem primeiro'}`);
         return result;
       }
       
@@ -368,9 +357,14 @@ export default function PublicLeaderboard() {
       const presetType = (configData && configData.preset_type && typeof configData.preset_type === 'string') 
         ? configData.preset_type 
         : 'crossfit-games';
-      console.log("📊 Preset de pontuação detectado:", presetType);
-      console.log("📊 ConfigData completo:", configData);
-      console.log("📊 preset_type raw:", configData?.preset_type);
+      
+      // DEBUG COMPLETO DO PRESET
+      console.log("════════════════════════════════════════════════");
+      console.log("📊 CONFIG DO BANCO:", JSON.stringify(configData));
+      console.log("📊 preset_type BRUTO:", configData?.preset_type, "| Tipo:", typeof configData?.preset_type);
+      console.log("📊 preset_type PROCESSADO:", presetType);
+      console.log("📊 Contém 'simple'?:", presetType.toLowerCase().includes('simple'));
+      console.log("════════════════════════════════════════════════");
       
       const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], presetType);
       
