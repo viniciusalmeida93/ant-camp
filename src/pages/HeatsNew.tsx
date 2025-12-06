@@ -455,7 +455,154 @@ export default function HeatsNew() {
     }
   };
 
-  const handleGenerateHeats = async () => {
+  // Função para CRIAR baterias do zero (primeira vez)
+  const handleCreateInitialHeats = async () => {
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    if (categories.length === 0 || wods.length === 0) {
+      toast.error("É necessário ter categorias e WODs cadastrados");
+      return;
+    }
+
+    if (!athletesPerHeat || athletesPerHeat < 1) {
+      toast.error("Defina a quantidade de raias por bateria");
+      return;
+    }
+
+    if (!startTime) {
+      toast.error("Defina a hora de início");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      // Determinar quais categorias e WODs processar baseado nos filtros
+      const categoriesToProcess = selectedCategory && selectedCategory !== 'all' 
+        ? categories.filter(c => c.id === selectedCategory)
+        : categories;
+      
+      const wodsToProcess = selectedWOD && selectedWOD !== 'all'
+        ? wods.filter(w => w.id === selectedWOD)
+        : wods;
+
+      if (categoriesToProcess.length === 0 || wodsToProcess.length === 0) {
+        toast.error("Nenhuma categoria ou WOD selecionado");
+        setGenerating(false);
+        return;
+      }
+
+      console.log("🏁 Criando baterias do zero...");
+
+      // Ordenar categorias e WODs
+      const sortedCategories = [...categoriesToProcess].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      const sortedWods = [...wodsToProcess].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+
+      // Hora de início base
+      const [hours, mins] = startTime.split(':');
+      const baseDate = championshipDays.length > 0 
+        ? new Date(championshipDays[0].date)
+        : new Date();
+      
+      let currentTime = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        baseDate.getDate(),
+        parseInt(hours),
+        parseInt(mins),
+        0,
+        0
+      );
+
+      let globalHeatNumber = 1;
+      let totalHeatsCreated = 0;
+
+      // Para cada WOD
+      for (const wod of sortedWods) {
+        // Para cada categoria
+        for (const category of sortedCategories) {
+          // Buscar atletas desta categoria
+          const categoryRegs = registrations.filter(r => r.category_id === category.id);
+          
+          if (categoryRegs.length === 0) {
+            console.log(`⚠️ Nenhum atleta em ${category.name}`);
+            continue;
+          }
+
+          // Calcular quantas baterias são necessárias
+          const numHeatsNeeded = Math.ceil(categoryRegs.length / athletesPerHeat);
+          
+          console.log(`📝 Criando ${numHeatsNeeded} baterias para ${category.name} - ${wod.name}`);
+
+          // Criar baterias para esta categoria/WOD
+          for (let i = 0; i < numHeatsNeeded; i++) {
+            // Criar bateria
+            const { data: newHeat, error: heatError } = await supabase
+              .from("heats")
+              .insert({
+                championship_id: selectedChampionship.id,
+                category_id: category.id,
+                wod_id: wod.id,
+                heat_number: globalHeatNumber,
+                scheduled_time: currentTime.toISOString(),
+                athletes_per_heat: athletesPerHeat,
+                time_cap: wod.time_cap || '10:00',
+              })
+              .select()
+              .single();
+
+            if (heatError) throw heatError;
+
+            // Adicionar atletas a esta bateria
+            const startIdx = i * athletesPerHeat;
+            const endIdx = Math.min(startIdx + athletesPerHeat, categoryRegs.length);
+            const heatParticipants = categoryRegs.slice(startIdx, endIdx);
+
+            if (heatParticipants.length > 0) {
+              const entries = heatParticipants.map((reg, idx) => ({
+                heat_id: newHeat.id,
+                registration_id: reg.id,
+                lane_number: idx + 1,
+              }));
+
+              await supabase.from("heat_entries").insert(entries);
+            }
+
+            // Avançar tempo (time_cap + transição)
+            const timecapMinutes = wod.estimated_duration_minutes || 10;
+            currentTime = new Date(currentTime.getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
+
+            globalHeatNumber++;
+            totalHeatsCreated++;
+          }
+
+          // Adicionar intervalo entre categorias (se houver mais categorias)
+          if (sortedCategories.indexOf(category) < sortedCategories.length - 1) {
+            currentTime = new Date(currentTime.getTime() + (categoryIntervalMinutes * 60000));
+          }
+        }
+
+        // Adicionar intervalo entre WODs (se houver mais WODs)
+        if (sortedWods.indexOf(wod) < sortedWods.length - 1) {
+          currentTime = new Date(currentTime.getTime() + (wodIntervalMinutes * 60000));
+        }
+      }
+
+      toast.success(`✅ ${totalHeatsCreated} baterias criadas com sucesso!`);
+      await loadHeats();
+      
+    } catch (error: any) {
+      console.error("Error creating heats:", error);
+      toast.error(`Erro ao criar baterias: ${error.message || 'Erro desconhecido'}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Função para ATUALIZAR baterias (reorganizar atletas baseado no ranking)
+  const handleUpdateHeats = async () => {
     if (!selectedChampionship) {
       toast.error("Selecione um campeonato");
       return;
@@ -503,7 +650,7 @@ export default function HeatsNew() {
         .order("heat_number");
 
       if (!allHeats || allHeats.length === 0) {
-        toast.error("Nenhuma bateria encontrada. Crie as baterias primeiro.");
+        toast.error("Nenhuma bateria encontrada. Use 'Gerar Baterias' para criar do zero.");
         setGenerating(false);
         return;
       }
@@ -595,20 +742,20 @@ export default function HeatsNew() {
       }
 
       if (totalHeatsUpdated > 0 && totalHeatsSkipped > 0) {
-        toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! ${totalHeatsSkipped} baterias com resultados foram mantidas intactas.`);
+        toast.success(`✅ ${totalHeatsUpdated} baterias atualizadas! ${totalHeatsSkipped} baterias com resultados foram mantidas intactas.`);
       } else if (totalHeatsUpdated > 0) {
-        toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! Ordem atualizada baseada no ranking.`);
+        toast.success(`✅ ${totalHeatsUpdated} baterias atualizadas! Ordem reorganizada baseada no ranking.`);
       } else if (totalHeatsSkipped > 0) {
         toast.info(`ℹ️ ${totalHeatsSkipped} baterias não foram alteradas (já possuem resultados publicados)`);
       } else {
-        toast.info("Nenhuma bateria disponível para reorganização");
+        toast.info("Nenhuma bateria disponível para atualização");
       }
       
       await loadHeats();
       
     } catch (error: any) {
       console.error("Error updating heats:", error);
-      toast.error("Erro ao reorganizar baterias");
+      toast.error("Erro ao atualizar baterias");
     } finally {
       setGenerating(false);
     }
@@ -2433,13 +2580,22 @@ export default function HeatsNew() {
                   </div>
                   <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Button 
-                      onClick={handleGenerateHeats} 
+                      onClick={handleCreateInitialHeats} 
                       className="w-full" 
                       disabled={generating}
                       variant="default"
                     >
+                      <Plus className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+                      {generating ? 'Criando...' : 'Gerar Baterias (do zero)'}
+                    </Button>
+                    <Button 
+                      onClick={handleUpdateHeats} 
+                      className="w-full" 
+                      disabled={generating}
+                      variant="secondary"
+                    >
                       <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                      {generating ? 'Gerando...' : 'Gerar TODAS as Baterias'}
+                      {generating ? 'Atualizando...' : 'Atualizar Baterias (ranking)'}
                     </Button>
                     <Button 
                       onClick={handleGenerateByCategoryAndWod} 
