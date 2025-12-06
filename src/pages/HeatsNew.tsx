@@ -1756,6 +1756,12 @@ export default function HeatsNew() {
       if (error) throw error;
 
       toast.success("Bateria criada com sucesso!");
+      
+      // Recalcular horários de todas as baterias após esta
+      if (newHeat) {
+        await recalculateScheduleAfterHeat(newHeat.id);
+      }
+      
       setIsCreatingHeat(false);
       await loadHeats();
     } catch (error: any) {
