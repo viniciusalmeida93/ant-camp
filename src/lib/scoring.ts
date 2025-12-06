@@ -124,14 +124,14 @@ export const calculateWODPoints = (
   // Se dois resultados têm o mesmo valor, ficam na mesma posição
   // Mas próxima posição diferente é sequencial (não pula números)
   let currentPosition = 1;
-  let previousResult: string | null = null;
   
   return sorted.map((result, index) => {
-    // Verificar se é empate comparando o resultado atual com o anterior
-    const currentResult = result.result || '';
-    const isTie = index > 0 && currentResult === previousResult && 
+    // Verificar se é empate usando a função compareResults
+    // Se compareResults retorna 0, os resultados são iguais
+    const isTie = index > 0 && 
                    result.status === 'completed' && 
-                   sorted[index - 1].status === 'completed';
+                   sorted[index - 1].status === 'completed' &&
+                   compareResults(result, sorted[index - 1], wodType) === 0;
     
     // Se não é empate, incrementar posição
     if (!isTie && index > 0) {
@@ -156,8 +156,6 @@ export const calculateWODPoints = (
         points = Math.max(1, 100 - (position - 1) * 3);
       }
     }
-    
-    previousResult = currentResult;
     
     return {
       ...result,
