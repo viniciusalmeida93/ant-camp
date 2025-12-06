@@ -31,6 +31,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -2931,7 +2932,7 @@ export default function HeatsNew() {
 
                             <CollapsibleContent>
                               <HeatDropZone heatId={heat.id}>
-                                <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
+                                <SortableContext items={allItemIds} strategy={rectSortingStrategy}>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                                     {Array.from({ length: maxAthletes }).map((_, idx) => {
                                       const entry = currentEntries[idx];
