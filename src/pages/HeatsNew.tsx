@@ -1950,12 +1950,22 @@ export default function HeatsNew() {
               .update({ heat_number: idx + 1 })
               .eq("id", heat.id)
           )
-        ).then(async () => {
+        ).then(async (results) => {
+          // Verificar se houve erros
+          const errors = results.filter(r => r.error);
+          if (errors.length > 0) {
+            console.error("❌ Erros ao salvar ordem das baterias:", errors);
+            toast.error("Erro ao salvar nova ordem");
+            await loadHeats(); // Reverter
+            return;
+          }
+          
+          console.log("✅ Ordem das baterias salva com sucesso!");
           await loadHeats(); // Sincronizar
           // NÃO recalcular horários automaticamente após drag and drop
           toast.success("Baterias reorganizadas!");
         }).catch((error) => {
-          console.error("Erro ao persistir:", error);
+          console.error("❌ Erro ao persistir:", error);
           loadHeats(); // Reverter
           toast.error("Erro ao salvar nova ordem");
         });
@@ -2035,6 +2045,7 @@ export default function HeatsNew() {
             lane_number: maxLaneNumber + 1,
           });
 
+        console.log(`✅ Atleta ${registrationId} adicionado à bateria ${targetHeatId}`);
         toast.success("Atleta adicionado à bateria!");
         await loadHeats();
       } catch (error: any) {
