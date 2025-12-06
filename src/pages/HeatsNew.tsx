@@ -695,21 +695,22 @@ export default function HeatsNew() {
             continue;
           }
 
-          // Ordenar atletas por order_index (ranking atual) - CRESCENTE
+          // Ordenar atletas por order_index (ranking atual)
           // MENOR order_index = melhor colocado (1º lugar = order_index 1)
           // Queremos: piores na primeira bateria, melhores na última
-          // Então ordenamos DECRESCENTE (maiores order_index primeiro)
+          // Então ordenamos CRESCENTE e depois INVERTEMOS
           const sortedParticipants = categoryRegs.sort((a, b) => {
             if (a.order_index !== null && a.order_index !== undefined && 
                 b.order_index !== null && b.order_index !== undefined) {
-              return b.order_index - a.order_index; // DECRESCENTE: maiores primeiro
+              return a.order_index - b.order_index; // CRESCENTE: menores primeiro
             }
-            if (a.order_index !== null && a.order_index !== undefined) return 1; // b sem index vai primeiro
-            if (b.order_index !== null && b.order_index !== undefined) return -1; // a sem index vai primeiro
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            if (a.order_index !== null && a.order_index !== undefined) return -1;
+            if (b.order_index !== null && b.order_index !== undefined) return 1;
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
           
-          const orderedParticipants = sortedParticipants; // Não precisa inverter
+          // INVERTER: 1º lugar (menor order_index) vai para o FIM do array = última bateria
+          const orderedParticipants = [...sortedParticipants].reverse();
 
           // Redistribuir atletas nas baterias EXISTENTES
           let participantIndex = 0;
@@ -1690,11 +1691,13 @@ export default function HeatsNew() {
         return updated;
       });
       
-      // Recalcular todas as baterias seguintes
+      setEditingHeat(null);
+      
+      // Recalcular todas as baterias seguintes DEPOIS de fechar o dialog
       await recalculateScheduleAfterHeat(editingHeat.id);
       
-      setEditingHeat(null);
       await loadHeats();
+      toast.success("Horários atualizados!");
     } catch (error: any) {
       console.error("Error saving heat:", error);
       toast.error("Erro ao salvar bateria");
