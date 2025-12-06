@@ -13,6 +13,176 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { compareResults, calculateWODPoints } from '@/lib/scoring';
 
+// Função para atualizar order_index baseado no leaderboard atual
+const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
+  try {
+    console.log('🔄 Atualizando order_index baseado no leaderboard para categoria:', categoryId);
+    
+    // 1. Buscar TODOS os resultados publicados da categoria
+    const { data: resultsData, error: resultsError } = await supabase
+      .from("wod_results")
+      .select("*")
+      .eq("category_id", categoryId)
+      .eq("is_published", true);
+    
+    if (resultsError) throw resultsError;
+    
+    // 2. Buscar todas as registrations aprovadas desta categoria
+    const { data: regsData, error: regsError } = await supabase
+      .from("registrations")
+      .select("*")
+      .eq("category_id", categoryId)
+      .eq("status", "approved");
+    
+    if (regsError) throw regsError;
+    
+    if (!regsData || regsData.length === 0) {
+      console.log('⚠️ Nenhum participante encontrado na categoria');
+      return;
+    }
+    
+    // 3. Buscar WODs para ordenar resultados
+    const { data: wodsData } = await supabase
+      .from("wods")
+      .select("*");
+    
+    const wods = wodsData || [];
+    
+    // 4. Calcular leaderboard (mesma lógica da página Leaderboard.tsx)
+    const participantMap = new Map<string, any[]>();
+    
+    (resultsData || []).forEach(result => {
+      const regId = result.registration_id;
+      if (!participantMap.has(regId)) {
+        participantMap.set(regId, []);
+      }
+      participantMap.get(regId)!.push(result);
+    });
+    
+    const entries: any[] = [];
+    const processedRegIds = new Set<string>();
+    
+    // Processar participantes com resultados
+    participantMap.forEach((wodResults, registrationId) => {
+      const reg = regsData.find(r => r.id === registrationId);
+      if (!reg) return;
+      
+      processedRegIds.add(registrationId);
+      
+      const totalPoints = wodResults.reduce((sum, r) => sum + (r.points || 0), 0);
+      const firstPlaces = wodResults.filter(r => r.position === 1).length;
+      const secondPlaces = wodResults.filter(r => r.position === 2).length;
+      const thirdPlaces = wodResults.filter(r => r.position === 3).length;
+      
+      const sortedResults = [...wodResults].sort((a, b) => {
+        const wodA = wods.find(w => w.id === a.wod_id);
+        const wodB = wods.find(w => w.id === b.wod_id);
+        const orderA = wodA?.order_num || 0;
+        const orderB = wodB?.order_num || 0;
+        
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      
+      const lastWodPosition = sortedResults.length > 0 
+        ? sortedResults[sortedResults.length - 1].position 
+        : undefined;
+      
+      entries.push({
+        registrationId,
+        totalPoints,
+        firstPlaces,
+        secondPlaces,
+        thirdPlaces,
+        lastWodPosition,
+        orderIndex: reg.order_index,
+      });
+    });
+    
+    // Adicionar participantes SEM resultados (zerados)
+    regsData.forEach(reg => {
+      if (!processedRegIds.has(reg.id)) {
+        entries.push({
+          registrationId: reg.id,
+          totalPoints: 0,
+          firstPlaces: 0,
+          secondPlaces: 0,
+          thirdPlaces: 0,
+          lastWodPosition: undefined,
+          orderIndex: reg.order_index,
+        });
+      }
+    });
+    
+    // 5. Ordenar (mesma lógica do Leaderboard.tsx)
+    entries.sort((a, b) => {
+      // Se ambos têm 0 pontos, manter order_index original
+      if (a.totalPoints === 0 && b.totalPoints === 0) {
+        if (a.orderIndex !== null && a.orderIndex !== undefined && 
+            b.orderIndex !== null && b.orderIndex !== undefined) {
+          return a.orderIndex - b.orderIndex;
+        }
+        if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+        if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+        return 0;
+      }
+      
+      // 1. Mais pontos
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      
+      // 2. Mais primeiros lugares
+      if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
+      
+      // 3. Mais segundos lugares
+      if (b.secondPlaces !== a.secondPlaces) return b.secondPlaces - a.secondPlaces;
+      
+      // 4. Mais terceiros lugares
+      if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
+      
+      // 5. Melhor posição no último WOD
+      if (a.lastWodPosition !== undefined && b.lastWodPosition !== undefined) {
+        return a.lastWodPosition - b.lastWodPosition;
+      }
+      
+      if (a.lastWodPosition !== undefined) return -1;
+      if (b.lastWodPosition !== undefined) return 1;
+      
+      // 6. order_index como desempate
+      if (a.orderIndex !== null && a.orderIndex !== undefined && 
+          b.orderIndex !== null && b.orderIndex !== undefined) {
+        return a.orderIndex - b.orderIndex;
+      }
+      
+      if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+      if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+      
+      return 0;
+    });
+    
+    // 6. Atualizar order_index no banco baseado na nova ordem do leaderboard
+    console.log('💾 Atualizando order_index de', entries.length, 'participantes...');
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const newOrderIndex = i + 1; // 1º lugar = 1, 2º lugar = 2, etc.
+      
+      await supabase
+        .from("registrations")
+        .update({ order_index: newOrderIndex })
+        .eq("id", entry.registrationId);
+    }
+    
+    console.log('✅ order_index atualizado! Agora as baterias serão reorganizadas automaticamente.');
+    
+  } catch (error) {
+    console.error('❌ Erro ao atualizar order_index:', error);
+    throw error;
+  }
+};
+
 export default function Results() {
   const navigate = useNavigate();
   const { selectedChampionship } = useChampionship();
@@ -342,6 +512,10 @@ export default function Results() {
           .eq("wod_id", selectedWOD);
 
         if (publishError) throw publishError;
+        
+        // ATUALIZAR ORDER_INDEX AUTOMATICAMENTE BASEADO NO LEADERBOARD
+        await updateOrderIndexFromLeaderboard(selectedCategory);
+        
         toast.success("Resultados salvos, pontuação calculada e publicados no leaderboard!");
       } else {
         // Garantir que resultados salvos sem publicar tenham is_published = false
