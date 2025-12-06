@@ -101,6 +101,7 @@ export default function LinkPage() {
           .from("wods")
           .select("*")
           .eq("championship_id", championshipId)
+          .eq("is_published", true) // ADICIONAR: apenas WODs publicados
           .order("order_num", { ascending: true }),
       ]);
 
