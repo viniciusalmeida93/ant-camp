@@ -788,6 +788,9 @@ export default function HeatsNew() {
             continue;
           }
 
+          console.log(`📋 ${category.name}: ${categoryRegs.length} atletas encontrados`);
+          console.log(`📋 order_index dos atletas:`, categoryRegs.map(r => ({ nome: r.team_name || r.athlete_name, order_index: r.order_index })));
+
           // Ordenar atletas por order_index
           // IMPORTANTE: order_index MAIOR = melhor colocado (1º lugar tem maior order_index)
           // Queremos: piores na primeira bateria, melhores na última
@@ -802,6 +805,8 @@ export default function HeatsNew() {
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
           
+          console.log(`📋 Após ordenação CRESCENTE:`, sortedParticipants.map(r => ({ nome: r.team_name || r.athlete_name, order_index: r.order_index })));
+          
           // INVERTER para colocar melhores (maior order_index) nas últimas baterias
           // sortedParticipants está: [pior (order_index=1), ..., melhor (order_index=11)]
           // Queremos distribuir: primeira bateria = piores, última bateria = melhores
@@ -810,6 +815,7 @@ export default function HeatsNew() {
           // Solução: inverter a lista ANTES de distribuir
           const orderedParticipants = [...sortedParticipants].reverse();
           
+          console.log(`📋 Após INVERSAO:`, orderedParticipants.map(r => ({ nome: r.team_name || r.athlete_name, order_index: r.order_index })));
           console.log('🔄 ORDEM DOS ATLETAS PARA BATERIAS (INVERTIDA):');
           orderedParticipants.forEach((p, idx) => {
             console.log(`  Posição ${idx + 1} na lista: ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
@@ -842,13 +848,19 @@ export default function HeatsNew() {
             
             const heatParticipants = orderedParticipants.slice(reverseStartIdx, reverseEndIdx);
             
-            console.log(`  🔄 Bateria ${heat.heat_number} (índice ${i}): ${heatParticipants.map(p => `${p.team_name || p.athlete_name} (idx:${p.order_index})`).join(', ')}`);
+            console.log(`  🔄 Bateria ${heat.heat_number} (índice ${i}, reverseStartIdx: ${reverseStartIdx}, reverseEndIdx: ${reverseEndIdx}):`);
+            console.log(`     Atletas: ${heatParticipants.map(p => `${p.team_name || p.athlete_name} (idx:${p.order_index})`).join(', ')}`);
             
             // Deletar APENAS entries antigas desta bateria (não a estrutura!)
-            await supabase
+            const { error: deleteError } = await supabase
               .from("heat_entries")
               .delete()
               .eq("heat_id", heat.id);
+
+            if (deleteError) {
+              console.error(`❌ Erro ao deletar entries antigas da bateria ${heat.heat_number}:`, deleteError);
+              throw deleteError;
+            }
 
             // Criar novas entries com nova ordem (se houver atletas)
             if (heatParticipants.length > 0) {
@@ -864,10 +876,13 @@ export default function HeatsNew() {
 
               if (entriesError) {
                 console.error(`❌ Erro ao salvar entries na bateria ${heat.heat_number}:`, entriesError);
+                console.error(`     Tentando inserir:`, newEntries);
                 throw entriesError;
               }
               
               console.log(`✅ Bateria ${heat.heat_number} atualizada com ${heatParticipants.length} atletas`);
+            } else {
+              console.log(`⚠️ Bateria ${heat.heat_number} ficou vazia (sem atletas para esta posição)`);
             }
             
             totalHeatsUpdated++;
