@@ -468,122 +468,113 @@ export default function HeatsNew() {
 
     setGenerating(true);
     try {
-      let totalHeatsGenerated = 0;
+      // Determinar quais categorias e WODs processar baseado nos filtros
+      const categoriesToProcess = selectedCategory && selectedCategory !== 'all' 
+        ? categories.filter(c => c.id === selectedCategory)
+        : categories;
+      
+      const wodsToProcess = selectedWOD && selectedWOD !== 'all'
+        ? wods.filter(w => w.id === selectedWOD)
+        : wods;
 
-      // Deletar TODAS as baterias existentes do campeonato
-      const { data: existingHeats } = await supabase
-        .from("heats")
-        .select("id")
-        .eq("championship_id", selectedChampionship.id);
-
-      if (existingHeats && existingHeats.length > 0) {
-        const heatIds = existingHeats.map(h => h.id);
-        
-        await supabase
-          .from("heat_entries")
-          .delete()
-          .in("heat_id", heatIds);
-
-        await supabase
-          .from("heats")
-          .delete()
-          .in("id", heatIds);
+      if (categoriesToProcess.length === 0 || wodsToProcess.length === 0) {
+        toast.error("Nenhuma categoria ou WOD selecionado");
+        setGenerating(false);
+        return;
       }
 
-      // ORDEM CORRETA: Iterar primeiro por WOD, depois por categoria
-      // Ordenar WODs por order_num
-      const sortedWods = [...wods].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
-      
-      // Ordenar categorias por order_index
-      const sortedCategories = [...categories].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      // Buscar TODAS as baterias existentes
+      const { data: allHeats } = await supabase
+        .from("heats")
+        .select("*")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number");
 
-      // Para cada WOD
-      for (const wod of sortedWods) {
-        console.log(`Gerando baterias para WOD: ${wod.name}`);
-        
-        // Para cada categoria (dentro do WOD)
-        for (const category of sortedCategories) {
-          const categoryRegs = registrations.filter(r => r.category_id === category.id);
+      if (!allHeats || allHeats.length === 0) {
+        toast.error("Nenhuma bateria encontrada. Crie as baterias primeiro.");
+        setGenerating(false);
+        return;
+      }
+
+      let totalHeatsUpdated = 0;
+
+      // Para cada categoria selecionada
+      for (const category of categoriesToProcess) {
+        // Para cada WOD selecionado
+        for (const wod of wodsToProcess) {
           
-          if (categoryRegs.length === 0) {
-            console.log(`Categoria ${category.name} sem inscrições, pulando...`);
+          // Buscar baterias EXISTENTES desta categoria + WOD
+          const categoryWodHeats = allHeats
+            .filter(h => h.category_id === category.id && h.wod_id === wod.id)
+            .sort((a, b) => a.heat_number - b.heat_number);
+
+          if (categoryWodHeats.length === 0) {
+            console.log(`⚠️ Nenhuma bateria encontrada para ${category.name} + ${wod.name}`);
             continue;
           }
 
-          // Ordenar por order_index (posição no ranking/leaderboard)
-          // IMPORTANTE: Quem está em 1º lugar (order_index = 1) fica nas ÚLTIMAS baterias
-          // Ordenar por order_index ascendente (1, 2, 3...) e usar created_at como fallback
-          const sortedParticipants = categoryRegs
-            .sort((a, b) => {
-              // Se ambos têm order_index, ordenar por ele
-              if (a.order_index !== null && a.order_index !== undefined && 
-                  b.order_index !== null && b.order_index !== undefined) {
-                return a.order_index - b.order_index; // Menor order_index primeiro (1º lugar vem antes)
-              }
-              // Se apenas um tem order_index, ele vem primeiro
-              if (a.order_index !== null && a.order_index !== undefined) return -1;
-              if (b.order_index !== null && b.order_index !== undefined) return 1;
-              // Se nenhum tem order_index, usar created_at como fallback
-              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-            });
+          console.log(`🔄 Reorganizando ${categoryWodHeats.length} baterias de ${category.name} + ${wod.name}`);
+
+          // Buscar atletas desta categoria
+          const categoryRegs = registrations.filter(r => r.category_id === category.id);
           
-          // INVERTER a ordem: quem está em 1º lugar (order_index = 1) vai para a última bateria
-          const orderedParticipants = sortedParticipants.reverse().map(reg => ({ registrationId: reg.id }));
+          if (categoryRegs.length === 0) {
+            console.log(`⚠️ Nenhum atleta encontrado para ${category.name}`);
+            continue;
+          }
 
-          // Usar o valor global de Raias configurado no topo
-          const athletesPerHeatValue = athletesPerHeat;
-          const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeatValue);
-
-          console.log(`  Categoria ${category.name}: ${orderedParticipants.length} atletas, ${totalHeats} baterias`);
-
-          // Criar baterias para esta combinação WOD + categoria
-          for (let i = 0; i < totalHeats; i++) {
-            const startIndex = i * athletesPerHeatValue;
-            const endIndex = Math.min(startIndex + athletesPerHeatValue, orderedParticipants.length);
-            const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
-
-            totalHeatsGenerated++;
-
-            const { data: newHeat, error: heatError } = await supabase
-              .from("heats")
-              .insert({
-                championship_id: selectedChampionship.id,
-                category_id: category.id,
-                wod_id: wod.id,
-                heat_number: totalHeatsGenerated,
-                athletes_per_heat: athletesPerHeatValue,
-              })
-              .select()
-              .single();
-
-            if (heatError) throw heatError;
-
-            const entries = heatParticipants.map((participant, index) => ({
-              heat_id: newHeat.id,
-              registration_id: participant.registrationId,
-              lane_number: index + 1,
-            }));
-
-            if (entries.length > 0) {
-              const { error: entriesError} = await supabase
-                .from("heat_entries")
-                .insert(entries);
-
-              if (entriesError) throw entriesError;
+          // Ordenar atletas por order_index (ranking atual)
+          const sortedParticipants = categoryRegs.sort((a, b) => {
+            if (a.order_index !== null && a.order_index !== undefined && 
+                b.order_index !== null && b.order_index !== undefined) {
+              return a.order_index - b.order_index;
             }
+            if (a.order_index !== null && a.order_index !== undefined) return -1;
+            if (b.order_index !== null && b.order_index !== undefined) return 1;
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          });
+          
+          // INVERTER: 1º lugar vai para última bateria
+          const orderedParticipants = sortedParticipants.reverse();
+
+          // Redistribuir atletas nas baterias EXISTENTES
+          let participantIndex = 0;
+          
+          for (const heat of categoryWodHeats) {
+            const athletesInThisHeat = heat.athletes_per_heat || 4;
+            const heatParticipants = orderedParticipants.slice(participantIndex, participantIndex + athletesInThisHeat);
+            
+            // Deletar entries antigas desta bateria
+            await supabase
+              .from("heat_entries")
+              .delete()
+              .eq("heat_id", heat.id);
+
+            // Criar novas entries com nova ordem (se houver atletas)
+            if (heatParticipants.length > 0) {
+              const newEntries = heatParticipants.map((participant, idx) => ({
+                heat_id: heat.id,
+                registration_id: participant.id,
+                lane_number: idx + 1,
+              }));
+
+              await supabase
+                .from("heat_entries")
+                .insert(newEntries);
+            }
+            
+            totalHeatsUpdated++;
+            participantIndex += athletesInThisHeat;
           }
         }
       }
 
-      toast.success(`${totalHeatsGenerated} baterias geradas! Calculando horários...`);
-      
-      // Agora calcular os horários respeitando TODOS os intervalos
-      await calculateAllHeatsSchedule();
-      
+      toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! Ordem atualizada baseada no ranking.`);
       await loadHeats();
+      
     } catch (error: any) {
-      console.error("Error generating heats:", error);
-      toast.error("Erro ao gerar baterias");
+      console.error("Error updating heats:", error);
+      toast.error("Erro ao reorganizar baterias");
     } finally {
       setGenerating(false);
     }
