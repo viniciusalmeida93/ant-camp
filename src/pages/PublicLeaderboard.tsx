@@ -216,11 +216,6 @@ export default function PublicLeaderboard() {
     // Normalizar preset para garantir match
     const normalizedPreset = (presetType || '').toString().toLowerCase().trim();
     const isSimpleOrder = normalizedPreset.includes('simple');
-    console.log("🎯 VERIFICAÇÃO DE ORDENAÇÃO:");
-    console.log("   - presetType recebido:", presetType);
-    console.log("   - normalizedPreset:", normalizedPreset);
-    console.log("   - isSimpleOrder:", isSimpleOrder);
-    console.log("   - Total de entries:", entries.length);
     
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
@@ -236,14 +231,7 @@ export default function PublicLeaderboard() {
       
       // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
-        // ORDEM SIMPLES: menor pontuação vem PRIMEIRO (a - b = crescente)
-        // OUTROS: maior pontuação vem PRIMEIRO (b - a = decrescente)
-        const result = isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
-        if (a.totalPoints <= 11 && b.totalPoints <= 11) { // Log apenas primeiros para debug
-          console.log(`   📊 ${a.participantName}(${a.totalPoints}pts) vs ${b.participantName}(${b.totalPoints}pts)`);
-          console.log(`      → isSimple: ${isSimpleOrder}, calc: ${isSimpleOrder ? 'a-b' : 'b-a'} = ${result}, vencedor: ${result < 0 ? 'A' : 'B'}`);
-        }
-        return result;
+        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
       }
       
       // 2. Mais primeiros lugares

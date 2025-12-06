@@ -120,9 +120,25 @@ export const calculateWODPoints = (
   // Ordenar resultados
   const sorted = [...results].sort((a, b) => compareResults(a, b, wodType));
   
-  // Atribuir posições e pontos
+  // Atribuir posições e pontos com suporte a empates
+  // Se dois resultados têm o mesmo valor, ficam na mesma posição
+  // Mas próxima posição diferente é sequencial (não pula números)
+  let currentPosition = 1;
+  let previousResult: string | null = null;
+  
   return sorted.map((result, index) => {
-    let position = index + 1;
+    // Verificar se é empate comparando o resultado atual com o anterior
+    const currentResult = result.result || '';
+    const isTie = index > 0 && currentResult === previousResult && 
+                   result.status === 'completed' && 
+                   sorted[index - 1].status === 'completed';
+    
+    // Se não é empate, incrementar posição
+    if (!isTie && index > 0) {
+      currentPosition++;
+    }
+    
+    let position = currentPosition;
     let points = 0;
     
     if (result.status === 'dns') {
@@ -140,6 +156,8 @@ export const calculateWODPoints = (
         points = Math.max(1, 100 - (position - 1) * 3);
       }
     }
+    
+    previousResult = currentResult;
     
     return {
       ...result,
