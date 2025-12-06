@@ -711,6 +711,11 @@ export default function HeatsNew() {
           
           // INVERTER: 1º lugar (menor order_index) vai para o FIM do array = última bateria
           const orderedParticipants = [...sortedParticipants].reverse();
+          
+          console.log('🔄 ORDEM DOS ATLETAS PARA BATERIAS:');
+          orderedParticipants.forEach((p, idx) => {
+            console.log(`  ${idx + 1}. ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
+          });
 
           // Redistribuir atletas nas baterias EXISTENTES
           let participantIndex = 0;
@@ -1578,7 +1583,7 @@ export default function HeatsNew() {
 
       // currentTime começa no FIM da bateria editada
       let currentTime = new Date(new Date(editedHeat.scheduled_time).getTime() + (timecapMinutes * 60000));
-      console.log(`⏰ Fim da bateria editada (${editedHeat.heat_number}): ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+      console.log(`⏰ FIM da bateria editada (${editedHeat.heat_number}): ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} | Timecap: ${timecapMinutes} minutos`);
 
       let previousWodId = editedHeat.wod_id;
       let previousCategoryId = editedHeat.category_id;
