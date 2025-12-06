@@ -695,26 +695,26 @@ export default function HeatsNew() {
             continue;
           }
 
-          // Ordenar atletas por order_index (ranking atual)
-          // MENOR order_index = melhor colocado (1º lugar = order_index 1)
+          // Ordenar atletas por order_index
+          // IMPORTANTE: order_index MAIOR = melhor colocado (1º lugar tem maior order_index)
           // Queremos: piores na primeira bateria, melhores na última
-          // Então ordenamos CRESCENTE e depois INVERTEMOS
+          // Então ordenamos CRESCENTE (menores order_index primeiro = piores)
           const sortedParticipants = categoryRegs.sort((a, b) => {
             if (a.order_index !== null && a.order_index !== undefined && 
                 b.order_index !== null && b.order_index !== undefined) {
-              return a.order_index - b.order_index; // CRESCENTE: menores primeiro
+              return a.order_index - b.order_index; // CRESCENTE: piores primeiro
             }
             if (a.order_index !== null && a.order_index !== undefined) return -1;
             if (b.order_index !== null && b.order_index !== undefined) return 1;
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
           
-          // INVERTER: 1º lugar (menor order_index) vai para o FIM do array = última bateria
-          const orderedParticipants = [...sortedParticipants].reverse();
+          // NÃO inverter! Já está na ordem correta (piores primeiro)
+          const orderedParticipants = sortedParticipants;
           
           console.log('🔄 ORDEM DOS ATLETAS PARA BATERIAS:');
           orderedParticipants.forEach((p, idx) => {
-            console.log(`  ${idx + 1}. ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
+            console.log(`  Posição ${idx + 1} (bateria): ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
           });
 
           // Redistribuir atletas nas baterias EXISTENTES
