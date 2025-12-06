@@ -2290,22 +2290,27 @@ export default function HeatsNew() {
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
-      opacity: isDragging ? 0.5 : (isInHeat ? 0.4 : 1),
+      opacity: isDragging ? 0.8 : (isInHeat ? 0.4 : 1),
+      boxShadow: isDragging ? '0 12px 24px rgba(0,0,0,0.35)' : 'none',
+      scale: isDragging ? '1.05' : '1',
+      zIndex: isDragging ? 1000 : 'auto',
     };
 
     return (
       <div
         ref={setNodeRef}
         style={style}
-        className={`flex items-center gap-2 p-2 rounded border text-sm ${
+        className={`flex items-center gap-2 p-2 rounded border text-sm transition-all duration-200 ${
           isInHeat 
             ? 'bg-muted text-muted-foreground cursor-not-allowed' 
-            : 'bg-background cursor-grab active:cursor-grabbing hover:bg-accent/50'
-        } transition-colors`}
+            : isDragging
+            ? 'bg-primary/20 border-primary border-2 shadow-2xl'
+            : 'bg-background cursor-grab active:cursor-grabbing hover:bg-accent/50 hover:border-accent'
+        }`}
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="w-3 h-3 flex-shrink-0" />
+        <GripVertical className={`w-3 h-3 flex-shrink-0 ${isDragging ? 'text-primary' : ''}`} />
         <span className="font-bold w-6">{index + 1}</span>
         <span className="flex-1 truncate">{fullName}</span>
         {lbEntry?.position && (
@@ -2332,16 +2337,18 @@ export default function HeatsNew() {
 
     const style = {
       transform: CSS.Transform.toString(transform),
-      transition: isDragging ? 'none' : transition, // Sem transição durante drag para movimento mais preciso
-      opacity: isDragging ? 0.8 : 1,
+      transition: isDragging ? 'none' : transition,
+      opacity: isDragging ? 0.9 : 1,
       zIndex: isDragging ? 999 : 1,
+      boxShadow: isDragging ? '0 20px 40px rgba(0,0,0,0.4)' : 'none',
+      scale: isDragging ? '1.03' : '1',
     };
 
     return (
       <div 
         ref={setNodeRef} 
         style={style}
-        className={`${isDragging ? 'ring-2 ring-primary ring-offset-2 shadow-lg scale-105' : ''} transition-shadow duration-200`}
+        className={`transition-all duration-200 ${isDragging ? 'ring-4 ring-primary ring-offset-4 shadow-2xl rotate-2' : 'hover:shadow-md'}`}
       >
         {children(listeners, attributes)}
       </div>
@@ -2400,9 +2407,20 @@ export default function HeatsNew() {
     return (
       <div
         ref={setNodeRef}
-        className={`transition-colors ${isOver ? 'bg-primary/10 rounded-lg' : ''}`}
+        className={`min-h-[100px] rounded-lg border-2 border-dashed p-3 transition-all duration-300 relative ${
+          isOver 
+            ? 'border-primary bg-primary/10 shadow-lg scale-[1.02] animate-pulse' 
+            : 'border-muted-foreground/20 bg-muted/5'
+        }`}
       >
         {children}
+        {isOver && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-primary/5 rounded-lg">
+            <div className="bg-primary text-primary-foreground px-6 py-3 rounded-lg shadow-2xl font-semibold animate-bounce text-lg">
+              ⬇️ Solte aqui!
+            </div>
+          </div>
+        )}
       </div>
     );
   }
