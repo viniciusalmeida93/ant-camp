@@ -1427,8 +1427,9 @@ export default function HeatsNew() {
           // Calcular tempo até esta bateria
           const previousHeat = allHeats[i - 1];
           const previousTimeCap = previousHeat.wods?.time_cap || '10:00';
+          // Corrigir cálculo: se formato HH:MM, converter corretamente para minutos
           const previousTimecapMinutes = previousTimeCap.includes(':') 
-            ? parseInt(previousTimeCap.split(':')[0]) + (parseInt(previousTimeCap.split(':')[1]) / 60)
+            ? (parseInt(previousTimeCap.split(':')[0]) * 60) + parseInt(previousTimeCap.split(':')[1])
             : parseInt(previousTimeCap) || 10;
 
           // Adicionar duração da bateria anterior (timecap)
