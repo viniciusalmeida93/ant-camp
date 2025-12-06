@@ -2699,7 +2699,7 @@ export default function HeatsNew() {
           <Card className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="globalTransition">Transição Entre Baterias (min)</Label>
+                <Label htmlFor="globalTransition">Intervalo Entre Baterias (min)</Label>
                 <div className="flex gap-2">
                   <Input
                     id="globalTransition"
@@ -2718,7 +2718,7 @@ export default function HeatsNew() {
               </div>
               
               <div>
-                <Label htmlFor="categoryInterval">Tempo Entre Categorias (min)</Label>
+                <Label htmlFor="categoryInterval">Intervalo Entre Categorias (min)</Label>
                 <div className="flex gap-2">
                   <Input
                     id="categoryInterval"
