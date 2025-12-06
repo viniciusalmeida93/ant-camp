@@ -695,19 +695,21 @@ export default function HeatsNew() {
             continue;
           }
 
-          // Ordenar atletas por order_index (ranking atual)
+          // Ordenar atletas por order_index (ranking atual) - CRESCENTE
+          // MENOR order_index = melhor colocado (1º lugar = order_index 1)
+          // Queremos: piores na primeira bateria, melhores na última
+          // Então ordenamos DECRESCENTE (maiores order_index primeiro)
           const sortedParticipants = categoryRegs.sort((a, b) => {
             if (a.order_index !== null && a.order_index !== undefined && 
                 b.order_index !== null && b.order_index !== undefined) {
-              return a.order_index - b.order_index;
+              return b.order_index - a.order_index; // DECRESCENTE: maiores primeiro
             }
-            if (a.order_index !== null && a.order_index !== undefined) return -1;
-            if (b.order_index !== null && b.order_index !== undefined) return 1;
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            if (a.order_index !== null && a.order_index !== undefined) return 1; // b sem index vai primeiro
+            if (b.order_index !== null && b.order_index !== undefined) return -1; // a sem index vai primeiro
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           });
           
-          // INVERTER: 1º lugar vai para última bateria
-          const orderedParticipants = sortedParticipants.reverse();
+          const orderedParticipants = sortedParticipants; // Não precisa inverter
 
           // Redistribuir atletas nas baterias EXISTENTES
           let participantIndex = 0;
