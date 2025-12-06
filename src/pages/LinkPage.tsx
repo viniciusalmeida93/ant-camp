@@ -82,20 +82,23 @@ export default function LinkPage() {
   const handleButtonClick = (button: any) => {
     console.log("Botão clicado:", button.button_type, "Championship slug:", championshipSlug);
     
+    // Adicionar timestamp para forçar cache bust
+    const cacheBust = `?v=${Date.now()}`;
+    
     if (button.button_type === "leaderboard" && championshipSlug) {
-      const url = `/${championshipSlug}/leaderboard`;
+      const url = `/${championshipSlug}/leaderboard${cacheBust}`;
       console.log("Abrindo URL:", url);
       window.open(url, "_blank");
     } else if (button.button_type === "registration" && championshipSlug) {
-      const url = `/register/${championshipSlug}`;
+      const url = `/register/${championshipSlug}${cacheBust}`;
       console.log("Abrindo URL:", url);
       window.open(url, "_blank");
     } else if (button.button_type === "heats" && championshipSlug) {
-      const url = `/${championshipSlug}/heats`;
+      const url = `/${championshipSlug}/heats${cacheBust}`;
       console.log("Abrindo URL:", url);
       window.open(url, "_blank");
     } else if (button.button_type === "wods" && championshipSlug) {
-      const url = `/${championshipSlug}/wods`;
+      const url = `/${championshipSlug}/wods${cacheBust}`;
       console.log("Abrindo URL:", url);
       window.open(url, "_blank");
     } else if (button.url) {
