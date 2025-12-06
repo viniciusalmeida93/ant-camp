@@ -483,6 +483,18 @@ export default function HeatsNew() {
         return;
       }
 
+      // Buscar TODOS os resultados PUBLICADOS do campeonato
+      const { data: publishedResults } = await supabase
+        .from("wod_results")
+        .select("wod_id, category_id")
+        .eq("is_published", true);
+
+      // Criar set de WODs que JÁ TEM resultados publicados (não podem ser reorganizados)
+      const wodsWithResults = new Set<string>();
+      (publishedResults || []).forEach(result => {
+        wodsWithResults.add(`${result.wod_id}_${result.category_id}`);
+      });
+
       // Buscar TODAS as baterias existentes
       const { data: allHeats } = await supabase
         .from("heats")
@@ -497,11 +509,24 @@ export default function HeatsNew() {
       }
 
       let totalHeatsUpdated = 0;
+      let totalHeatsSkipped = 0;
 
       // Para cada categoria selecionada
       for (const category of categoriesToProcess) {
         // Para cada WOD selecionado
         for (const wod of wodsToProcess) {
+          
+          // VERIFICAR se este WOD + categoria JÁ TEM resultados publicados
+          const hasPublishedResults = wodsWithResults.has(`${wod.id}_${category.id}`);
+          
+          if (hasPublishedResults) {
+            console.log(`⏭️ Pulando ${category.name} + ${wod.name} - JÁ TEM RESULTADOS PUBLICADOS`);
+            
+            // Contar quantas baterias foram puladas
+            const skippedHeats = allHeats.filter(h => h.category_id === category.id && h.wod_id === wod.id);
+            totalHeatsSkipped += skippedHeats.length;
+            continue; // NÃO REORGANIZAR!
+          }
           
           // Buscar baterias EXISTENTES desta categoria + WOD
           const categoryWodHeats = allHeats
@@ -544,7 +569,7 @@ export default function HeatsNew() {
             const athletesInThisHeat = heat.athletes_per_heat || 4;
             const heatParticipants = orderedParticipants.slice(participantIndex, participantIndex + athletesInThisHeat);
             
-            // Deletar entries antigas desta bateria
+            // Deletar APENAS entries antigas desta bateria (não a estrutura!)
             await supabase
               .from("heat_entries")
               .delete()
@@ -569,7 +594,16 @@ export default function HeatsNew() {
         }
       }
 
-      toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! Ordem atualizada baseada no ranking.`);
+      if (totalHeatsUpdated > 0 && totalHeatsSkipped > 0) {
+        toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! ${totalHeatsSkipped} baterias com resultados foram mantidas intactas.`);
+      } else if (totalHeatsUpdated > 0) {
+        toast.success(`✅ ${totalHeatsUpdated} baterias reorganizadas! Ordem atualizada baseada no ranking.`);
+      } else if (totalHeatsSkipped > 0) {
+        toast.info(`ℹ️ ${totalHeatsSkipped} baterias não foram alteradas (já possuem resultados publicados)`);
+      } else {
+        toast.info("Nenhuma bateria disponível para reorganização");
+      }
+      
       await loadHeats();
       
     } catch (error: any) {
