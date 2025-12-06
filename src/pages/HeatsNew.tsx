@@ -72,6 +72,7 @@ export default function HeatsNew() {
     scheduled_time: '',
     end_time: '',
     time_cap: '',
+    heat_number: 0,
   });
   const [championshipDays, setChampionshipDays] = useState<any[]>([]);
   const [wodIntervalMinutes, setWodIntervalMinutes] = useState<number>(0);
@@ -524,6 +525,16 @@ export default function HeatsNew() {
       for (const wod of sortedWods) {
         // Para cada categoria
         for (const category of sortedCategories) {
+          // VERIFICAR se já existem baterias para esta categoria + WOD
+          const existingHeatsForCategoryWod = heats.filter(
+            h => h.category_id === category.id && h.wod_id === wod.id
+          );
+
+          if (existingHeatsForCategoryWod.length > 0) {
+            console.log(`⏭️ Pulando ${category.name} - ${wod.name}: já existem ${existingHeatsForCategoryWod.length} baterias`);
+            continue; // Não criar duplicatas
+          }
+
           // Buscar atletas desta categoria
           const categoryRegs = registrations.filter(r => r.category_id === category.id);
           
@@ -549,7 +560,6 @@ export default function HeatsNew() {
                 heat_number: globalHeatNumber,
                 scheduled_time: currentTime.toISOString(),
                 athletes_per_heat: athletesPerHeat,
-                time_cap: wod.time_cap || '10:00',
               })
               .select()
               .single();
@@ -677,13 +687,95 @@ export default function HeatsNew() {
           }
           
           // Buscar baterias EXISTENTES desta categoria + WOD
-          const categoryWodHeats = allHeats
+          let categoryWodHeats = allHeats
             .filter(h => h.category_id === category.id && h.wod_id === wod.id)
             .sort((a, b) => a.heat_number - b.heat_number);
 
+          // Se não tem baterias, CRIAR novas baseado no ranking
           if (categoryWodHeats.length === 0) {
-            console.log(`⚠️ Nenhuma bateria encontrada para ${category.name} + ${wod.name}`);
-            continue;
+            console.log(`📝 Criando baterias para ${category.name} + ${wod.name} (não existiam)`);
+            
+            const categoryRegs = registrations.filter(r => r.category_id === category.id);
+            
+            if (categoryRegs.length === 0) {
+              console.log(`⚠️ Nenhum atleta encontrado para ${category.name}`);
+              continue;
+            }
+
+            // Ordenar atletas por order_index CRESCENTE (piores primeiro)
+            const sortedRegs = categoryRegs.sort((a, b) => {
+              if (a.order_index !== null && a.order_index !== undefined && 
+                  b.order_index !== null && b.order_index !== undefined) {
+                return a.order_index - b.order_index;
+              }
+              if (a.order_index !== null && a.order_index !== undefined) return -1;
+              if (b.order_index !== null && b.order_index !== undefined) return 1;
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
+
+            // INVERTER para colocar melhores nas últimas baterias
+            const orderedRegs = [...sortedRegs].reverse();
+
+            const numHeatsNeeded = Math.ceil(orderedRegs.length / athletesPerHeat);
+            
+            // Buscar próximo heat_number disponível
+            const { data: maxHeatData } = await supabase
+              .from("heats")
+              .select("heat_number")
+              .eq("championship_id", selectedChampionship.id)
+              .order("heat_number", { ascending: false })
+              .limit(1);
+
+            let nextHeatNumber = (maxHeatData && maxHeatData.length > 0) ? maxHeatData[0].heat_number + 1 : 1;
+
+            // Criar baterias - distribuir de TRÁS pra FRENTE (melhores nas últimas)
+            // orderedRegs está: [melhor (order_index=11), ..., pior (order_index=1)]
+            // Criamos baterias na ordem normal (1, 2, 3...) mas preenchemos de trás pra frente
+            for (let i = 0; i < numHeatsNeeded; i++) {
+              // Calcular índice reverso: última bateria recebe primeiros atletas (melhores)
+              const reverseIdx = numHeatsNeeded - 1 - i;
+              const startIdx = reverseIdx * athletesPerHeat;
+              const endIdx = Math.min(startIdx + athletesPerHeat, orderedRegs.length);
+              const heatParticipants = orderedRegs.slice(startIdx, endIdx);
+
+              const { data: newHeat, error: heatError } = await supabase
+                .from("heats")
+                .insert({
+                  championship_id: selectedChampionship.id,
+                  category_id: category.id,
+                  wod_id: wod.id,
+                  heat_number: nextHeatNumber + i,
+                  athletes_per_heat: athletesPerHeat,
+                })
+                .select()
+                .single();
+
+              if (heatError) {
+                console.error(`Erro ao criar bateria:`, heatError);
+                continue;
+              }
+
+              if (heatParticipants.length > 0) {
+                const entries = heatParticipants.map((reg, idx) => ({
+                  heat_id: newHeat.id,
+                  registration_id: reg.id,
+                  lane_number: idx + 1,
+                }));
+
+                await supabase.from("heat_entries").insert(entries);
+              }
+            }
+
+            // Buscar as baterias recém criadas
+            const { data: newHeats } = await supabase
+              .from("heats")
+              .select("*")
+              .eq("category_id", category.id)
+              .eq("wod_id", wod.id)
+              .order("heat_number");
+
+            categoryWodHeats = newHeats || [];
+            console.log(`✅ ${categoryWodHeats.length} baterias criadas para ${category.name} + ${wod.name}`);
           }
 
           console.log(`🔄 Reorganizando ${categoryWodHeats.length} baterias de ${category.name} + ${wod.name}`);
@@ -710,20 +802,47 @@ export default function HeatsNew() {
             return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           });
           
-          // NÃO inverter! Já está na ordem correta (piores primeiro)
-          const orderedParticipants = sortedParticipants;
+          // INVERTER para colocar melhores (maior order_index) nas últimas baterias
+          // sortedParticipants está: [pior (order_index=1), ..., melhor (order_index=11)]
+          // Queremos distribuir: primeira bateria = piores, última bateria = melhores
+          // Então mantemos a ordem (piores primeiro) e distribuímos sequencialmente
+          // MAS precisamos garantir que os melhores vão para as últimas baterias
+          // Solução: inverter a lista ANTES de distribuir
+          const orderedParticipants = [...sortedParticipants].reverse();
           
-          console.log('🔄 ORDEM DOS ATLETAS PARA BATERIAS:');
+          console.log('🔄 ORDEM DOS ATLETAS PARA BATERIAS (INVERTIDA):');
           orderedParticipants.forEach((p, idx) => {
-            console.log(`  Posição ${idx + 1} (bateria): ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
+            console.log(`  Posição ${idx + 1} na lista: ${p.team_name || p.athlete_name} (order_index: ${p.order_index})`);
           });
+          
+          console.log(`📊 Total de baterias: ${categoryWodHeats.length}`);
+          console.log(`📊 Total de atletas: ${orderedParticipants.length}`);
 
           // Redistribuir atletas nas baterias EXISTENTES
-          let participantIndex = 0;
+          // orderedParticipants está: [melhor (order_index=11), ..., pior (order_index=1)]
+          // Baterias na ordem normal: [1, 2, 3, ..., 19]
+          // Queremos: bateria 1 = piores (últimos da lista), bateria 19 = melhores (primeiros da lista)
+          // Solução: distribuir de TRÁS pra FRENTE na lista, mas baterias na ordem normal
           
-          for (const heat of categoryWodHeats) {
+          // Manter baterias na ordem normal (não inverter!)
+          const sortedHeats = [...categoryWodHeats].sort((a, b) => a.heat_number - b.heat_number);
+          
+          const totalParticipants = orderedParticipants.length;
+          
+          for (let i = 0; i < sortedHeats.length; i++) {
+            const heat = sortedHeats[i];
             const athletesInThisHeat = heat.athletes_per_heat || 4;
-            const heatParticipants = orderedParticipants.slice(participantIndex, participantIndex + athletesInThisHeat);
+            
+            // Calcular índice REVERSO na lista de atletas
+            // Primeira bateria (i=0) pega do final: slice(total - athletesPerHeat, total) = piores
+            // Segunda bateria (i=1) pega: slice(total - 2*athletesPerHeat, total - athletesPerHeat)
+            // Última bateria pega do início: slice(0, athletesPerHeat) = melhores
+            const reverseStartIdx = Math.max(0, totalParticipants - (i + 1) * athletesInThisHeat);
+            const reverseEndIdx = totalParticipants - i * athletesInThisHeat;
+            
+            const heatParticipants = orderedParticipants.slice(reverseStartIdx, reverseEndIdx);
+            
+            console.log(`  🔄 Bateria ${heat.heat_number} (índice ${i}): ${heatParticipants.map(p => `${p.team_name || p.athlete_name} (idx:${p.order_index})`).join(', ')}`);
             
             // Deletar APENAS entries antigas desta bateria (não a estrutura!)
             await supabase
@@ -739,13 +858,19 @@ export default function HeatsNew() {
                 lane_number: idx + 1,
               }));
 
-              await supabase
+              const { error: entriesError } = await supabase
                 .from("heat_entries")
                 .insert(newEntries);
+
+              if (entriesError) {
+                console.error(`❌ Erro ao salvar entries na bateria ${heat.heat_number}:`, entriesError);
+                throw entriesError;
+              }
+              
+              console.log(`✅ Bateria ${heat.heat_number} atualizada com ${heatParticipants.length} atletas`);
             }
             
             totalHeatsUpdated++;
-            participantIndex += athletesInThisHeat;
           }
         }
       }
@@ -1190,8 +1315,28 @@ export default function HeatsNew() {
       return;
     }
 
+    if (!athletesPerHeat || athletesPerHeat < 1) {
+      toast.error("Defina a quantidade de raias por bateria");
+      return;
+    }
+
     setGenerating(true);
     try {
+      // Verificar se já tem resultados publicados (não pode gerar)
+      const { data: publishedResults } = await supabase
+        .from("wod_results")
+        .select("id")
+        .eq("wod_id", selectedWOD)
+        .eq("category_id", selectedCategory)
+        .eq("is_published", true)
+        .limit(1);
+
+      if (publishedResults && publishedResults.length > 0) {
+        toast.error("Este WOD já tem resultados publicados. Não é possível gerar baterias.");
+        setGenerating(false);
+        return;
+      }
+
       const categoryRegs = registrations.filter(r => r.category_id === selectedCategory);
       
       if (categoryRegs.length === 0) {
@@ -1200,28 +1345,32 @@ export default function HeatsNew() {
         return;
       }
 
-      // Ordenar por order_index (posição no ranking/leaderboard)
-      // IMPORTANTE: Quem está em 1º lugar (order_index = 1) fica nas ÚLTIMAS baterias
-      const sortedParticipants = categoryRegs
-        .sort((a, b) => {
-          // Se ambos têm order_index, ordenar por ele
-          if (a.order_index !== null && a.order_index !== undefined && 
-              b.order_index !== null && b.order_index !== undefined) {
-            return a.order_index - b.order_index; // Menor order_index primeiro (1º lugar vem antes)
-          }
-          // Se apenas um tem order_index, ele vem primeiro
-          if (a.order_index !== null && a.order_index !== undefined) return -1;
-          if (b.order_index !== null && b.order_index !== undefined) return 1;
-          // Se nenhum tem order_index, usar created_at como fallback
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        });
-      
-      // INVERTER a ordem: quem está em 1º lugar (order_index = 1) vai para a última bateria
-      const orderedParticipants = sortedParticipants.reverse().map(reg => ({ registrationId: reg.id }));
+      // Ordenar por order_index CRESCENTE (piores primeiro)
+      const sortedParticipants = categoryRegs.sort((a, b) => {
+        if (a.order_index !== null && a.order_index !== undefined && 
+            b.order_index !== null && b.order_index !== undefined) {
+          return a.order_index - b.order_index;
+        }
+        if (a.order_index !== null && a.order_index !== undefined) return -1;
+        if (b.order_index !== null && b.order_index !== undefined) return 1;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
 
-      const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
+      const totalHeats = Math.ceil(sortedParticipants.length / athletesPerHeat);
 
-      // Deletar baterias existentes desta categoria e WOD
+      console.log(`📝 Gerando ${totalHeats} baterias para ${categories.find(c => c.id === selectedCategory)?.name} - ${wods.find(w => w.id === selectedWOD)?.name}`);
+
+      // Buscar maior heat_number existente para continuar a numeração
+      const { data: maxHeatData } = await supabase
+        .from("heats")
+        .select("heat_number")
+        .eq("championship_id", selectedChampionship.id)
+        .order("heat_number", { ascending: false })
+        .limit(1);
+
+      let nextHeatNumber = (maxHeatData && maxHeatData.length > 0) ? maxHeatData[0].heat_number + 1 : 1;
+
+      // Deletar baterias existentes desta categoria e WOD (se houver)
       const existingHeats = heats.filter(
         h => h.category_id === selectedCategory && h.wod_id === selectedWOD
       );
@@ -1238,13 +1387,15 @@ export default function HeatsNew() {
           .from("heats")
           .delete()
           .in("id", heatIds);
+        
+        console.log(`🗑️ Removidas ${existingHeats.length} baterias antigas`);
       }
 
       // Criar novas baterias
       for (let i = 0; i < totalHeats; i++) {
         const startIndex = i * athletesPerHeat;
-        const endIndex = Math.min(startIndex + athletesPerHeat, orderedParticipants.length);
-        const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
+        const endIndex = Math.min(startIndex + athletesPerHeat, sortedParticipants.length);
+        const heatParticipants = sortedParticipants.slice(startIndex, endIndex);
 
         const { data: newHeat, error: heatError } = await supabase
           .from("heats")
@@ -1252,17 +1403,20 @@ export default function HeatsNew() {
             championship_id: selectedChampionship.id,
             category_id: selectedCategory,
             wod_id: selectedWOD,
-            heat_number: i + 1,
+            heat_number: nextHeatNumber + i,
             athletes_per_heat: athletesPerHeat,
           })
           .select()
           .single();
 
-        if (heatError) throw heatError;
+        if (heatError) {
+          console.error(`Erro ao criar bateria ${i + 1}:`, heatError);
+          throw heatError;
+        }
 
-        const entries = heatParticipants.map((participant, index) => ({
+        const entries = heatParticipants.map((reg, index) => ({
           heat_id: newHeat.id,
-          registration_id: participant.registrationId,
+          registration_id: reg.id,
           lane_number: index + 1,
         }));
 
@@ -1271,15 +1425,20 @@ export default function HeatsNew() {
             .from("heat_entries")
             .insert(entries);
 
-          if (entriesError) throw entriesError;
+          if (entriesError) {
+            console.error(`Erro ao adicionar atletas na bateria ${i + 1}:`, entriesError);
+            throw entriesError;
+          }
         }
+
+        console.log(`✅ Bateria ${nextHeatNumber + i} criada com ${heatParticipants.length} atletas`);
       }
 
-      toast.success(`${totalHeats} baterias geradas para ${categories.find(c => c.id === selectedCategory)?.name}!`);
+      toast.success(`✅ ${totalHeats} baterias geradas para ${categories.find(c => c.id === selectedCategory)?.name}!`);
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats by category:", error);
-      toast.error("Erro ao gerar baterias");
+      toast.error(`Erro ao gerar baterias: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setGenerating(false);
     }
@@ -1300,10 +1459,13 @@ export default function HeatsNew() {
     
     setEditHeatData({
       custom_name: heat.custom_name || defaultName,
+      category_id: heat.category_id || '',
+      wod_id: heat.wod_id || '',
       athletes_per_heat: heat.athletes_per_heat || athletesPerHeat,
       scheduled_time: scheduledTime,
       end_time: scheduledTime,
       time_cap: wodInfo?.time_cap || '10:00',
+      heat_number: heat.heat_number || 0,
     });
   };
 
@@ -1516,7 +1678,100 @@ export default function HeatsNew() {
   };
 
   /**
+   * Renumera as baterias seguintes após alterar o heat_number de uma bateria
+   * IMPORTANTE: Renumera apenas baterias VISÍVEIS na tela (com filtros aplicados)
+   */
+  const renumberHeatsAfterEdit = async (editedHeatId: string, newHeatNumber: number) => {
+    if (!selectedChampionship) return;
+
+    try {
+      // Usar as baterias FILTRADAS/VISÍVEIS na tela (mesma lógica do filteredHeats)
+      const visibleHeats = heats.filter(h => {
+        const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
+        const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
+        return categoryFilter && wodFilter;
+      }).sort((a, b) => {
+        // Ordenar por scheduled_time (se existir), senão por heat_number
+        if (a.scheduled_time && b.scheduled_time) {
+          return new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+        }
+        if (a.scheduled_time) return -1;
+        if (b.scheduled_time) return 1;
+        return a.heat_number - b.heat_number;
+      });
+
+      if (visibleHeats.length === 0) {
+        console.log('⚠️ Nenhuma bateria visível na tela');
+        return;
+      }
+
+      // Encontrar a posição da bateria editada na lista ordenada
+      const editedHeatIndex = visibleHeats.findIndex(h => h.id === editedHeatId);
+      
+      if (editedHeatIndex === -1) {
+        console.log('⚠️ Bateria editada não encontrada na lista de baterias visíveis');
+        return;
+      }
+
+      // Pegar apenas as baterias SEGUINTES (após a editada) na ordem da listagem
+      const followingHeats = visibleHeats.slice(editedHeatIndex + 1);
+
+      if (followingHeats.length === 0) {
+        console.log('✅ Nenhuma bateria seguinte para renumerar');
+        return;
+      }
+
+      console.log(`🔄 Renumerando ${followingHeats.length} baterias seguintes a partir de ${newHeatNumber + 1}`);
+
+      // Buscar TODOS os resultados publicados de uma vez (otimização)
+      const { data: allPublishedResults } = await supabase
+        .from("wod_results")
+        .select("wod_id, category_id")
+        .eq("is_published", true);
+
+      const publishedResultsSet = new Set<string>();
+      (allPublishedResults || []).forEach(r => {
+        publishedResultsSet.add(`${r.wod_id}_${r.category_id}`);
+      });
+
+      // Renumerar cada bateria seguinte
+      let currentNumber = newHeatNumber + 1;
+      
+      for (const heat of followingHeats) {
+        // Verificar se esta bateria já tem resultados publicados
+        const hasPublishedResults = publishedResultsSet.has(`${heat.wod_id}_${heat.category_id}`);
+        
+        if (hasPublishedResults) {
+          console.log(`⏭️ Bateria ${heat.heat_number} (WOD ${heat.wod_id} + Categoria ${heat.category_id}) já tem resultados publicados. Parando renumeração.`);
+          break; // Para de renumerar se encontrar resultados publicados
+        }
+
+        // Atualizar heat_number
+        const { error: updateError } = await supabase
+          .from("heats")
+          .update({ heat_number: currentNumber })
+          .eq("id", heat.id);
+        
+        if (updateError) {
+          console.error(`❌ ERRO ao renumerar bateria ${heat.heat_number} para ${currentNumber}:`, updateError);
+        } else {
+          console.log(`✅ Bateria renumerada: ${heat.heat_number} → ${currentNumber}`);
+        }
+
+        currentNumber++;
+      }
+
+      console.log('✅ Renumeração concluída!');
+    } catch (error: any) {
+      console.error("Erro ao renumerar baterias:", error);
+      toast.error("Erro ao renumerar baterias seguintes");
+    }
+  };
+
+  /**
    * Recalcula os horários de todas as baterias APÓS a bateria editada
+   * IMPORTANTE: Recalcula apenas baterias VISÍVEIS na tela (com filtros aplicados)
+   * Abrange TODAS as categorias exibidas na tela
    */
   const recalculateScheduleAfterHeat = async (editedHeatId: string) => {
     if (!selectedChampionship) return;
@@ -1545,96 +1800,115 @@ export default function HeatsNew() {
         .eq("id", editedHeatId)
         .single();
 
-      if (!editedHeat || !editedHeat.scheduled_time) return;
-
-      // Buscar todas as baterias APÓS esta (heat_number maior)
-      const { data: followingHeats } = await supabase
-        .from("heats")
-        .select("*, wods(*)")
-        .eq("championship_id", selectedChampionship.id)
-        .gt("heat_number", editedHeat.heat_number)
-        .order("heat_number");
-
-      if (!followingHeats || followingHeats.length === 0) return;
-
-      // Buscar configurações de pausa dos DIAS
-      const { data: daysConfig } = await supabase
-        .from("championship_days")
-        .select("*, championship_day_wods(wod_id, order_num)")
-        .eq("championship_id", selectedChampionship.id)
-        .order("day_number");
-
-      // Criar mapa de WOD -> Dia
-      const wodToDayMap = new Map<string, any>();
-      if (daysConfig) {
-        daysConfig.forEach(day => {
-          if (day.championship_day_wods) {
-            day.championship_day_wods.forEach((dayWod: any) => {
-              wodToDayMap.set(dayWod.wod_id, day);
-            });
-          }
-        });
+      if (!editedHeat || !editedHeat.scheduled_time) {
+        console.log('⚠️ Bateria editada não encontrada ou sem horário');
+        return;
       }
 
-      // Calcular o fim da bateria editada (início + timecap)
-      const timeCap = editedHeat.wods?.time_cap || '10:00';
-      const timecapMinutes = timeCap.includes(':') 
-        ? parseInt(timeCap.split(':')[0]) * 60 + parseInt(timeCap.split(':')[1])
-        : parseInt(timeCap) || 10;
+      // Usar as baterias FILTRADAS/VISÍVEIS na tela (mesma lógica do filteredHeats)
+      const visibleHeats = heats.filter(h => {
+        const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
+        const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
+        return categoryFilter && wodFilter;
+      }).sort((a, b) => {
+        // Ordenar por scheduled_time (se existir), senão por heat_number
+        if (a.scheduled_time && b.scheduled_time) {
+          return new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+        }
+        if (a.scheduled_time) return -1;
+        if (b.scheduled_time) return 1;
+        return a.heat_number - b.heat_number;
+      });
 
-      // currentTime começa no FIM da bateria editada
-      let currentTime = new Date(new Date(editedHeat.scheduled_time).getTime() + (timecapMinutes * 60000));
-      console.log(`⏰ FIM da bateria editada (${editedHeat.heat_number}): ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} | Timecap: ${timecapMinutes} minutos`);
+      if (visibleHeats.length === 0) {
+        console.log('⚠️ Nenhuma bateria visível na tela');
+        return;
+      }
 
+      // Encontrar a posição da bateria editada na lista ordenada
+      const editedHeatIndex = visibleHeats.findIndex(h => h.id === editedHeatId);
+      
+      if (editedHeatIndex === -1) {
+        console.log('⚠️ Bateria editada não encontrada na lista de baterias visíveis');
+        return;
+      }
+
+      // Pegar apenas as baterias SEGUINTES (após a editada) na ordem da listagem
+      const followingHeats = visibleHeats.slice(editedHeatIndex + 1);
+
+      if (followingHeats.length === 0) {
+        console.log('✅ Nenhuma bateria seguinte para recalcular');
+        return;
+      }
+
+      console.log(`🔄 Recalculando ${followingHeats.length} baterias seguintes (visíveis na tela)`);
+
+      // Buscar dados dos WODs para todas as baterias seguintes
+      const wodIds = [...new Set(followingHeats.map(h => h.wod_id))];
+      const { data: wodsData } = await supabase
+        .from("wods")
+        .select("id, estimated_duration_minutes")
+        .in("id", wodIds);
+
+      const wodsMap = new Map((wodsData || []).map(w => [w.id, w]));
+
+      // Buscar TODOS os resultados publicados de uma vez (otimização)
+      const { data: allPublishedResults } = await supabase
+        .from("wod_results")
+        .select("wod_id, category_id")
+        .eq("is_published", true);
+
+      const publishedResultsSet = new Set<string>();
+      (allPublishedResults || []).forEach(r => {
+        publishedResultsSet.add(`${r.wod_id}_${r.category_id}`);
+      });
+
+      // Obter duração do WOD da bateria editada e intervalo entre baterias
+      const editedWodDuration = editedHeat.wods?.estimated_duration_minutes || 10;
+      const intervalBetweenHeats = currentTransitionTime;
+      
+      console.log(`📊 Duração do WOD editado: ${editedWodDuration} minutos`);
+      console.log(`📊 Intervalo entre baterias: ${intervalBetweenHeats} minutos`);
+
+      // currentTime começa no horário da bateria editada
+      let currentTime = new Date(editedHeat.scheduled_time);
       let previousWodId = editedHeat.wod_id;
       let previousCategoryId = editedHeat.category_id;
-      let wodsCompleted: string[] = [];
+      
+      console.log(`⏰ Bateria editada (${editedHeat.heat_number}) inicia em: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
 
+      // Recalcular cada bateria seguinte na ordem da listagem
       for (const heat of followingHeats) {
-        // Verificar se mudou de WOD
+        // Verificar se esta bateria já tem resultados publicados
+        const hasPublishedResults = publishedResultsSet.has(`${heat.wod_id}_${heat.category_id}`);
+        
+        if (hasPublishedResults) {
+          console.log(`⏭️ Bateria ${heat.heat_number} (WOD ${heat.wod_id} + Categoria ${heat.category_id}) já tem resultados publicados. Parando recálculo.`);
+          break; // Para de recalcular se encontrar resultados publicados
+        }
+
+        // Obter duração do WOD desta bateria
+        const wodData = wodsMap.get(heat.wod_id);
+        const wodDuration = wodData?.estimated_duration_minutes || 10;
+
+        // Verificar se mudou de WOD ou categoria para aplicar intervalos apropriados
         if (heat.wod_id !== previousWodId) {
-          console.log(`🔄 Recálculo: Mudança de WOD detectada (${previousWodId} -> ${heat.wod_id})`);
-          
-          // Marcar WOD anterior como completo
-          wodsCompleted.push(previousWodId);
-
-          // Adicionar intervalo entre provas
+          // Mudou de WOD: adicionar intervalo entre provas
           currentTime = new Date(currentTime.getTime() + (currentWodInterval * 60000));
-          console.log(`  + ${currentWodInterval} min (intervalo entre provas) = ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-          
-          // Verificar se deve aplicar PAUSA após o WOD anterior (usar configuração do DIA)
-          if (previousWodId) {
-            const previousWodDay = wodToDayMap.get(previousWodId);
-            
-            if (previousWodDay?.enable_break) {
-              const previousWodDayWods = previousWodDay.championship_day_wods || [];
-              const previousWodInDay = previousWodDayWods.find((dw: any) => dw.wod_id === previousWodId);
-              const previousWodOrderInDay = previousWodInDay?.order_num || 0;
-              
-              const breakAfterWodNumber = previousWodDay.break_after_wod_number;
-              const breakDuration = previousWodDay.break_duration_minutes || 30;
-              
-              if (previousWodOrderInDay === breakAfterWodNumber) {
-                currentTime = new Date(currentTime.getTime() + (breakDuration * 60000));
-                console.log(`  + ${breakDuration} min (PAUSA do DIA após WOD ${previousWodOrderInDay}) = ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-              }
-            }
-          }
-        }
-        // Se mudou apenas de categoria (mesmo WOD)
-        else if (heat.category_id !== previousCategoryId) {
-          console.log(`🔄 Recálculo: Mudança de categoria detectada (mesmo WOD)`);
+          console.log(`  🔄 Mudança de WOD: +${currentWodInterval}min (intervalo entre provas)`);
+        } else if (heat.category_id !== previousCategoryId) {
+          // Mudou de categoria (mesmo WOD): adicionar intervalo entre categorias
           currentTime = new Date(currentTime.getTime() + (currentCategoryInterval * 60000));
-          console.log(`  + ${currentCategoryInterval} min (intervalo entre categorias) = ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+          console.log(`  🔄 Mudança de categoria: +${currentCategoryInterval}min (intervalo entre categorias)`);
         }
-        // Mesma categoria e mesmo WOD = apenas transição entre baterias
-        else {
-          currentTime = new Date(currentTime.getTime() + (currentTransitionTime * 60000));
-          console.log(`🔄 Recálculo: Mesma categoria e WOD, adicionando transição`);
-          console.log(`  + ${currentTransitionTime} min (transição entre baterias) = ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-        }
+        // Mesma categoria e WOD: apenas transição (já aplicada abaixo)
 
-        // Atualizar horário da bateria SEMPRE (recalcular todas as seguintes)
+        // Calcular novo horário: horário atual + duração do WOD + intervalo entre baterias
+        currentTime = new Date(currentTime.getTime() + (wodDuration * 60000) + (intervalBetweenHeats * 60000));
+        
+        console.log(`  🔄 Bateria ${heat.heat_number}: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })} (anterior + ${wodDuration}min + ${intervalBetweenHeats}min)`);
+
+        // Atualizar horário da bateria
         const { error: updateError } = await supabase
           .from("heats")
           .update({ scheduled_time: currentTime.toISOString() })
@@ -1642,7 +1916,6 @@ export default function HeatsNew() {
         
         if (updateError) {
           console.error(`❌ ERRO ao atualizar bateria ${heat.heat_number}:`, updateError);
-          console.error('Detalhes do erro:', JSON.stringify(updateError, null, 2));
           
           // Verificar sessão
           const { data: { session } } = await supabase.auth.getSession();
@@ -1652,17 +1925,11 @@ export default function HeatsNew() {
             return;
           }
         } else {
-          console.log(`✅ Bateria ${heat.heat_number} atualizada para: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+          console.log(`✅ Bateria ${heat.heat_number} atualizada para: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
         }
 
         // Atualizar currentTime para o FIM desta bateria (para calcular a próxima)
-        const heatTimeCap = heat.wods?.time_cap || '10:00';
-        const heatTimecapMinutes = heatTimeCap.includes(':') 
-          ? parseInt(heatTimeCap.split(':')[0]) * 60 + parseInt(heatTimeCap.split(':')[1])
-          : parseInt(heatTimeCap) || 10;
-        currentTime = new Date(currentTime.getTime() + (heatTimecapMinutes * 60000));
-        console.log(`  ⏰ Fim da bateria ${heat.heat_number}: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-
+        currentTime = new Date(currentTime.getTime() + (wodDuration * 60000));
         previousWodId = heat.wod_id;
         previousCategoryId = heat.category_id;
       }
@@ -1670,6 +1937,7 @@ export default function HeatsNew() {
       console.log('✅ Horários recalculados após edição!');
     } catch (error: any) {
       console.error("Erro ao recalcular horários:", error);
+      toast.error("Erro ao recalcular horários das baterias seguintes");
     }
   };
 
@@ -1693,18 +1961,27 @@ export default function HeatsNew() {
         0
       );
 
+      // Verificar se o heat_number mudou
+      const heatNumberChanged = editHeatData.heat_number !== editingHeat.heat_number;
+
       await supabase
         .from("heats")
         .update({
           custom_name: editHeatData.custom_name.trim() || null,
           athletes_per_heat: editHeatData.athletes_per_heat,
           scheduled_time: scheduledDate.toISOString(),
+          heat_number: editHeatData.heat_number,
         })
         .eq("id", editingHeat.id);
 
-      console.log(`💾 Bateria ${editingHeat.heat_number} salva com horário: ${scheduledDate.toLocaleTimeString('pt-BR')}`);
+      console.log(`💾 Bateria ${editingHeat.heat_number} salva com horário: ${scheduledDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
       
-      toast.success("Bateria atualizada! Recalculando horários seguintes...");
+      if (heatNumberChanged) {
+        console.log(`🔄 Numeração alterada de ${editingHeat.heat_number} para ${editHeatData.heat_number}`);
+        toast.success("Bateria atualizada! Renumerando baterias seguintes...");
+      } else {
+        toast.success("Bateria atualizada! Recalculando horários seguintes...");
+      }
       
       // Atualizar heatCapacities imediatamente
       setHeatCapacities(prev => {
@@ -1715,11 +1992,16 @@ export default function HeatsNew() {
       
       setEditingHeat(null);
       
+      // Renumerar baterias seguintes se o número mudou
+      if (heatNumberChanged) {
+        await renumberHeatsAfterEdit(editingHeat.id, editHeatData.heat_number);
+      }
+      
       // Recalcular todas as baterias seguintes DEPOIS de fechar o dialog
       await recalculateScheduleAfterHeat(editingHeat.id);
       
       await loadHeats();
-      toast.success("Horários atualizados!");
+      toast.success(heatNumberChanged ? "Numeração e horários atualizados!" : "Horários atualizados!");
     } catch (error: any) {
       console.error("Error saving heat:", error);
       toast.error("Erro ao salvar bateria");
@@ -3187,6 +3469,23 @@ export default function HeatsNew() {
                   athletes_per_heat: parseInt(e.target.value) || 1 
                 }))}
               />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-heat-number">Número da Bateria</Label>
+              <Input
+                id="edit-heat-number"
+                type="number"
+                min="1"
+                value={editHeatData.heat_number}
+                onChange={(e) => setEditHeatData(prev => ({ 
+                  ...prev, 
+                  heat_number: parseInt(e.target.value) || 0 
+                }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                As baterias seguintes serão renumeradas automaticamente (26, 27, 28...)
+              </p>
             </div>
 
             <div>
