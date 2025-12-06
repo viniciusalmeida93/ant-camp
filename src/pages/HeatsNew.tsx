@@ -1634,11 +1634,16 @@ export default function HeatsNew() {
         }
 
         // Atualizar horário da bateria SEMPRE (recalcular todas as seguintes)
-        await supabase
+        const { error: updateError } = await supabase
           .from("heats")
           .update({ scheduled_time: currentTime.toISOString() })
           .eq("id", heat.id);
-        console.log(`✅ Bateria ${heat.heat_number} atualizada para: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        
+        if (updateError) {
+          console.error(`❌ ERRO ao atualizar bateria ${heat.heat_number}:`, updateError);
+        } else {
+          console.log(`✅ Bateria ${heat.heat_number} atualizada para: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+        }
 
         // Atualizar currentTime para o FIM desta bateria (para calcular a próxima)
         const heatTimeCap = heat.wods?.time_cap || '10:00';
@@ -1687,6 +1692,8 @@ export default function HeatsNew() {
         })
         .eq("id", editingHeat.id);
 
+      console.log(`💾 Bateria ${editingHeat.heat_number} salva com horário: ${scheduledDate.toLocaleTimeString('pt-BR')}`);
+      
       toast.success("Bateria atualizada! Recalculando horários seguintes...");
       
       // Atualizar heatCapacities imediatamente
