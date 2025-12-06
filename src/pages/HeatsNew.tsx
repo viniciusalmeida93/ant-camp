@@ -1641,6 +1641,15 @@ export default function HeatsNew() {
         
         if (updateError) {
           console.error(`❌ ERRO ao atualizar bateria ${heat.heat_number}:`, updateError);
+          console.error('Detalhes do erro:', JSON.stringify(updateError, null, 2));
+          
+          // Verificar sessão
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            console.error('❌ SESSÃO EXPIRADA! Faça login novamente.');
+            toast.error("Sessão expirada. Faça login novamente.");
+            return;
+          }
         } else {
           console.log(`✅ Bateria ${heat.heat_number} atualizada para: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
         }
@@ -1940,29 +1949,43 @@ export default function HeatsNew() {
           newOrderedHeats = arrayMove(allHeatsOrdered, activeIndex, overIndex);
         }
         
-        // Persistir no banco em background (já temos feedback visual)
+        // Persistir no banco
         setActiveId(null); // Liberar imediatamente para melhor UX
         
-        Promise.all(
-          newOrderedHeats.map((heat, idx) =>
-            supabase
-              .from("heats")
-              .update({ heat_number: idx + 1 })
-              .eq("id", heat.id)
-          )
-        ).then(async (results) => {
+        console.log('💾 Salvando nova ordem de', newOrderedHeats.length, 'baterias...');
+        
+        const updatePromises = newOrderedHeats.map((heat, idx) => {
+          console.log(`  Bateria ${heat.heat_number} -> ${idx + 1}`);
+          return supabase
+            .from("heats")
+            .update({ heat_number: idx + 1 })
+            .eq("id", heat.id);
+        });
+        
+        Promise.all(updatePromises).then(async (results) => {
           // Verificar se houve erros
           const errors = results.filter(r => r.error);
           if (errors.length > 0) {
-            console.error("❌ Erros ao salvar ordem das baterias:", errors);
-            toast.error("Erro ao salvar nova ordem");
+            console.error("❌ Erros ao salvar ordem das baterias:");
+            errors.forEach((err, idx) => {
+              console.error(`  Erro ${idx + 1}:`, err.error);
+            });
+            
+            // Verificar sessão
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              console.error('❌ SESSÃO EXPIRADA!');
+              toast.error("Sessão expirada. Faça login novamente.");
+            } else {
+              toast.error("Erro ao salvar nova ordem - verifique permissões");
+            }
+            
             await loadHeats(); // Reverter
             return;
           }
           
           console.log("✅ Ordem das baterias salva com sucesso!");
           await loadHeats(); // Sincronizar
-          // NÃO recalcular horários automaticamente após drag and drop
           toast.success("Baterias reorganizadas!");
         }).catch((error) => {
           console.error("❌ Erro ao persistir:", error);
