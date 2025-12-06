@@ -217,14 +217,11 @@ export const calculateLeaderboard = (
   });
   
   // Ordenar e atribuir posições
-  // Para "simple-order", menor pontuação ganha (ordem crescente)
-  // Para outros sistemas, maior pontuação ganha (ordem decrescente)
-  const isSimpleOrder = presetType === 'simple-order';
-  
+  // SEMPRE: menor pontuação ganha (ordem crescente)
   entries.sort((a, b) => {
-    // 1. Pontos (invertido para simple-order)
-    if (b.totalPoints !== a.totalPoints) {
-      return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+    // 1. Pontos (SEMPRE menor é melhor)
+    if (a.totalPoints !== b.totalPoints) {
+      return a.totalPoints - b.totalPoints;
     }
     
     // 2. Mais primeiros lugares (sempre melhor ter mais)

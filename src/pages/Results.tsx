@@ -130,8 +130,8 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
         return 0;
       }
       
-      // 1. Mais pontos
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      // 1. Pontos (SEMPRE menor é melhor)
+      if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
       
       // 2. Mais primeiros lugares
       if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;

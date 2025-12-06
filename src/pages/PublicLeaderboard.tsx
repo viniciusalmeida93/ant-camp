@@ -211,12 +211,7 @@ export default function PublicLeaderboard() {
     });
 
     // Ordenar e atribuir posições
-    // Para "simple-order": menor pontuação ganha (ordem crescente)
-    // Para outros sistemas: maior pontuação ganha (ordem decrescente)
-    // Normalizar preset para garantir match
-    const normalizedPreset = (presetType || '').toString().toLowerCase().trim();
-    const isSimpleOrder = normalizedPreset.includes('simple');
-    
+    // SEMPRE: menor pontuação ganha (ordem crescente)
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
@@ -229,9 +224,9 @@ export default function PublicLeaderboard() {
         return 0;
       }
       
-      // 1. Pontos (invertido para simple-order: menor é melhor)
-      if (b.totalPoints !== a.totalPoints) {
-        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+      // 1. Pontos (SEMPRE menor é melhor)
+      if (a.totalPoints !== b.totalPoints) {
+        return a.totalPoints - b.totalPoints;
       }
       
       // 2. Mais primeiros lugares
