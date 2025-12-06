@@ -1341,9 +1341,13 @@ export default function HeatsNew() {
       
       // Usar valores atualizados (do estado ou do banco)
       const currentTransitionTime = champConfig?.transition_time_minutes ?? transitionTime ?? 0;
-      // Se intervalos estiverem em 0, usar o intervalo entre baterias para tudo
-      const currentCategoryInterval = (champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0) || currentTransitionTime;
-      const currentWodInterval = (champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0) || currentTransitionTime;
+      // Se intervalos estiverem em 0 ou não definidos, usar o intervalo entre baterias para tudo
+      const categoryIntervalRaw = champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0;
+      const wodIntervalRaw = champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0;
+      const currentCategoryInterval = (categoryIntervalRaw && categoryIntervalRaw > 0) ? categoryIntervalRaw : currentTransitionTime;
+      const currentWodInterval = (wodIntervalRaw && wodIntervalRaw > 0) ? wodIntervalRaw : currentTransitionTime;
+      
+      console.log(`⏱️ Intervalos configurados: Transição=${currentTransitionTime}min, Categoria=${currentCategoryInterval}min, WOD=${currentWodInterval}min`);
 
       // Buscar configurações de pausa dos DIAS (não do campeonato)
       const { data: daysConfig } = await supabase
@@ -1516,9 +1520,13 @@ export default function HeatsNew() {
         .single();
       
       const currentTransitionTime = champConfig?.transition_time_minutes ?? transitionTime ?? 0;
-      // Se intervalos estiverem em 0, usar o intervalo entre baterias para tudo
-      const currentCategoryInterval = (champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0) || currentTransitionTime;
-      const currentWodInterval = (champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0) || currentTransitionTime;
+      // Se intervalos estiverem em 0 ou não definidos, usar o intervalo entre baterias para tudo
+      const categoryIntervalRaw = champConfig?.category_interval_minutes ?? categoryIntervalMinutes ?? 0;
+      const wodIntervalRaw = champConfig?.wod_interval_minutes ?? wodIntervalMinutes ?? 0;
+      const currentCategoryInterval = (categoryIntervalRaw && categoryIntervalRaw > 0) ? categoryIntervalRaw : currentTransitionTime;
+      const currentWodInterval = (wodIntervalRaw && wodIntervalRaw > 0) ? wodIntervalRaw : currentTransitionTime;
+      
+      console.log(`⏱️ Intervalos configurados: Transição=${currentTransitionTime}min, Categoria=${currentCategoryInterval}min, WOD=${currentWodInterval}min`);
 
       // Buscar a bateria editada
       const { data: editedHeat } = await supabase
