@@ -726,7 +726,7 @@ export default function PublicHeats() {
                           className="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 rounded bg-muted/50 hover:bg-muted/70 transition-colors"
                         >
                           <span className="font-semibold text-xs sm:text-sm min-w-[1.5rem] sm:min-w-8 text-center bg-primary/10 text-primary rounded px-1">
-                            {participant.lane_number || idx + 1}
+                            {idx + 1}
                           </span>
                           <span className="text-xs sm:text-sm font-medium truncate flex-1" title={`${participant.participant_name}${participant.category_name ? ' - ' + participant.category_name : ''}`}>
                             {participant.participant_name || 'Sem nome'}
