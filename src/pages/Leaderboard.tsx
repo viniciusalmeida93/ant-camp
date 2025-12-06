@@ -375,18 +375,13 @@ export default function Leaderboard() {
     });
 
     // Atribuir posições finais com suporte a empates
-    // Se duas equipes têm a mesma pontuação (e mesmos critérios de desempate), ficam na mesma posição
+    // Se duas equipes têm a MESMA PONTUAÇÃO TOTAL, ficam na mesma posição
     let currentPosition = 1;
     entries.forEach((entry, index) => {
       if (index > 0) {
         const previous = entries[index - 1];
-        // Verificar se é empate (mesma pontuação total E mesmos critérios de desempate)
-        const isTie = 
-          entry.totalPoints === previous.totalPoints &&
-          entry.firstPlaces === previous.firstPlaces &&
-          entry.secondPlaces === previous.secondPlaces &&
-          entry.thirdPlaces === previous.thirdPlaces &&
-          entry.lastWodPosition === previous.lastWodPosition;
+        // EMPATE = mesma pontuação total (ignorar outros critérios)
+        const isTie = entry.totalPoints === previous.totalPoints;
         
         if (!isTie) {
           currentPosition = index + 1;
