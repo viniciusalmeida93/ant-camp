@@ -48,69 +48,13 @@ export default function Leaderboard() {
     if (selectedCategory) {
       loadLeaderboard();
     }
-  }, [selectedCategory, wodResults]);
-
-  // Listener para mudanças em tempo real na tabela wod_results
-  useEffect(() => {
-    if (!selectedCategory) return;
-
-    console.log('👂 Configurando listener para categoria:', selectedCategory);
-
-    const channel = supabase
-      .channel(`wod_results_changes_${selectedCategory}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'wod_results',
-          filter: `category_id=eq.${selectedCategory}`
-        },
-        (payload) => {
-          console.log('🔔 Mudança detectada em wod_results:', payload.eventType, payload);
-          // Forçar recarregamento imediato
-          loadLeaderboard();
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Status do listener:', status);
-      });
-
-    return () => {
-      console.log('🔇 Removendo listener');
-      supabase.removeChannel(channel);
-    };
   }, [selectedCategory]);
 
-  // Recarregar quando a página ganha foco (por exemplo, quando volta da página de Results)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (selectedCategory) {
-        loadLeaderboard();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [selectedCategory]);
-
-  // Listener para evento customizado quando resultados são atualizados
-  useEffect(() => {
-    const handleResultsUpdate = () => {
-      if (selectedCategory) {
-        console.log('🔔 Evento customizado recebido: wod_results_updated - Forçando recarregamento...');
-        // Forçar recarregamento imediato
-        loadLeaderboard();
-      }
-    };
-
-    window.addEventListener('wod_results_updated', handleResultsUpdate);
-    console.log('👂 Listener de evento customizado configurado');
-    return () => {
-      window.removeEventListener('wod_results_updated', handleResultsUpdate);
-      console.log('🔇 Listener de evento customizado removido');
-    };
-  }, [selectedCategory]);
+  // REMOVIDO: Listeners em tempo real que causavam atualizações constantes
+  // O leaderboard agora só atualiza quando:
+  // 1. Usuário seleciona outra categoria
+  // 2. Usuário clica no botão "Recalcular Pontos"
+  // 3. Página é recarregada manualmente
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
