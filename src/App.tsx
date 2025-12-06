@@ -25,6 +25,7 @@ import Integrations from "./pages/Integrations";
 import AsaasIntegration from "./pages/AsaasIntegration";
 import PublicLeaderboard from "./pages/PublicLeaderboard";
 import PublicHeats from "./pages/PublicHeats";
+import PublicWODs from "./pages/PublicWODs";
 import LinkPage from "./pages/LinkPage";
 import LinkPageConfig from "./pages/LinkPageConfig";
 import BulkImport from "./pages/BulkImport";
@@ -54,6 +55,7 @@ const App = () => (
           <Route path="/tv-display" element={<TVDisplay />} />
           <Route path="/:slug/leaderboard" element={<PublicLeaderboard />} />
           <Route path="/:slug/heats" element={<PublicHeats />} />
+          <Route path="/:slug/wods" element={<PublicWODs />} />
           
           {/* Organizer dashboard */}
           <Route path="/dashboard" element={<OrganizerDashboard />} />
