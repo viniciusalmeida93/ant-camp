@@ -1569,17 +1569,6 @@ export default function HeatsNew() {
       let wodsCompleted: string[] = [];
 
       for (const heat of followingHeats) {
-        // Se a bateria já tem horário manual, pular (respeitar horário manual)
-        if (heat.scheduled_time) {
-          // Manter horário manual existente e atualizar currentTime para continuar cálculo
-          const existingTime = new Date(heat.scheduled_time);
-          currentTime = new Date(existingTime);
-          previousWodId = heat.wod_id;
-          previousCategoryId = heat.category_id;
-          console.log(`⏭️ Bateria ${heat.heat_number} tem horário manual, mantendo: ${currentTime.toLocaleTimeString('pt-BR')}`);
-          continue;
-        }
-        
         // Verificar se mudou de WOD
         if (heat.wod_id !== previousWodId) {
           console.log(`Recálculo: Mudança de WOD detectada`);
@@ -1622,16 +1611,13 @@ export default function HeatsNew() {
           console.log(`  + ${currentTransitionTime} min (transição entre baterias)`);
         }
 
-        // Atualizar horário da bateria apenas se não tiver horário manual
-        if (!heat.scheduled_time) {
-          await supabase
-            .from("heats")
-            .update({ scheduled_time: currentTime.toISOString() })
-            .eq("id", heat.id);
-          console.log(`Bateria ${heat.heat_number} recalculada: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-        } else {
-          console.log(`⏭️ Bateria ${heat.heat_number} mantém horário manual: ${new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
-        }
+        // Atualizar horário da bateria SEMPRE (recalcular todas as seguintes)
+        await supabase
+          .from("heats")
+          .update({ scheduled_time: currentTime.toISOString() })
+          .eq("id", heat.id);
+        console.log(`Bateria ${heat.heat_number} recalculada: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+
 
         previousWodId = heat.wod_id;
         previousCategoryId = heat.category_id;
