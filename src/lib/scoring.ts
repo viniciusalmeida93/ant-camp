@@ -218,8 +218,16 @@ export const calculateLeaderboard = (
   
   // Ordenar e atribuir posições
   // SEMPRE: menor pontuação ganha (ordem crescente)
+  // EXCETO: quem tem 0 pontos fica por último
   entries.sort((a, b) => {
-    // 1. Pontos (SEMPRE menor é melhor)
+    // Se um tem 0 e outro não, quem tem 0 vai para o final
+    if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
+    if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
+    
+    // Se ambos têm 0, não importa a ordem entre eles
+    if (a.totalPoints === 0 && b.totalPoints === 0) return 0;
+    
+    // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
     if (a.totalPoints !== b.totalPoints) {
       return a.totalPoints - b.totalPoints;
     }

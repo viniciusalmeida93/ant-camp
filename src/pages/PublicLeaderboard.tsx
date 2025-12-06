@@ -212,7 +212,12 @@ export default function PublicLeaderboard() {
 
     // Ordenar e atribuir posições
     // SEMPRE: menor pontuação ganha (ordem crescente)
+    // EXCETO: quem tem 0 pontos fica por último
     entries.sort((a, b) => {
+      // Se um tem 0 e outro não, quem tem 0 vai para o final
+      if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
+      if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
+      
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
       if (a.totalPoints === 0 && b.totalPoints === 0) {
         if (a.orderIndex !== null && a.orderIndex !== undefined && 
@@ -224,7 +229,7 @@ export default function PublicLeaderboard() {
         return 0;
       }
       
-      // 1. Pontos (SEMPRE menor é melhor)
+      // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
       if (a.totalPoints !== b.totalPoints) {
         return a.totalPoints - b.totalPoints;
       }

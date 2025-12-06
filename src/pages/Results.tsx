@@ -119,6 +119,10 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
     
     // 5. Ordenar (mesma lógica do Leaderboard.tsx)
     entries.sort((a, b) => {
+      // Se um tem 0 e outro não, quem tem 0 vai para o final
+      if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
+      if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
+      
       // Se ambos têm 0 pontos, manter order_index original
       if (a.totalPoints === 0 && b.totalPoints === 0) {
         if (a.orderIndex !== null && a.orderIndex !== undefined && 
@@ -130,7 +134,7 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
         return 0;
       }
       
-      // 1. Pontos (SEMPRE menor é melhor)
+      // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
       if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
       
       // 2. Mais primeiros lugares
