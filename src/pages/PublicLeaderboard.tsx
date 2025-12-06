@@ -213,9 +213,10 @@ export default function PublicLeaderboard() {
     // Ordenar e atribuir posições
     // Para "simple-order": menor pontuação ganha (ordem crescente)
     // Para outros sistemas: maior pontuação ganha (ordem decrescente)
-    // USAR MESMA LÓGICA DO INTERNO QUE FUNCIONA
-    const isSimpleOrder = presetType === 'simple-order';
-    console.log("🚀 PRESET:", presetType, "| isSimpleOrder:", isSimpleOrder);
+    // Normalizar preset para garantir match
+    const normalizedPreset = (presetType || '').toString().toLowerCase().trim();
+    const isSimpleOrder = normalizedPreset.includes('simple');
+    console.log("🚀 PRESET RAW:", presetType, "| NORMALIZADO:", normalizedPreset, "| IS SIMPLE:", isSimpleOrder);
     
     entries.sort((a, b) => {
       // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
@@ -231,7 +232,9 @@ export default function PublicLeaderboard() {
       
       // 1. Pontos (invertido para simple-order: menor é melhor)
       if (b.totalPoints !== a.totalPoints) {
-        return isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+        const result = isSimpleOrder ? a.totalPoints - b.totalPoints : b.totalPoints - a.totalPoints;
+        console.log(`📊 Comparando: ${a.participantName}(${a.totalPoints}pts) vs ${b.participantName}(${b.totalPoints}pts) | Simple=${isSimpleOrder} | Result=${result}`);
+        return result;
       }
       
       // 2. Mais primeiros lugares
@@ -265,19 +268,18 @@ export default function PublicLeaderboard() {
     });
 
     // Atribuir posições finais com suporte a empates
-    // Se duas equipes têm a MESMA PONTUAÇÃO TOTAL, ficam na mesma posição
+    // Lógica: se mesma pontuação = mesma posição
+    // Mas próxima posição diferente é sequencial (não pula números)
+    // Ex: 1º, 1º, 2º, 3º, 3º, 4º (não 1º, 1º, 3º)
     let currentPosition = 1;
+    let previousPoints: number | null = null;
+    
     entries.forEach((entry, index) => {
-      if (index > 0) {
-        const previous = entries[index - 1];
-        // EMPATE = mesma pontuação total (ignorar outros critérios)
-        const isTie = entry.totalPoints === previous.totalPoints;
-        
-        if (!isTie) {
-          currentPosition = index + 1;
-        }
+      if (index > 0 && entry.totalPoints !== previousPoints) {
+        currentPosition++; // Incrementa apenas quando pontuação muda
       }
       entry.position = currentPosition;
+      previousPoints = entry.totalPoints;
     });
     
     console.log("📊 Posições atribuídas. Primeiros 5:", entries.slice(0, 5).map(e => ({ 
