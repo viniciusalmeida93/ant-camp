@@ -927,10 +927,8 @@ export default function Dashboard() {
 
   if (contextLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+      <div className="flex items-center justify-center min-h-[400px] p-6">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -938,7 +936,7 @@ export default function Dashboard() {
   // If no championships and no selected championship, show create screen
   if (championships.length === 0 && !selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="text-center py-12">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -1037,66 +1035,24 @@ export default function Dashboard() {
                 </form>
               </DialogContent>
             </Dialog>
-            <div className="mt-4">
-              <Button 
-                variant="outline" 
-                size="lg"
-                onClick={() => navigate("/dashboard")}
-              >
-                Painel do Organizador
-              </Button>
-            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // Show championship selector and dashboard
+  // Show championship dashboard
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-start justify-between gap-4 mb-8 animate-fade-in flex-col md:flex-row md:items-center">
+    <div className="p-6">
+      <div className="flex items-start justify-between gap-4 mb-6 animate-fade-in flex-col md:flex-row md:items-center">
         <div>
-          <h1 className="text-4xl font-bold mb-2">
-            {selectedChampionship ? selectedChampionship.name : "Escolha um campeonato"}
+          <h1 className="text-3xl font-bold mb-1">
+            {selectedChampionship ? selectedChampionship.name : "Selecione um campeonato"}
           </h1>
-          <p className="text-muted-foreground">
-            Gerencie seu campeonato e visualize estatísticas detalhadas
+          <p className="text-muted-foreground text-sm">
+            Gerencie seu campeonato e visualize estatísticas
           </p>
         </div>
-        <Button
-          size="lg"
-          className="shadow-glow"
-          onClick={() => navigate("/dashboard")}
-        >
-          <Settings className="w-5 h-5 mr-2" />
-          Painel do Organizador
-        </Button>
-      </div>
-
-      {/* Championship Selector */}
-      <div className="mb-8">
-        <Label className="mb-2 block">Escolha um campeonato</Label>
-        <Select
-          value={selectedChampionship?.id || ''}
-          onValueChange={(value) => {
-            const champ = championships.find(c => c.id === value);
-            if (champ) {
-              setSelectedChampionship(champ);
-            }
-          }}
-        >
-          <SelectTrigger className="w-full md:w-[400px] bg-card">
-            <SelectValue placeholder="Escolha um campeonato" />
-          </SelectTrigger>
-          <SelectContent>
-            {championships.map((champ) => (
-              <SelectItem key={champ.id} value={champ.id}>
-                {champ.name} - {new Date(champ.date).toLocaleDateString('pt-BR')}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {selectedChampionship ? (
@@ -1598,7 +1554,15 @@ export default function Dashboard() {
         </>
       ) : (
         <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Selecione um campeonato para ver as estatísticas e gerenciar.</p>
+          <div className="flex flex-col items-center gap-4">
+            <Trophy className="w-12 h-12 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold mb-1">Nenhum campeonato selecionado</h3>
+              <p className="text-muted-foreground text-sm">
+                Selecione um campeonato na barra lateral para começar.
+              </p>
+            </div>
+          </div>
         </Card>
       )}
     </div>

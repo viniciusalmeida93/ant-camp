@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Navbar } from "./components/layout/Navbar";
+import { AppLayout } from "./components/layout/AppLayout";
 import Auth from "./pages/Auth";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import PublicRegistration from "./pages/PublicRegistration";
@@ -43,7 +43,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
         <Routes>
-          {/* Public routes without navbar */}
+          {/* Public routes without sidebar */}
           <Route path="/" element={<Auth />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/setup" element={<Setup />} />
@@ -55,7 +55,7 @@ const App = () => (
           <Route path="/:slug/leaderboard" element={<PublicLeaderboard />} />
           <Route path="/:slug/heats" element={<PublicHeats />} />
           
-          {/* Organizer dashboard */}
+          {/* Organizer dashboard (standalone) */}
           <Route path="/dashboard" element={<OrganizerDashboard />} />
           <Route path="/super-admin" element={<SuperAdminDashboard />} />
           <Route path="/asaas-integration" element={<AsaasIntegration />} />
@@ -65,24 +65,21 @@ const App = () => (
           <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
           <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
           
-          {/* App routes with navbar */}
-          <Route path="*" element={
-            <div className="min-h-screen bg-background">
-              <Navbar />
-              <Routes>
-                <Route path="/app" element={<Dashboard />} />
-                <Route path="/categories" element={<Categories />} />
-                <Route path="/wods" element={<WODs />} />
-                <Route path="/registrations" element={<Registrations />} />
-                <Route path="/bulk-import" element={<BulkImport />} />
-                <Route path="/scoring" element={<Scoring />} />
-                <Route path="/results" element={<Results />} />
-                <Route path="/heats" element={<Heats />} />
-                <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </div>
-          } />
+          {/* App routes with sidebar layout */}
+          <Route element={<AppLayout />}>
+            <Route path="/app" element={<Dashboard />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/wods" element={<WODs />} />
+            <Route path="/registrations" element={<Registrations />} />
+            <Route path="/bulk-import" element={<BulkImport />} />
+            <Route path="/scoring" element={<Scoring />} />
+            <Route path="/results" element={<Results />} />
+            <Route path="/heats" element={<Heats />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+          </Route>
+          
+          {/* 404 fallback */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
       </TooltipProvider>

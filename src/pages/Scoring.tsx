@@ -192,7 +192,7 @@ export default function Scoring() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -202,25 +202,22 @@ export default function Scoring() {
 
   if (!selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Selecione um campeonato primeiro.</p>
-          <Button onClick={() => navigate("/app")}>
-            Ir para Dashboard
-          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-primary" />
-          <h1 className="text-4xl font-bold">Configuração de Pontuação</h1>
+    <div className="p-6">
+      <div className="mb-6 animate-fade-in">
+        <div className="flex items-center gap-3 mb-1">
+          <Settings className="w-6 h-6 text-primary" />
+          <h1 className="text-3xl font-bold">Configuração de Pontuação</h1>
         </div>
-        <p className="text-muted-foreground">Configure o sistema de pontuação para todas as categorias do campeonato</p>
+        <p className="text-muted-foreground text-sm">Configure o sistema de pontuação para todas as categorias</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

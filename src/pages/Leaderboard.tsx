@@ -432,7 +432,7 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -442,25 +442,22 @@ export default function Leaderboard() {
 
   if (!selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Selecione um campeonato primeiro.</p>
-          <Button onClick={() => navigate("/app")}>
-            Ir para Dashboard
-          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8 animate-fade-in">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6 animate-fade-in">
         <div className="flex items-center gap-3">
-          <Trophy className="w-8 h-8 text-primary" />
+          <Trophy className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-4xl font-bold">Leaderboard</h1>
-            <p className="text-muted-foreground">Classificação ao vivo do campeonato</p>
+            <h1 className="text-3xl font-bold">Leaderboard</h1>
+            <p className="text-muted-foreground text-sm">Classificação ao vivo do campeonato</p>
           </div>
         </div>
         

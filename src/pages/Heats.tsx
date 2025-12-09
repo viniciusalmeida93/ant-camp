@@ -587,7 +587,7 @@ export default function Heats() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -597,12 +597,9 @@ export default function Heats() {
 
   if (!selectedChampionship) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6">
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">Selecione um campeonato primeiro.</p>
-          <Button onClick={() => navigate("/app")}>
-            Ir para Dashboard
-          </Button>
         </div>
       </div>
     );
@@ -750,13 +747,13 @@ export default function Heats() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 animate-fade-in">
-        <div className="flex items-center gap-3 mb-2">
-          <Users className="w-8 h-8 text-primary" />
-          <h1 className="text-4xl font-bold">Organização de Baterias</h1>
+    <div className="p-6">
+      <div className="mb-6 animate-fade-in">
+        <div className="flex items-center gap-3 mb-1">
+          <Users className="w-6 h-6 text-primary" />
+          <h1 className="text-3xl font-bold">Organização de Baterias</h1>
         </div>
-        <p className="text-muted-foreground">Geração automática com semeadura baseada no ranking</p>
+        <p className="text-muted-foreground text-sm">Geração automática com semeadura baseada no ranking</p>
       </div>
 
       <Card className="p-6 shadow-card mb-6">
