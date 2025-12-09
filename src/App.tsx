@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Navbar } from "./components/layout/Navbar";
+import { AppLayout } from "./components/layout/AppLayout";
 import Auth from "./pages/Auth";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import PublicRegistration from "./pages/PublicRegistration";
@@ -65,24 +65,19 @@ const App = () => (
           <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
           <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
           
-          {/* App routes with navbar */}
-          <Route path="*" element={
-            <div className="min-h-screen bg-background">
-              <Navbar />
-              <Routes>
-                <Route path="/app" element={<Dashboard />} />
-                <Route path="/categories" element={<Categories />} />
-                <Route path="/wods" element={<WODs />} />
-                <Route path="/registrations" element={<Registrations />} />
-                <Route path="/bulk-import" element={<BulkImport />} />
-                <Route path="/scoring" element={<Scoring />} />
-                <Route path="/results" element={<Results />} />
-                <Route path="/heats" element={<Heats />} />
-                <Route path="/leaderboard" element={<Leaderboard />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </div>
-          } />
+          {/* App routes with sidebar layout */}
+          <Route path="/app" element={<AppLayout><Dashboard /></AppLayout>} />
+          <Route path="/categories" element={<AppLayout><Categories /></AppLayout>} />
+          <Route path="/wods" element={<AppLayout><WODs /></AppLayout>} />
+          <Route path="/registrations" element={<AppLayout><Registrations /></AppLayout>} />
+          <Route path="/bulk-import" element={<AppLayout><BulkImport /></AppLayout>} />
+          <Route path="/scoring" element={<AppLayout><Scoring /></AppLayout>} />
+          <Route path="/results" element={<AppLayout><Results /></AppLayout>} />
+          <Route path="/heats" element={<AppLayout><Heats /></AppLayout>} />
+          <Route path="/leaderboard" element={<AppLayout><Leaderboard /></AppLayout>} />
+          
+          {/* 404 - only catch if no other route matches */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
       </TooltipProvider>
