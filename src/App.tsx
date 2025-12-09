@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Navbar } from "./components/layout/Navbar";
+import { AppLayout } from "./components/layout/AppLayout";
 import Auth from "./pages/Auth";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import PublicRegistration from "./pages/PublicRegistration";
@@ -65,10 +65,9 @@ const App = () => (
           <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
           <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
           
-          {/* App routes with navbar */}
+          {/* App routes with sidebar layout */}
           <Route path="*" element={
-            <div className="min-h-screen bg-background">
-              <Navbar />
+            <AppLayout>
               <Routes>
                 <Route path="/app" element={<Dashboard />} />
                 <Route path="/categories" element={<Categories />} />
@@ -81,7 +80,7 @@ const App = () => (
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
-            </div>
+            </AppLayout>
           } />
         </Routes>
       </BrowserRouter>
