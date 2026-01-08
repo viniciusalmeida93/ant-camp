@@ -14,10 +14,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
-// REMOVIDO: Não criar resultados fictícios automaticamente
-// import { generateDemoData } from '@/utils/generateDemoData';
-// import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
-// import { ensureRandomResults } from '@/utils/ensureRandomResults';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -70,64 +66,6 @@ export default function Dashboard() {
       loadWODs();
       loadChampionshipDays();
     }
-  }, [selectedChampionship]);
-
-  // DESABILITADO: Geração automática de dados demo
-  // useEffect(() => {
-  //   const seedDemoData = async () => {
-  //     if (!selectedChampionship) return;
-  //     // Código de demo desabilitado para evitar conflitos
-  //   };
-  //   seedDemoData();
-  // }, [selectedChampionship]);
-
-  useEffect(() => {
-    const ensureDemoConsistency = async () => {
-      if (!selectedChampionship) return;
-      const championshipId = selectedChampionship.id;
-
-      let shouldRefresh = false;
-
-      // DESABILITADO: Não criar resultados fictícios automaticamente
-      // Os resultados devem ser lançados manualmente
-      /*
-      if (!scaleTriosEnsuredRef.current.has(championshipId)) {
-        try {
-          const { added } = await ensureScaleTrios(championshipId);
-          if (added > 0) {
-            shouldRefresh = true;
-          }
-        } catch (error: any) {
-          console.error('Erro ao garantir times fictícios:', error);
-        } finally {
-          scaleTriosEnsuredRef.current.add(championshipId);
-        }
-      }
-
-      if (!randomResultsEnsuredRef.current.has(championshipId)) {
-        try {
-          const { generated } = await ensureRandomResults(championshipId);
-          if (generated > 0) {
-            shouldRefresh = true;
-          }
-        } catch (error: any) {
-          console.error('Erro ao gerar resultados aleatórios:', error);
-        } finally {
-          randomResultsEnsuredRef.current.add(championshipId);
-        }
-      }
-      */
-
-      if (shouldRefresh) {
-        await Promise.all([
-          loadStats(),
-          loadWODs(),
-          loadChampionshipDays(),
-        ]);
-      }
-    };
-
-    ensureDemoConsistency();
   }, [selectedChampionship]);
 
   const loadStats = async () => {
@@ -221,8 +159,8 @@ export default function Dashboard() {
 
       if (data) {
         setScheduleConfig({
-          startTime: '', // Não usado mais, cada dia tem seu próprio horário
-          breakIntervalMinutes: 5, // Valor padrão, não usado mais (cada dia tem seu próprio intervalo)
+          startTime: '',
+          breakIntervalMinutes: 5,
           enableBreak: data.enable_break || false,
           breakDurationMinutes: data.break_duration_minutes || 30,
           breakAfterWodNumber: data.break_after_wod_number || 1,
@@ -270,7 +208,6 @@ export default function Dashboard() {
         const wodsByDay = new Map<number, any[]>();
         daysData.forEach(day => wodsByDay.set(day.day_number, []));
 
-        // Carregar WODs de cada dia
         const dayIds = daysData.map(d => d.id);
         const { data: wodsData, error: wodsError } = await supabase
           .from("championship_day_wods")
@@ -289,7 +226,6 @@ export default function Dashboard() {
         }
         setDayWods(wodsByDay);
       } else {
-        // Se não há dias, criar baseado no total_days
         await initializeDays();
       }
     } catch (error: any) {
@@ -336,7 +272,6 @@ export default function Dashboard() {
     const currentDays = championshipDays.length;
     
     if (newDays > currentDays) {
-      // Adicionar novos dias
       const baseDate = new Date(selectedChampionship.date);
       for (let i = currentDays + 1; i <= newDays; i++) {
         const dayDate = new Date(baseDate);
@@ -362,7 +297,6 @@ export default function Dashboard() {
         }
       }
     } else if (newDays < currentDays) {
-      // Remover dias extras
       const daysToRemove = championshipDays.slice(newDays);
       for (const day of daysToRemove) {
         await supabase
@@ -433,7 +367,6 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Atualizar estado local
       setChampionshipDays(prev => prev.map(day => 
         day.id === dayId ? { ...day, enable_break: enabled } : day
       ));
@@ -447,24 +380,17 @@ export default function Dashboard() {
 
   const handleDayBreakUpdate = async (dayId: string, field: string, value: any) => {
     try {
-      console.log(`Atualizando campo ${field} para dia ${dayId} com valor:`, value);
-      
       const { error } = await supabase
         .from("championship_days")
         .update({ [field]: value })
         .eq("id", dayId);
 
-      if (error) {
-        console.error("Erro do Supabase:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      // Atualizar estado local
       setChampionshipDays(prev => prev.map(day => 
         day.id === dayId ? { ...day, [field]: value } : day
       ));
       
-      console.log(`✓ Campo ${field} atualizado com sucesso para valor:`, value);
       toast.success("Configuração atualizada!");
     } catch (error: any) {
       console.error("Error updating day break:", error);
@@ -489,381 +415,12 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // NÃO recalcular horários automaticamente - apenas salvar as configurações
-      // Os horários serão recalculados apenas quando necessário (ex: ao gerar baterias)
-      // Isso preserva os horários que o usuário já definiu manualmente
-
       toast.success("Configuração salva com sucesso!");
     } catch (error: any) {
       console.error("Error saving schedule config:", error);
       toast.error("Erro ao salvar configuração");
     } finally {
       setSavingSchedule(false);
-    }
-  };
-
-  const handleCalculateSchedule = async () => {
-    if (!selectedChampionship) return;
-
-    setLoadingSchedule(true);
-    try {
-      // Recarregar os dias para garantir que temos os valores mais recentes do banco
-      const { data: daysDataFresh, error: daysErrorFresh } = await supabase
-        .from("championship_days")
-        .select("*")
-        .eq("championship_id", selectedChampionship.id)
-        .order("day_number");
-
-      if (daysErrorFresh) throw daysErrorFresh;
-
-      // Atualizar o estado com os dados frescos
-      if (daysDataFresh && daysDataFresh.length > 0) {
-        setChampionshipDays(daysDataFresh);
-        console.log("Dias recarregados do banco:", daysDataFresh.map(d => ({
-          day: d.day_number,
-          start_time: d.start_time,
-          break_interval_minutes: d.break_interval_minutes,
-          enable_break: d.enable_break,
-          break_duration_minutes: d.break_duration_minutes,
-          break_after_wod_number: d.break_after_wod_number
-        })));
-      }
-
-      // Buscar todas as baterias do campeonato
-      const { data: allHeats, error: heatsError } = await supabase
-        .from("heats")
-        .select("*, wods(*)")
-        .eq("championship_id", selectedChampionship.id)
-        .order("heat_number");
-
-      if (heatsError) throw heatsError;
-
-      const variationMap = new Map<string, Map<string, any>>();
-      const wodIdsForVariations = wods.map(wod => wod.id);
-      if (wodIdsForVariations.length > 0) {
-        const { data: variationData, error: variationsError } = await supabase
-          .from("wod_category_variations")
-          .select("*")
-          .in("wod_id", wodIdsForVariations);
-
-        if (variationsError) {
-          if (variationsError.code === '42P01' || (variationsError.message ?? '').includes('wod_category_variations')) {
-            console.warn('Tabela wod_category_variations ausente; agendamento utilizará durações padrão.');
-          } else {
-            throw variationsError;
-          }
-        } else {
-          (variationData || []).forEach((variation: any) => {
-            if (!variationMap.has(variation.wod_id)) {
-              variationMap.set(variation.wod_id, new Map());
-            }
-            variationMap.get(variation.wod_id)!.set(variation.category_id, variation);
-          });
-        }
-      }
-
-      // Mapa para rastrear quais WODs já foram processados
-      const processedWodIds = new Set<string>();
-
-      // Para cada dia, calcular horários (usar dados frescos do banco)
-      const daysToProcess = daysDataFresh && daysDataFresh.length > 0 ? daysDataFresh : championshipDays;
-      for (const day of daysToProcess) {
-        const dayWodsList = dayWods.get(day.day_number) || [];
-        if (dayWodsList.length === 0) continue;
-
-        // Verificar se já existe uma primeira bateria com horário definido para este dia
-        // Se existir, usar esse horário como ponto de partida (respeitando o horário manual do usuário)
-        const firstHeatOfDay = (allHeats || [])
-          .filter(h => {
-            const heatDay = dayWodsList.find(w => w.id === h.wod_id);
-            return heatDay !== undefined;
-          })
-          .sort((a, b) => a.heat_number - b.heat_number)[0];
-
-        let dayStartTime: string;
-        let useExistingFirstHeatTime = false;
-
-        if (firstHeatOfDay && firstHeatOfDay.scheduled_time) {
-          // Usar o horário da primeira bateria existente
-          const firstHeatDate = new Date(firstHeatOfDay.scheduled_time);
-          const hours = firstHeatDate.getHours().toString().padStart(2, '0');
-          const mins = firstHeatDate.getMinutes().toString().padStart(2, '0');
-          dayStartTime = `${hours}:${mins}`;
-          useExistingFirstHeatTime = true;
-          console.log(`Dia ${day.day_number}: Usando horário da primeira bateria existente: ${dayStartTime}`);
-        } else {
-          // Horário de início do dia (priorizar start_time do dia, senão usar o global)
-          // Converter start_time do formato TIME do PostgreSQL (HH:MM:SS) para HH:MM
-          if (day.start_time) {
-            if (typeof day.start_time === 'string' && day.start_time.includes(':')) {
-              const parts = day.start_time.split(':');
-              dayStartTime = `${parts[0]}:${parts[1]}`;
-            } else {
-              dayStartTime = day.start_time;
-            }
-          } else {
-            dayStartTime = day.start_time || ''; // Não usar valor padrão, apenas o que está configurado
-            if (!dayStartTime) {
-              console.log(`⚠️ Dia ${day.day_number} não tem horário de início configurado. Pulando cálculo automático.`);
-              continue; // Pular este dia se não tiver horário configurado
-            }
-          }
-          console.log(`Dia ${day.day_number}: Início às ${dayStartTime} (day.start_time: ${day.start_time}, scheduleConfig.startTime: ${scheduleConfig.startTime})`);
-        }
-        
-        // Criar data em horário LOCAL (não UTC)
-        const [hours, mins] = dayStartTime.split(':');
-        const [year, month, dayNum] = day.date.split('-');
-        const startTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum), parseInt(hours), parseInt(mins), 0, 0);
-        let currentTime = new Date(startTime);
-
-        // Para cada WOD do dia (em ordem)
-        for (let wodIndex = 0; wodIndex < dayWodsList.length; wodIndex++) {
-          const wod = dayWodsList[wodIndex];
-          // Buscar duração do WOD diretamente do banco para garantir valor atualizado
-          const { data: wodData } = await supabase
-            .from("wods")
-            .select("estimated_duration_minutes")
-            .eq("id", wod.id)
-            .single();
-
-          const baseDuration = (wodData?.estimated_duration_minutes ?? wod.estimated_duration_minutes) || 10;
-          console.log(`WOD ${wod.name}: Duração base = ${baseDuration} minutos (do banco: ${wodData?.estimated_duration_minutes}, do estado: ${wod.estimated_duration_minutes})`);
-
-          // Buscar todas as baterias deste WOD, agrupadas por categoria
-          const wodHeats = (allHeats || []).filter(h => h.wod_id === wod.id);
-          
-          if (wodHeats.length === 0) continue;
-
-          // Marcar este WOD como processado
-          processedWodIds.add(wod.id);
-
-          // Agrupar baterias por categoria e ordenar
-          const heatsByCategory = new Map<string, any[]>();
-          wodHeats.forEach(heat => {
-            if (!heatsByCategory.has(heat.category_id)) {
-              heatsByCategory.set(heat.category_id, []);
-            }
-            heatsByCategory.get(heat.category_id)!.push(heat);
-          });
-
-          // Para cada categoria, calcular horários das baterias
-          // Ordenar categorias por order_index
-          const categoryIds = Array.from(heatsByCategory.keys());
-          const { data: categoriesData } = await supabase
-            .from("categories")
-            .select("id, order_index")
-            .in("id", categoryIds);
-          
-          const categoryOrderMap = new Map((categoriesData || []).map(c => [c.id, c.order_index || 0]));
-          const sortedCategoryIds = categoryIds.sort((a, b) => {
-            const orderA = categoryOrderMap.get(a) || 0;
-            const orderB = categoryOrderMap.get(b) || 0;
-            return orderA - orderB;
-          });
-
-          // Calcular horários: todas as baterias da primeira categoria, depois todas da segunda, etc.
-          for (const categoryId of sortedCategoryIds) {
-            const categoryHeats = heatsByCategory.get(categoryId) || [];
-            const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
-
-            const variationForCategory = variationMap.get(wod.id)?.get(categoryId);
-            const wodDuration = variationForCategory?.estimated_duration_minutes ?? baseDuration;
-
-            // Calcular horário para cada bateria desta categoria neste WOD
-            // Usar intervalo do dia (já recarregado do banco no início da função)
-            const dayBreakInterval = (day.break_interval_minutes !== null && day.break_interval_minutes !== undefined)
-              ? day.break_interval_minutes
-              : 5; // Padrão se não definido
-            
-            const dayWodInterval = (day.wod_interval_minutes !== null && day.wod_interval_minutes !== undefined)
-              ? day.wod_interval_minutes
-              : 10; // Padrão se não definido
-            
-            // Se é a primeira categoria do WOD e não é o primeiro WOD do dia, aplicar intervalo entre provas
-            const isFirstCategoryOfWod = categoryId === sortedCategoryIds[0];
-            const isNotFirstWod = wodIndex > 0;
-            
-            if (isFirstCategoryOfWod && isNotFirstWod) {
-              // Aplicar intervalo entre provas antes da primeira bateria deste WOD
-              currentTime = new Date(currentTime.getTime() + (dayWodInterval * 60000));
-              console.log(`[Dia ${day.day_number}] Intervalo entre provas de ${dayWodInterval} minutos aplicado antes do WOD ${wod.name}`);
-            }
-            
-            console.log(`Dia ${day.day_number}: Usando intervalo entre baterias de ${dayBreakInterval} minutos e intervalo entre provas de ${dayWodInterval} minutos`);
-            
-            for (const heat of sortedHeats) {
-              // Salvar horário usando toISOString (converte para UTC automaticamente)
-              const scheduledTime = currentTime.toISOString();
-              const timeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-              const { error: updateError } = await supabase
-                .from("heats")
-                .update({ scheduled_time: scheduledTime })
-                .eq("id", heat.id);
-
-              if (updateError) {
-                console.error(`Erro ao atualizar horário da bateria ${heat.id}:`, updateError);
-              } else {
-                console.log(`✓ Bateria ${heat.heat_number} (${wod.name} - ${categoryId}): ${timeStr}, Duração WOD: ${wodDuration}min, Intervalo: ${dayBreakInterval}min`);
-              }
-
-              // Avançar tempo: duração do WOD + intervalo entre baterias
-              // O intervalo é aplicado APÓS a duração do WOD
-              // IMPORTANTE: O intervalo é em MINUTOS, então multiplicamos por 60000 para converter para milissegundos
-              currentTime = new Date(currentTime.getTime() + (wodDuration * 60000)); // Duração do WOD em milissegundos
-              currentTime = new Date(currentTime.getTime() + (dayBreakInterval * 60000)); // Intervalo entre baterias em milissegundos
-              
-              const nextTimeStr = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-              console.log(`  → Próxima bateria será às: ${nextTimeStr} (avançou ${wodDuration + dayBreakInterval} minutos no total)`);
-            }
-          }
-
-          // Verificar se precisa aplicar pausa APÓS este WOD
-          // Priorizar configuração de pausa do dia sobre a configuração global
-          const dayBreakEnabled = day.enable_break !== undefined ? day.enable_break : scheduleConfig.enableBreak;
-          const dayBreakAfterWod = day.break_after_wod_number !== null && day.break_after_wod_number !== undefined 
-            ? day.break_after_wod_number 
-            : scheduleConfig.breakAfterWodNumber;
-          const dayBreakDuration = day.break_duration_minutes !== null && day.break_duration_minutes !== undefined
-            ? day.break_duration_minutes
-            : scheduleConfig.breakDurationMinutes;
-
-          console.log(`[Dia ${day.day_number}] Verificando pausa após WOD ${wodIndex + 1} (${wod.name}): enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, duration=${dayBreakDuration}, day.break_after_wod_number=${day.break_after_wod_number}`);
-
-          // Verificar se a pausa deve ser aplicada após este WOD
-          // Comparar o índice do WOD (wodIndex + 1) com break_after_wod_number
-          const shouldApplyBreak = dayBreakEnabled && 
-              dayBreakAfterWod !== null && 
-              dayBreakAfterWod !== undefined && 
-              (wodIndex + 1) === dayBreakAfterWod;
-
-          if (shouldApplyBreak) {
-            // Adicionar pausa após todas as baterias deste WOD
-            // A pausa é aplicada após o último intervalo entre baterias
-            // Então não precisamos subtrair o intervalo, pois já foi aplicado na última bateria
-            const beforePause = new Date(currentTime);
-            currentTime = new Date(currentTime.getTime() + dayBreakDuration * 60000);
-            console.log(`✓✓✓ [Dia ${day.day_number}] PAUSA de ${dayBreakDuration} minutos aplicada após WOD ${wodIndex + 1} (${wod.name}). Horário antes: ${beforePause.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}, Horário depois: ${currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
-          } else {
-            console.log(`  → [Dia ${day.day_number}] Sem pausa após este WOD (enable=${dayBreakEnabled}, afterWod=${dayBreakAfterWod}, currentWodIndex=${wodIndex + 1}, comparação: ${wodIndex + 1} === ${dayBreakAfterWod} = ${(wodIndex + 1) === dayBreakAfterWod})`);
-          }
-        }
-      }
-
-      // Processar baterias de WODs que não estão atribuídos a nenhum dia
-      // Agrupar por WOD
-      const unprocessedHeats = (allHeats || []).filter(h => !processedWodIds.has(h.wod_id));
-      
-      if (unprocessedHeats.length > 0) {
-        // Usar o primeiro dia ou criar um horário base
-        const firstDay = championshipDays.length > 0 ? championshipDays[0] : null;
-        const baseDate = firstDay?.date || selectedChampionship.date;
-        let baseStartTime = firstDay?.start_time || '';
-        if (!baseStartTime) {
-          console.log('⚠️ Nenhum horário de início configurado. Não é possível calcular horários automaticamente.');
-          toast.warning('Configure o horário de início nos dias do campeonato antes de calcular.');
-          return;
-        }
-        
-        // Garantir formato HH:MM
-        if (typeof baseStartTime === 'string' && baseStartTime.includes(':')) {
-          const parts = baseStartTime.split(':');
-          baseStartTime = `${parts[0]}:${parts[1]}`;
-        }
-        
-        // Criar data em horário LOCAL (não UTC)
-        const [hours, mins] = baseStartTime.split(':');
-        const [year, month, dayNum] = baseDate.split('-');
-        let currentTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum), parseInt(hours), parseInt(mins), 0, 0);
-
-        // Agrupar por WOD
-        const heatsByWod = new Map<string, any[]>();
-        unprocessedHeats.forEach(heat => {
-          if (!heatsByWod.has(heat.wod_id)) {
-            heatsByWod.set(heat.wod_id, []);
-          }
-          heatsByWod.get(heat.wod_id)!.push(heat);
-        });
-
-        // Buscar informações dos WODs
-        const wodIds = Array.from(heatsByWod.keys());
-        const { data: wodsData } = await supabase
-          .from("wods")
-          .select("id, order_num, estimated_duration_minutes")
-          .in("id", wodIds);
-
-        const wodsMap = new Map((wodsData || []).map(w => [w.id, w]));
-        
-        // Ordenar WODs por order_num
-        const sortedWodIds = wodIds.sort((a, b) => {
-          const wodA = wodsMap.get(a);
-          const wodB = wodsMap.get(b);
-          const orderA = wodA?.order_num || 0;
-          const orderB = wodB?.order_num || 0;
-          return orderA - orderB;
-        });
-
-        // Processar cada WOD não atribuído
-        for (const wodId of sortedWodIds) {
-          const wod = wodsMap.get(wodId);
-          const wodDuration = wod?.estimated_duration_minutes || 15;
-          const wodHeats = heatsByWod.get(wodId) || [];
-
-          // Agrupar por categoria
-          const heatsByCategory = new Map<string, any[]>();
-          wodHeats.forEach(heat => {
-            if (!heatsByCategory.has(heat.category_id)) {
-              heatsByCategory.set(heat.category_id, []);
-            }
-            heatsByCategory.get(heat.category_id)!.push(heat);
-          });
-
-          // Ordenar categorias
-          const categoryIds = Array.from(heatsByCategory.keys());
-          const { data: categoriesData } = await supabase
-            .from("categories")
-            .select("id, order_index")
-            .in("id", categoryIds);
-          
-          const categoryOrderMap = new Map((categoriesData || []).map(c => [c.id, c.order_index || 0]));
-          const sortedCategoryIds = categoryIds.sort((a, b) => {
-            const orderA = categoryOrderMap.get(a) || 0;
-            const orderB = categoryOrderMap.get(b) || 0;
-            return orderA - orderB;
-          });
-
-          // Calcular horários para cada categoria
-          for (const categoryId of sortedCategoryIds) {
-            const categoryHeats = heatsByCategory.get(categoryId) || [];
-            const sortedHeats = categoryHeats.sort((a, b) => a.heat_number - b.heat_number);
-
-            for (const heat of sortedHeats) {
-              const scheduledTime = currentTime.toISOString();
-
-              await supabase
-                .from("heats")
-                .update({ scheduled_time: scheduledTime })
-                .eq("id", heat.id);
-
-              // Avançar tempo: duração do WOD + intervalo entre baterias
-              // O intervalo é aplicado APÓS a duração do WOD
-              // Para WODs não atribuídos, usar intervalo padrão de 5 minutos
-              const defaultBreakInterval = 5;
-              
-              currentTime = new Date(currentTime.getTime() + wodDuration * 60000); // Duração do WOD
-              currentTime = new Date(currentTime.getTime() + defaultBreakInterval * 60000); // Intervalo entre baterias
-            }
-          }
-        }
-      }
-
-      toast.success("Horários calculados e aplicados automaticamente!");
-    } catch (error: any) {
-      console.error("Error calculating schedule:", error);
-      toast.error("Erro ao calcular horários");
-    } finally {
-      setLoadingSchedule(false);
     }
   };
 
@@ -896,7 +453,6 @@ export default function Dashboard() {
         return;
       }
 
-      // Generate unique slug
       let slug = generateSlug(name);
       let slugExists = true;
       let attempts = 0;
@@ -937,7 +493,6 @@ export default function Dashboard() {
       setIsDialogOpen(false);
       setFormData({ name: '', date: '', location: '', description: '' });
       
-      // Reload championships and select the new one
       await loadChampionships();
       if (championship) {
         setSelectedChampionship(championship);
@@ -960,7 +515,6 @@ export default function Dashboard() {
     );
   }
 
-  // If no championships and no selected championship, show create screen
   if (championships.length === 0 && !selectedChampionship) {
     return (
       <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
@@ -1077,7 +631,6 @@ export default function Dashboard() {
     );
   }
 
-  // Show championship selector and dashboard
   return (
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="flex items-start justify-between gap-4 mb-8 animate-fade-in flex-col md:flex-row md:items-center">
@@ -1309,7 +862,6 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {/* Basic Schedule Settings */}
                 <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
               <div>
                     <Label htmlFor="totalDays">Duração do Evento (dias)</Label>
@@ -1345,7 +897,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Break Configuration - Info */}
                 <div className="p-4 border rounded-lg bg-muted/30">
                   <div className="flex items-start gap-3">
                     <div className="flex-1">
@@ -1358,7 +909,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Days and WODs Distribution */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-lg font-semibold">Distribuição de Provas por Dia</Label>
@@ -1389,7 +939,6 @@ export default function Dashboard() {
 
                   {championshipDays.map((day) => {
                     const dayWodsList = dayWods.get(day.day_number) || [];
-                    // WODs disponíveis são aqueles que não estão em nenhum dia
                     const allAssignedWodIds = new Set(
                       Array.from(dayWods.values()).flat().map(w => w.id)
                     );
@@ -1405,7 +954,6 @@ export default function Dashboard() {
                             </p>
                           </div>
                         </div>
-                        
                         
                         <div className="space-y-2 mb-3">
                           <Label className="text-sm">Provas do Dia:</Label>
@@ -1451,7 +999,6 @@ export default function Dashboard() {
                           </p>
                         )}
 
-                        {/* Configuração de Pausa para este Dia */}
                         <div className="mt-4 pt-4 border-t">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
@@ -1524,7 +1071,6 @@ export default function Dashboard() {
                   })}
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-2 pt-4 border-t">
         <Button 
                     onClick={handleSaveScheduleConfig}

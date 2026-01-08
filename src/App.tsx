@@ -13,6 +13,7 @@ import ChampionshipSettings from "./pages/ChampionshipSettings";
 import Dashboard from "./pages/Dashboard";
 import Categories from "./pages/Categories";
 import WODs from "./pages/WODs";
+import CreateWOD from "./pages/CreateWOD";
 import Registrations from "./pages/Registrations";
 import Scoring from "./pages/Scoring";
 import Results from "./pages/Results";
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/app" element={<Dashboard />} />
                   <Route path="/categories" element={<Categories />} />
                   <Route path="/wods" element={<WODs />} />
+                  <Route path="/wods/new" element={<CreateWOD />} />
                   <Route path="/registrations" element={<Registrations />} />
                   <Route path="/bulk-import" element={<BulkImport />} />
                   <Route path="/scoring" element={<Scoring />} />

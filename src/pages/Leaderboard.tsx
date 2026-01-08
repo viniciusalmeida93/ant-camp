@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { compareLeaderboardEntries } from '@/lib/scoring';
 // REMOVIDO: Usando função local que inclui todos os registros mesmo sem resultados
 // import { calculateLeaderboard } from '@/lib/scoring';
 
@@ -321,73 +322,13 @@ export default function Leaderboard() {
     console.log('📉 Participantes sem resultados (zerados):', participantsWithoutResults);
     console.log('📊 Total de participantes no leaderboard:', entries.length);
 
-    // Ordenar e atribuir posições
-    // SEMPRE: menor pontuação ganha (ordem crescente)
-    // EXCETO: quem tem 0 pontos fica por último
-    entries.sort((a, b) => {
-      // Se um tem 0 e outro não, quem tem 0 vai para o final
-      if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
-      if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
-      
-      // Se ambos têm 0 pontos (sem resultados), ordenar apenas por order_index
-      if (a.totalPoints === 0 && b.totalPoints === 0) {
-        if (a.orderIndex !== null && a.orderIndex !== undefined && 
-            b.orderIndex !== null && b.orderIndex !== undefined) {
-          return a.orderIndex - b.orderIndex;
-        }
-        if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
-        if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
-        return 0;
-      }
-      
-      // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
-      if (a.totalPoints !== b.totalPoints) {
-        return a.totalPoints - b.totalPoints;
-      }
-      
-      // 2. Mais primeiros lugares
-      if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
-      
-      // 3. Mais segundos lugares
-      if (b.secondPlaces !== a.secondPlaces) return b.secondPlaces - a.secondPlaces;
-      
-      // 4. Mais terceiros lugares
-      if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
-      
-      // 5. Melhor posição no último WOD (menor número é melhor)
-      if (a.lastWodPosition !== undefined && b.lastWodPosition !== undefined) {
-        return a.lastWodPosition - b.lastWodPosition;
-      }
-      
-      if (a.lastWodPosition !== undefined) return -1;
-      if (b.lastWodPosition !== undefined) return 1;
-      
-      // 6. Usar order_index como desempate final (menor order_index = melhor posição manual)
-      if (a.orderIndex !== null && a.orderIndex !== undefined && 
-          b.orderIndex !== null && b.orderIndex !== undefined) {
-        return a.orderIndex - b.orderIndex;
-      }
-      
-      // Se apenas um tem order_index, ele vem primeiro
-      if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
-      if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
-      
-      return 0;
-    });
+    // Ordenar usando a função de comparação completa com desempate
+    entries.sort((a, b) => compareLeaderboardEntries(a, b));
 
-    // Atribuir posições finais com suporte a empates
-    // Lógica: se mesma pontuação = mesma posição
-    // Mas próxima posição diferente é sequencial (não pula números)
-    // Ex: 1º, 1º, 2º, 3º, 3º, 4º (não 1º, 1º, 3º)
-    let currentPosition = 1;
-    let previousPoints: number | null = null;
-    
+    // Atribuir posições finais (sem empates - cada um tem posição única)
+    // A função de comparação garante que não haverá empates absolutos
     entries.forEach((entry, index) => {
-      if (index > 0 && entry.totalPoints !== previousPoints) {
-        currentPosition++; // Incrementa apenas quando pontuação muda
-      }
-      entry.position = currentPosition;
-      previousPoints = entry.totalPoints;
+      entry.position = index + 1;
     });
 
     return entries;

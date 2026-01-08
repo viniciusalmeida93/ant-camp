@@ -197,12 +197,21 @@ export default function PublicHeats() {
       console.log("Buscando baterias para o campeonato ID:", champ.id);
       
       // Primeiro, buscar as baterias sem os relacionamentos
+      // ORDENAÇÃO DETERMINÍSTICA: usar múltiplos campos para garantir ordem consistente
+      // 1) wod_id (UUID) - garante agrupamento por WOD
+      // 2) category_id (UUID) - garante agrupamento por categoria
+      // 3) scheduled_time (TIMESTAMP) - ordena por horário
+      // 4) heat_number (INTEGER) - ordena por número da bateria
+      // 5) created_at (TIMESTAMP) - desempate final para garantir determinismo
       const { data: heatsData, error: heatsError } = await supabase
         .from("heats")
         .select("*")
         .eq("championship_id", champ.id)
+        .order("wod_id", { ascending: true })
+        .order("category_id", { ascending: true })
         .order("scheduled_time", { ascending: true, nullsFirst: false })
-        .order("heat_number", { ascending: true });
+        .order("heat_number", { ascending: true })
+        .order("created_at", { ascending: true });
 
       if (heatsError) {
         console.error("Erro ao buscar baterias:", heatsError);
@@ -417,41 +426,53 @@ export default function PublicHeats() {
         const totalParticipants = formattedHeats.reduce((sum, h) => sum + (h.participants?.length || 0), 0);
         console.log("Total de participantes em todas as baterias:", totalParticipants);
         
-        // Ordenar baterias antes de definir: 1) WOD, 2) Categoria, 3) Horário, 4) Número da bateria
+        // Ordenar baterias antes de definir: ordem determinística e estável
+        // A ordenação do banco já garante ordem básica, mas precisamos refinar com dados de relacionamento
         const sortedHeats = [...formattedHeats].sort((a, b) => {
-          // 1) Dia da prova
+          // 1) Dia da prova (usar 9999 para undefined/null para garantir estabilidade)
           const dayA = a.day_number ?? 9999;
           const dayB = b.day_number ?? 9999;
           if (dayA !== dayB) {
             return dayA - dayB;
           }
 
-          // 2) Horário agendado
-          if (a.scheduled_time && b.scheduled_time) {
-            const diff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
-            if (diff !== 0) return diff;
-          } else if (a.scheduled_time) {
-            return -1;
-          } else if (b.scheduled_time) {
-            return 1;
-          }
-
-          // 3) Ordem do WOD
+          // 2) Ordem do WOD (order_num) - usar 9999 para undefined/null
           const wodOrderA = a.wod_order ?? 9999;
           const wodOrderB = b.wod_order ?? 9999;
           if (wodOrderA !== wodOrderB) {
             return wodOrderA - wodOrderB;
           }
 
-          // 4) Ordem da categoria
+          // 3) Ordem da categoria (order_index) - usar 9999 para undefined/null
           const categoryOrderA = a.category_order ?? 9999;
           const categoryOrderB = b.category_order ?? 9999;
           if (categoryOrderA !== categoryOrderB) {
             return categoryOrderA - categoryOrderB;
           }
 
-          // 5) Número da bateria
-          return a.heat_number - b.heat_number;
+          // 4) Horário agendado - comparação determinística de timestamps
+          if (a.scheduled_time && b.scheduled_time) {
+            // Usar getTime() para comparação numérica estável
+            const timeA = new Date(a.scheduled_time).getTime();
+            const timeB = new Date(b.scheduled_time).getTime();
+            if (timeA !== timeB) {
+              return timeA - timeB;
+            }
+          } else if (a.scheduled_time && !b.scheduled_time) {
+            return -1; // a tem horário, b não - a vem primeiro
+          } else if (!a.scheduled_time && b.scheduled_time) {
+            return 1; // b tem horário, a não - b vem primeiro
+          }
+          // Se ambos não têm horário, continuar para próximo critério
+
+          // 5) Número da bateria (sempre presente, garantido pelo banco)
+          const heatNumDiff = a.heat_number - b.heat_number;
+          if (heatNumDiff !== 0) {
+            return heatNumDiff;
+          }
+
+          // 6) ID da bateria como último desempate (garante ordem determinística mesmo com valores iguais)
+          return a.id.localeCompare(b.id);
         });
         
         console.log("Baterias ordenadas. Primeira bateria:", sortedHeats[0]?.category_name, "Ordem:", sortedHeats[0]?.category_order);
@@ -516,51 +537,47 @@ export default function PublicHeats() {
       console.log("Baterias após filtro de dia:", filtered.map(h => ({ id: h.id, wod: h.wod_name, day: h.day_number })));
     }
 
-    // Ordenar exatamente como na página interna (HeatsNew.tsx)
-    // Quando filtrar por categoria: ordenar por WOD primeiro, depois heat_number (mantém ordem sequencial global)
-    // Isso garante que baterias intercaladas apareçam na posição correta:
-    // - Filtrar "iniciante feminino": baterias 01, 02, 03 (03 é mista, aparece como última)
-    // - Filtrar "iniciante masculino": baterias 03, 04 (03 é mista, aparece como primeira)
+    // Ordenação determinística e estável (mesma lógica da ordenação principal)
     filtered.sort((a, b) => {
-      // 1) Dia da prova (se houver)
+      // 1) Dia da prova (usar 9999 para undefined/null para garantir estabilidade)
       const dayA = a.day_number ?? 9999;
       const dayB = b.day_number ?? 9999;
       if (dayA !== dayB) {
         return dayA - dayB;
       }
 
-      // 2) Horário agendado
-      if (a.scheduled_time && b.scheduled_time) {
-        const diff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
-        if (diff !== 0) return diff;
-      } else if (a.scheduled_time) {
-        return -1;
-      } else if (b.scheduled_time) {
-        return 1;
-      }
-
-      // 3) Ordem do WOD (order_num) - SEMPRE verificar WOD primeiro, mesmo quando filtrar por categoria
+      // 2) Ordem do WOD (order_num) - usar 9999 para undefined/null
       const wodOrderA = a.wod_order ?? 9999;
       const wodOrderB = b.wod_order ?? 9999;
       if (wodOrderA !== wodOrderB) {
         return wodOrderA - wodOrderB;
       }
 
-      // 4) Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
-      // Isso garante que baterias intercaladas apareçam na posição correta dentro da categoria
-      if (selectedCategory !== "all") {
-        return a.heat_number - b.heat_number;
-      }
-
-      // 5) Sem filtro de categoria: ordenar por categoria original, depois número
+      // 3) Ordem da categoria (order_index) - usar 9999 para undefined/null
       const categoryOrderA = a.category_order ?? 9999;
       const categoryOrderB = b.category_order ?? 9999;
       if (categoryOrderA !== categoryOrderB) {
         return categoryOrderA - categoryOrderB;
       }
 
-      // 6) Número da bateria como último critério
-      return a.heat_number - b.heat_number;
+      // 4) Horário agendado - comparação determinística de timestamps
+      if (a.scheduled_time && b.scheduled_time) {
+        const timeDiff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+        if (timeDiff !== 0) return timeDiff;
+      } else if (a.scheduled_time && !b.scheduled_time) {
+        return -1; // a tem horário, b não - a vem primeiro
+      } else if (!a.scheduled_time && b.scheduled_time) {
+        return 1; // b tem horário, a não - b vem primeiro
+      }
+
+      // 5) Número da bateria (sempre presente)
+      const heatNumDiff = a.heat_number - b.heat_number;
+      if (heatNumDiff !== 0) {
+        return heatNumDiff;
+      }
+
+      // 6) ID da bateria como último desempate (garante ordem determinística)
+      return a.id.localeCompare(b.id);
     });
 
     console.log("Baterias após filtros:", filtered.length);

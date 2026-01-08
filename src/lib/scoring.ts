@@ -165,6 +165,70 @@ export const calculateWODPoints = (
   });
 };
 
+// Função auxiliar para comparar dois atletas com desempate completo
+// Compara sequencialmente: pontos, 1º lugares, 2º lugares, 3º lugares, 4º lugares, etc.
+export const compareLeaderboardEntries = (
+  a: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null },
+  b: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null }
+): number => {
+  // Se um tem 0 e outro não, quem tem 0 vai para o final
+  if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
+  if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
+  
+  // Se ambos têm 0 pontos (sem resultados), ordenar por order_index
+  if (a.totalPoints === 0 && b.totalPoints === 0) {
+    if (a.orderIndex !== null && a.orderIndex !== undefined && 
+        b.orderIndex !== null && b.orderIndex !== undefined) {
+      return a.orderIndex - b.orderIndex;
+    }
+    if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+    if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+    return 0;
+  }
+  
+  // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
+  if (a.totalPoints !== b.totalPoints) {
+    return a.totalPoints - b.totalPoints;
+  }
+  
+  // 2. Desempate por número de colocações (1º, 2º, 3º, 4º, etc.)
+  // Encontrar a maior posição possível entre todos os resultados
+  const aPositions = a.wodResults.map(r => r.position || 0).filter(p => p > 0);
+  const bPositions = b.wodResults.map(r => r.position || 0).filter(p => p > 0);
+  const maxPosition = Math.max(
+    ...(aPositions.length > 0 ? aPositions : [0]),
+    ...(bPositions.length > 0 ? bPositions : [0]),
+    0
+  );
+  
+  // Comparar sequencialmente cada posição (1º, 2º, 3º, 4º, ...)
+  for (let position = 1; position <= maxPosition; position++) {
+    const aCount = a.wodResults.filter(r => r.position === position).length;
+    const bCount = b.wodResults.filter(r => r.position === position).length;
+    
+    if (aCount !== bCount) {
+      // Maior quantidade dessa posição é melhor
+      return bCount - aCount;
+    }
+  }
+  
+  // 3. Se ainda empatar, usar order_index como desempate final
+  if (a.orderIndex !== null && a.orderIndex !== undefined && 
+      b.orderIndex !== null && b.orderIndex !== undefined) {
+    return a.orderIndex - b.orderIndex;
+  }
+  
+  // Se apenas um tem order_index, ele vem primeiro
+  if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
+  if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
+  
+  // Fallback: comparar por ID dos participantes (garantir ordem determinística)
+  // Isso garante que nunca haverá empate absoluto
+  const aId = (a as any).participantId || (a as any).registrationId || '';
+  const bId = (b as any).participantId || (b as any).registrationId || '';
+  return aId.localeCompare(bId);
+};
+
 // Calcular leaderboard de uma categoria
 export const calculateLeaderboard = (
   allResults: WODResult[],
@@ -216,40 +280,10 @@ export const calculateLeaderboard = (
     });
   });
   
-  // Ordenar e atribuir posições
-  // SEMPRE: menor pontuação ganha (ordem crescente)
-  // EXCETO: quem tem 0 pontos fica por último
-  entries.sort((a, b) => {
-    // Se um tem 0 e outro não, quem tem 0 vai para o final
-    if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
-    if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
-    
-    // Se ambos têm 0, não importa a ordem entre eles
-    if (a.totalPoints === 0 && b.totalPoints === 0) return 0;
-    
-    // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
-    if (a.totalPoints !== b.totalPoints) {
-      return a.totalPoints - b.totalPoints;
-    }
-    
-    // 2. Mais primeiros lugares (sempre melhor ter mais)
-    if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
-    
-    // 3. Mais segundos lugares (sempre melhor ter mais)
-    if (b.secondPlaces !== a.secondPlaces) return b.secondPlaces - a.secondPlaces;
-    
-    // 4. Mais terceiros lugares (sempre melhor ter mais)
-    if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
-    
-    // 5. Melhor posição no último WOD (menor posição é melhor)
-    if (a.lastWodPosition && b.lastWodPosition) {
-      return a.lastWodPosition - b.lastWodPosition;
-    }
-    
-    return 0;
-  });
+  // Ordenar usando a função de comparação completa
+  entries.sort((a, b) => compareLeaderboardEntries(a, b));
   
-  // Atribuir posições finais
+  // Atribuir posições finais (sem empates - cada um tem posição única)
   entries.forEach((entry, index) => {
     entry.position = index + 1;
   });

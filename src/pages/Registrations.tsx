@@ -764,12 +764,6 @@ export default function Registrations() {
             });
           }
         }}>
-          <DialogTrigger asChild>
-            <Button className="shadow-glow">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Inscrição
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingRegistration ? 'Editar' : 'Nova'} Inscrição</DialogTitle>
@@ -1010,7 +1004,7 @@ export default function Registrations() {
             </p>
             <p className="text-sm text-muted-foreground mt-2">
               {registrations.length === 0 
-                ? "Clique em \"Nova Inscrição\" para começar." 
+                ? "Clique no botão flutuante no canto inferior direito para criar uma nova inscrição." 
                 : "Tente selecionar outra categoria."}
             </p>
           </Card>
@@ -1042,6 +1036,24 @@ export default function Registrations() {
           </DndContext>
         )}
       </div>
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => {
+          setSelectedCategory(null);
+          setEditingRegistration(null);
+          setFormData({
+            teamName: '',
+            members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+            boxName: '',
+          });
+          setIsDialogOpen(true);
+        }}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        aria-label="Nova inscrição"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }

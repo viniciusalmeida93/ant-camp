@@ -446,12 +446,6 @@ export default function Categories() {
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingCategory(null)} className="shadow-glow">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Categoria
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingCategory ? 'Editar' : 'Criar'} Categoria</DialogTitle>
@@ -608,7 +602,7 @@ export default function Categories() {
       {categories.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Nenhuma categoria criada ainda.</p>
-          <p className="text-sm text-muted-foreground mt-2">Clique em "Nova Categoria" para começar.</p>
+          <p className="text-sm text-muted-foreground mt-2">Clique no botão flutuante no canto inferior direito para criar uma nova categoria.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -650,6 +644,18 @@ export default function Categories() {
           )}
         </div>
       )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => {
+          setEditingCategory(null);
+          setIsDialogOpen(true);
+        }}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        aria-label="Criar nova categoria"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }

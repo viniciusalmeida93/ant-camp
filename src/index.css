@@ -17,6 +17,13 @@ All colors MUST be HSL.
   }
 
   :root {
+    /* Design System Colors - Figma */
+    --antcamp-red: 355 87% 52%; /* #F32735 */
+    --antcamp-white: 0 0% 98%; /* #FAFAFA */
+    --antcamp-dark-blue: 205 79% 10%; /* #051C2C */
+    --antcamp-light-gray: 0 0% 85%; /* #D9D9D9 */
+    --antcamp-dark-gray: 205 35% 20%; /* #1F3342 */
+
     --background: 0 0% 98%;
     --foreground: 0 0% 10%;
 
@@ -63,23 +70,24 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 0 0% 7%;
-    --foreground: 0 0% 98%;
+    /* Dashboard Theme - Figma Design */
+    --background: 205 79% 10%; /* #051C2C - Dark blue background */
+    --foreground: 0 0% 98%; /* #FAFAFA - White text */
 
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 98%;
+    --card: 205 35% 20%; /* #1F3342 - Dark gray cards */
+    --card-foreground: 0 0% 98%; /* #FAFAFA - White text on cards */
 
-    --popover: 0 0% 12%;
+    --popover: 205 35% 20%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 355 87% 52%;
+    --primary: 355 87% 52%; /* #F32735 - Red */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 15%;
+    --secondary: 205 35% 25%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 205 35% 25%;
+    --muted-foreground: 0 0% 85%; /* #D9D9D9 - Light gray text */
 
     --accent: 355 87% 52%;
     --accent-foreground: 0 0% 100%;
@@ -87,17 +95,17 @@ All colors MUST be HSL.
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 18%;
+    --border: 0 0% 85%; /* #D9D9D9 - Light gray borders */
+    --input: 205 35% 25%;
     --ring: 355 87% 52%;
     
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 95%;
+    --sidebar-background: 205 79% 10%;
+    --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 355 87% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 18%;
+    --sidebar-accent: 205 35% 25%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 85%;
     --sidebar-ring: 355 87% 52%;
   }
 }

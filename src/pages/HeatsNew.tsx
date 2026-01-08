@@ -221,7 +221,18 @@ export default function HeatsNew() {
       }
       // Se ambos forem 'all' ou vazios, não aplica filtro (mostra todas)
 
-      const { data: heatsData, error: heatsError } = await query.order("heat_number");
+      // ORDENAÇÃO DETERMINÍSTICA: usar múltiplos campos para garantir ordem consistente
+      // 1) wod_id (UUID) - garante agrupamento por WOD
+      // 2) category_id (UUID) - garante agrupamento por categoria
+      // 3) scheduled_time (TIMESTAMP) - ordena por horário
+      // 4) heat_number (INTEGER) - ordena por número da bateria
+      // 5) created_at (TIMESTAMP) - desempate final para garantir determinismo
+      const { data: heatsData, error: heatsError } = await query
+        .order("wod_id", { ascending: true })
+        .order("category_id", { ascending: true })
+        .order("scheduled_time", { ascending: true, nullsFirst: false })
+        .order("heat_number", { ascending: true })
+        .order("created_at", { ascending: true });
 
       if (heatsError) throw heatsError;
 
@@ -2837,13 +2848,45 @@ export default function HeatsNew() {
     );
   }
 
+  // Ordenação determinística e estável para filteredHeats
   const filteredHeats = heats.filter(h => {
     // Se "all" estiver selecionado, não filtra por aquele critério
     const categoryFilter = !selectedCategory || selectedCategory === 'all' || h.category_id === selectedCategory;
     const wodFilter = !selectedWOD || selectedWOD === 'all' || h.wod_id === selectedWOD;
     
     return categoryFilter && wodFilter;
-  }).sort((a, b) => a.heat_number - b.heat_number);
+  }).sort((a, b) => {
+    // 1) wod_id (UUID) - comparação lexicográfica determinística
+    const wodCompare = a.wod_id.localeCompare(b.wod_id);
+    if (wodCompare !== 0) return wodCompare;
+
+    // 2) category_id (UUID) - comparação lexicográfica determinística
+    const catCompare = a.category_id.localeCompare(b.category_id);
+    if (catCompare !== 0) return catCompare;
+
+    // 3) scheduled_time - comparação determinística de timestamps
+    if (a.scheduled_time && b.scheduled_time) {
+      const timeDiff = new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+      if (timeDiff !== 0) return timeDiff;
+    } else if (a.scheduled_time && !b.scheduled_time) {
+      return -1; // a tem horário, b não - a vem primeiro
+    } else if (!a.scheduled_time && b.scheduled_time) {
+      return 1; // b tem horário, a não - b vem primeiro
+    }
+
+    // 4) heat_number (sempre presente)
+    const heatNumDiff = a.heat_number - b.heat_number;
+    if (heatNumDiff !== 0) return heatNumDiff;
+
+    // 5) created_at - desempate final para garantir determinismo
+    if (a.created_at && b.created_at) {
+      const createdDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (createdDiff !== 0) return createdDiff;
+    }
+
+    // 6) id - último desempate (garante ordem determinística mesmo com valores iguais)
+    return a.id.localeCompare(b.id);
+  });
 
   // Filtrar competidores por busca
   // IMPORTANTE: Mostrar apenas atletas que NÃO estão em nenhuma bateria
@@ -3092,14 +3135,6 @@ export default function HeatsNew() {
                       Intercalar
                     </Button>
                     
-                    <Button 
-                      onClick={handleOpenCreateHeat} 
-                      variant="outline" 
-                      size="sm"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Adicionar Bateria
-                    </Button>
                   </div>
                 </div>
               </Card>
@@ -3110,7 +3145,7 @@ export default function HeatsNew() {
                   <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground mb-2">Nenhuma bateria gerada ainda</p>
                   <p className="text-sm text-muted-foreground">
-                    Clique em "Gerar Baterias" para gerar todas ou "Adicionar Bateria" para criar manualmente
+                    Clique em "Gerar Baterias" para gerar todas ou use o botão flutuante no canto inferior direito para criar manualmente
                   </p>
                 </Card>
               ) : (
@@ -3749,6 +3784,15 @@ export default function HeatsNew() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Action Button */}
+      <button
+        onClick={handleOpenCreateHeat}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        aria-label="Adicionar bateria"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }

@@ -869,12 +869,6 @@ export default function WODs() {
             setApplyToAllCategories(false);
           }
         }}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenCreate} className="shadow-glow">
-              <Plus className="w-4 h-4 mr-2" />
-              Novo WOD
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingWOD ? 'Editar' : 'Criar'} WOD</DialogTitle>
@@ -1147,7 +1141,7 @@ export default function WODs() {
       {wods.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Nenhum WOD criado ainda para o campeonato "{selectedChampionship?.name}".</p>
-          <p className="text-sm text-muted-foreground mt-2">Clique em "Novo WOD" para começar.</p>
+          <p className="text-sm text-muted-foreground mt-2">Clique no botão flutuante no canto inferior direito para criar um novo WOD.</p>
           <p className="text-xs text-muted-foreground mt-4">
             Campeonato ID: {selectedChampionship?.id}
           </p>
@@ -1175,6 +1169,15 @@ export default function WODs() {
           </SortableContext>
         </DndContext>
       )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={() => navigate('/wods/new')}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        aria-label="Criar novo WOD"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }
