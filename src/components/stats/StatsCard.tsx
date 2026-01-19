@@ -10,7 +10,7 @@ interface StatsCardProps {
 
 export const StatsCard = ({ title, value, icon: Icon, trend }: StatsCardProps) => {
   return (
-    <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300 hover:scale-105 animate-fade-in">
+    <Card className="p-6 shadow-card animate-fade-in">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-muted-foreground mb-1">{title}</p>

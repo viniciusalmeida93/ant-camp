@@ -22,7 +22,9 @@ import {
   Award,
   Upload,
   Loader2,
+
   ArrowLeft,
+  Share2,
 } from "lucide-react";
 
 const buttonTypes = [
@@ -43,7 +45,6 @@ export default function LinkPageConfig() {
   const [linkPage, setLinkPage] = useState<any>(null);
   const [buttons, setButtons] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    title: "",
     slug: "",
     banner_alt: "",
     theme_color: "#ED1B24",
@@ -68,7 +69,6 @@ export default function LinkPageConfig() {
       if (page) {
         setLinkPage(page);
         setFormData({
-          title: page.title || "",
           slug: page.slug || "",
           banner_alt: page.banner_alt || "",
           theme_color: page.theme_color || "#ED1B24",
@@ -86,7 +86,7 @@ export default function LinkPageConfig() {
           button_type: btn.button_type || "external",
           icon: btn.icon || btn.button_type || "external",
         }));
-        
+
         console.log("Loaded buttons:", normalizedButtons);
         let finalButtons = [...normalizedButtons];
 
@@ -98,7 +98,7 @@ export default function LinkPageConfig() {
           finalButtons.push({
             id: "wods-default",
             label: "WODs",
-          url: null,
+            url: null,
             icon: "wods",
             button_type: "wods",
             order_index: finalButtons.length,
@@ -229,7 +229,7 @@ export default function LinkPageConfig() {
       const pageData = {
         championship_id: championshipId,
         slug: formData.slug,
-        title: formData.title,
+        // title: formData.title, // Removed title
         banner_url: linkPage?.banner_url,
         banner_alt: formData.banner_alt,
         theme_color: formData.theme_color,
@@ -260,16 +260,16 @@ export default function LinkPageConfig() {
       }
 
       // Insert new buttons
-    const buttonsToSave = buttons
-      .filter((b) => b.label?.trim() && (b.button_type !== "external" || b.url?.trim()))
-      .map((b, index) => ({
+      const buttonsToSave = buttons
+        .filter((b) => b.label?.trim() && (b.button_type !== "external" || b.url?.trim()))
+        .map((b, index) => ({
           link_page_id: pageId,
           label: b.label,
-        url: b.button_type === "external" ? (b.url || "") : "",
+          url: b.button_type === "external" ? (b.url || "") : "",
           icon: b.icon || b.button_type,
           button_type: b.button_type,
           order_index: index,
-        is_active: b.is_active ?? true,
+          is_active: b.is_active ?? true,
         }));
 
       if (buttonsToSave.length > 0) {
@@ -305,14 +305,6 @@ export default function LinkPageConfig() {
     <div className="min-h-screen bg-background">
       <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
         <div className="mb-6">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(-1)}
-            className="mb-4"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">
             Configurar Página de Links
           </h1>
@@ -331,17 +323,13 @@ export default function LinkPageConfig() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
+              {/* <div>
                 <Label htmlFor="title">Título</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
                   }
-                  placeholder="Título da página de links"
+                placeholder="Título da página de links"
                 />
-              </div>
+              </div> */
+              }
               <div>
                 <Label htmlFor="slug">Slug (URL)</Label>
                 <div className="flex items-center gap-2">
@@ -361,37 +349,66 @@ export default function LinkPageConfig() {
                   />
                 </div>
                 {previewUrl && (
-                  <div className="mt-2 p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">Sua URL:</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm font-mono bg-background px-2 py-1 rounded flex-1 break-all">
-                        {previewUrl}
-                      </code>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(previewUrl);
-                          toast.success("URL copiada!");
-                        }}
-                      >
-                        Copiar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                      >
-                        <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      </Button>
+                  <div className="mt-4 space-y-4">
+                    <div className="p-3 bg-muted rounded-lg border border-border">
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DA BIO:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
+                          {previewUrl}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(previewUrl);
+                            toast.success("Link da Bio copiado!");
+                          }}
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          asChild
+                        >
+                          <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Use esta URL na bio do seu Instagram! 
-                      <br />
-                      <span className="font-semibold">Domínio de produção:</span> antsports.com.br/links/{formData.slug}
-                    </p>
+
+                    <div className="p-3 bg-muted rounded-lg border border-border">
+                      <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DE INSCRIÇÃO:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
+                          {previewUrl.replace('/links/', '/inscricao/')}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(previewUrl.replace('/links/', '/inscricao/'));
+                            toast.success("Link de Inscrição copiado!");
+                          }}
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          asChild
+                        >
+                          <a href={previewUrl.replace('/links/', '/inscricao/')} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -533,9 +550,9 @@ export default function LinkPageConfig() {
                                     console.log("Select onValueChange called:", value, "for button:", button.id);
                                     console.log("Button before update:", button);
                                     // Atualizar ambos os campos em uma única operação
-                                    setButtons(prevButtons => 
-                                      prevButtons.map((b) => 
-                                        b.id === button.id 
+                                    setButtons(prevButtons =>
+                                      prevButtons.map((b) =>
+                                        b.id === button.id
                                           ? { ...b, button_type: value, icon: value }
                                           : b
                                       )

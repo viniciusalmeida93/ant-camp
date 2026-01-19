@@ -18,10 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { 
-  Trophy, LogOut, Settings, Trash2, Plus, Loader2
+import {
+  Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign
 } from "lucide-react";
 import { useChampionship } from "@/contexts/ChampionshipContext";
+
+import { ProfileDialog } from "@/components/ProfileDialog";
+import { StatsCard } from "@/components/stats/StatsCard";
 
 export default function OrganizerDashboard() {
   const navigate = useNavigate();
@@ -29,6 +32,11 @@ export default function OrganizerDashboard() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [championships, setChampionships] = useState<any[]>([]);
+
+  // New States for Profile and Avatar
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
   const [stats, setStats] = useState({
     totalChampionships: 0,
     totalAthletes: 0,
@@ -43,6 +51,10 @@ export default function OrganizerDashboard() {
     date: '',
     location: '',
     description: '',
+    registrationDeadline: '',
+    city: '',
+    state: '',
+    address: ''
   });
 
   useEffect(() => {
@@ -57,6 +69,17 @@ export default function OrganizerDashboard() {
       return;
     }
     setUser(session.user);
+    loadProfileStats(session.user.id);
+  };
+
+  const loadProfileStats = async (userId: string) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", userId)
+      .single();
+
+    if (data) setAvatarUrl(data.avatar_url);
   };
 
   const loadDashboard = async () => {
@@ -91,8 +114,8 @@ export default function OrganizerDashboard() {
           for (const reg of regs) {
             if (reg.team_members) {
               try {
-                const members = typeof reg.team_members === 'string' 
-                  ? JSON.parse(reg.team_members) 
+                const members = typeof reg.team_members === 'string'
+                  ? JSON.parse(reg.team_members)
                   : reg.team_members;
                 if (Array.isArray(members)) {
                   totalAthletes += members.length;
@@ -129,6 +152,8 @@ export default function OrganizerDashboard() {
     await supabase.auth.signOut();
     navigate("/");
   };
+  // ... (rest of component, e.g. delete logic)
+
 
   const handleDeleteChampionship = async () => {
     if (!championshipToDelete) return;
@@ -173,9 +198,17 @@ export default function OrganizerDashboard() {
         return;
       }
 
-      const { name, date, location, description } = formData;
-      
-      if (!name || !date || !location) {
+      // Concat location from parts
+      // Note: If user didn't fill anything (unlikely due to required), fallback to ""
+      // We prioritize the parts if they exist
+      let finalLocation = formData.location;
+      if (formData.address || formData.city || formData.state) {
+        finalLocation = `${formData.address}${formData.city ? ` - ${formData.city}` : ''}${formData.state ? `/${formData.state}` : ''}`;
+      }
+
+      const { name, date, description, registrationDeadline } = formData;
+
+      if (!name || !date || !finalLocation) {
         toast.error("Preencha todos os campos obrigatórios");
         setCreating(false);
         return;
@@ -185,14 +218,14 @@ export default function OrganizerDashboard() {
       let slug = generateSlug(name);
       let slugExists = true;
       let attempts = 0;
-      
+
       while (slugExists && attempts < 10) {
         const { data: existing } = await supabase
           .from("championships")
           .select("id")
           .eq("slug", slug)
           .maybeSingle();
-        
+
         if (!existing) {
           slugExists = false;
         } else {
@@ -207,7 +240,11 @@ export default function OrganizerDashboard() {
           name,
           slug,
           date,
-          location,
+          location: finalLocation, // using the constructed location
+          city: formData.city,
+          state: formData.state,
+          address: formData.address,
+          registration_deadline: registrationDeadline || null,
           description: description || null,
           organizer_id: session.user.id,
           is_published: false,
@@ -220,8 +257,17 @@ export default function OrganizerDashboard() {
 
       toast.success("Campeonato criado com sucesso!");
       setIsCreateDialogOpen(false);
-      setFormData({ name: '', date: '', location: '', description: '' });
-      
+      setFormData({
+        name: '',
+        date: '',
+        location: '',
+        description: '',
+        registrationDeadline: '',
+        city: '',
+        state: '',
+        address: ''
+      });
+
       await loadDashboard();
       await loadChampionships();
     } catch (error: any) {
@@ -241,20 +287,20 @@ export default function OrganizerDashboard() {
 
   const formatDateRange = (championship: any) => {
     if (!championship.date) return '';
-    
+
     const startDate = new Date(championship.date);
-    const endDate = championship.total_days 
+    const endDate = championship.total_days
       ? new Date(new Date(championship.date).setDate(startDate.getDate() + (championship.total_days - 1)))
       : startDate;
-    
+
     const formatDate = (date: Date) => {
-      return date.toLocaleDateString('pt-BR', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
     };
-    
+
     if (championship.total_days > 1) {
       return `${formatDate(startDate)} a ${formatDate(endDate)}`;
     }
@@ -263,223 +309,271 @@ export default function OrganizerDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#051C2C] flex items-center justify-center">
-        <div className="text-[#FAFAFA] font-sans">Carregando...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#051C2C] text-[#FAFAFA] font-sans">
+    <div className="min-h-screen bg-background">
+      <ProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        user={user}
+        onProfileUpdate={() => checkAuth()}
+      />
+
       {/* Header */}
-      <header className="px-6 py-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#F32735] flex items-center justify-center">
-              <Trophy className="w-6 h-6 text-white" />
+      <div className="border-b bg-[#0f172a] text-white">
+        <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setProfileOpen(true)}>
+              <div className="relative">
+                <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-primary/20 bg-muted/10 flex items-center justify-center">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <Trophy className="w-6 h-6 text-white" />
+                  )}
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
+                  <Pencil className="w-3 h-3 text-black" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">Área do Organizador</h1>
+                <p className="text-sm text-gray-400">
+                  Bem-vindo, {user?.email}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">ANTCAMP</h1>
-              <p className="text-sm text-[#D9D9D9]">{user?.email || ''}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white hover:text-white hover:bg-white/10"
+                onClick={() => navigate("/athlete-dashboard")}
+              >
+                Área do Atleta
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/20 text-white hover:bg-white/10 hover:text-white bg-transparent"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSignOut}
-            className="border-[#D9D9D9] text-[#FAFAFA] hover:bg-[#1F3342]"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sair
-          </Button>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <main className="px-6 pb-24">
+      <div className="px-6 py-8 pb-24 max-w-[98%] mx-auto">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {/* Total de Campeonatos */}
-          <Card className="bg-[#1F3342] border-[#1F3342] relative">
-            <CardContent className="p-6">
-              <div className="absolute top-4 right-4">
-                <Trophy className="w-5 h-5 text-[#F32735]" />
-              </div>
-              <h3 className="text-sm text-[#FAFAFA] mb-2">Total de Campeonatos</h3>
-              <p className="text-3xl font-bold text-[#F32735] mb-1">{stats.totalChampionships}</p>
-              <p className="text-xs text-[#D9D9D9]">Ativo</p>
-            </CardContent>
-          </Card>
-
-          {/* Atletas Inscritos */}
-          <Card className="bg-[#1F3342] border-[#1F3342] relative">
-            <CardContent className="p-6">
-              <div className="absolute top-4 right-4">
-                <Trophy className="w-5 h-5 text-[#F32735]" />
-              </div>
-              <h3 className="text-sm text-[#FAFAFA] mb-2">Atletas Inscritos</h3>
-              <p className="text-3xl font-bold text-[#F32735] mb-1">{stats.totalAthletes}</p>
-              <p className="text-xs text-[#D9D9D9]">Confirmados</p>
-            </CardContent>
-          </Card>
-
-          {/* Receita Total */}
-          <Card className="bg-[#1F3342] border-[#1F3342] relative">
-            <CardContent className="p-6">
-              <div className="absolute top-4 right-4">
-                <Trophy className="w-5 h-5 text-[#F32735]" />
-              </div>
-              <h3 className="text-sm text-[#FAFAFA] mb-2">Receita Total</h3>
-              <p className="text-3xl font-bold text-[#F32735] mb-1">
-                {formatCurrency(stats.totalRevenue)}
-              </p>
-              <p className="text-xs text-[#D9D9D9]">Líquido</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <StatsCard
+            title="Total de Campeonatos"
+            value={stats.totalChampionships}
+            icon={Trophy}
+            trend="Ativo"
+          />
+          <StatsCard
+            title="Atletas Inscritos"
+            value={stats.totalAthletes}
+            icon={Users}
+            trend="Confirmados"
+          />
+          <StatsCard
+            title="Receita Total"
+            value={formatCurrency(stats.totalRevenue)}
+            icon={DollarSign}
+            trend="Líquido"
+          />
         </div>
 
         {/* Meus Campeonatos Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-[#FAFAFA] mb-6">Meus Campeonatos</h2>
-          
-          {championships.length === 0 ? (
-            <Card className="bg-[#1F3342] border-[#1F3342]">
-              <CardContent className="p-8 text-center">
-                <p className="text-[#D9D9D9]">Nenhum campeonato criado ainda</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {championships.map((championship) => (
-                <Card key={championship.id} className="bg-[#1F3342] border-[#1F3342]">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-xl font-bold text-[#FAFAFA]">
-                            {championship.name}
-                          </h3>
-                          <div className="w-2 h-2 rounded-full bg-[#F32735]"></div>
+
+          {
+            championships.length === 0 ? (
+              <Card className="shadow-card">
+                <CardContent className="p-8 text-center">
+                  <p className="text-muted-foreground">Nenhum campeonato criado ainda</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {championships.map((championship) => (
+                  <Card key={championship.id} className="shadow-card transition-all hover:bg-muted/5">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-xl font-bold">
+                              {championship.name}
+                            </h3>
+                            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {formatDateRange(championship)}
+                          </p>
                         </div>
-                        <p className="text-sm text-[#D9D9D9]">
-                          {formatDateRange(championship)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedChampionship(championship);
+                              navigate("/app");
+                            }}
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Configurações
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setChampionshipToDelete(championship);
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Excluir
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedChampionship(championship);
-                            navigate("/app");
-                          }}
-                          className="border-[#D9D9D9] text-[#FAFAFA] hover:bg-[#051C2C]"
-                        >
-                          <Settings className="w-4 h-4 mr-2" />
-                          Configurações
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setChampionshipToDelete(championship);
-                            setDeleteDialogOpen(true);
-                          }}
-                          className="border-[#D9D9D9] text-[#FAFAFA] hover:bg-[#051C2C]"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Excluir
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )
+          }
         </div>
-      </main>
+      </div>
 
       {/* Floating Action Button */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogTrigger asChild>
           <button
-            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
             aria-label="Criar novo campeonato"
           >
             <Plus className="w-6 h-6" />
           </button>
         </DialogTrigger>
-        <DialogContent className="bg-[#1F3342] border-[#1F3342] text-[#FAFAFA]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle className="text-[#FAFAFA]">Criar Novo Campeonato</DialogTitle>
-            <DialogDescription className="text-[#D9D9D9]">
+            <DialogTitle>Criar Novo Campeonato</DialogTitle>
+            <DialogDescription>
               Preencha os dados básicos do seu campeonato
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateChampionship} className="space-y-4">
             <div>
-              <Label htmlFor="name" className="text-[#FAFAFA]">Nome do Campeonato *</Label>
-              <Input 
-                id="name" 
+              <Label htmlFor="name">Nome do Campeonato *</Label>
+              <Input
+                id="name"
                 name="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ex: Open 2024" 
+                placeholder="Ex: Open 2024"
                 required
-                className="bg-[#051C2C] border-[#1F3342] text-[#FAFAFA]"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="date" className="text-[#FAFAFA]">Data *</Label>
-                <Input 
-                  id="date" 
+                <Label htmlFor="date">Data do Evento *</Label>
+                <Input
+                  id="date"
                   name="date"
-                  type="date" 
+                  type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   required
-                  className="bg-[#051C2C] border-[#1F3342] text-[#FAFAFA]"
                 />
               </div>
               <div>
-                <Label htmlFor="location" className="text-[#FAFAFA]">Local *</Label>
-                <Input 
-                  id="location" 
-                  name="location"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Ex: Box CrossFit SP" 
-                  required
-                  className="bg-[#051C2C] border-[#1F3342] text-[#FAFAFA]"
+                <Label htmlFor="registrationDeadline">Encerramento Inscrições</Label>
+                <Input
+                  id="registrationDeadline"
+                  name="registrationDeadline"
+                  type="date"
+                  value={formData.registrationDeadline}
+                  onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
                 />
               </div>
             </div>
+
+            {/* Address Fields - Unboxed */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="address">Endereço *</Label>
+                <Input
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Rua, Número, Bairro"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="city">Cidade *</Label>
+                  <Input
+                    id="city"
+                    name="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="state">Estado (UF) *</Label>
+                  <Input
+                    id="state"
+                    name="state"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    required
+                    maxLength={2}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div>
-              <Label htmlFor="description" className="text-[#FAFAFA]">Descrição</Label>
-              <Textarea 
-                id="description" 
+              <Label htmlFor="description">Descrição</Label>
+              <Textarea
+                id="description"
                 name="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Descreva seu campeonato..."
                 rows={3}
-                className="bg-[#051C2C] border-[#1F3342] text-[#FAFAFA]"
               />
             </div>
             <div className="flex gap-4">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsCreateDialogOpen(false)}
-                className="flex-1 border-[#D9D9D9] text-[#FAFAFA] hover:bg-[#051C2C]"
+                className="flex-1"
               >
                 Cancelar
               </Button>
-              <Button 
-                type="submit" 
-                className="flex-1 bg-[#F32735] hover:bg-[#d11f2d] text-white"
+              <Button
+                type="submit"
+                className="flex-1 bg-[#D71C1D] hover:bg-[#d11f2d] text-white"
                 disabled={creating}
               >
                 {creating ? (
@@ -494,10 +588,10 @@ export default function OrganizerDashboard() {
             </div>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      < AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} >
         <AlertDialogContent className="bg-[#1F3342] border-[#1F3342] text-[#FAFAFA]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FAFAFA]">Excluir Campeonato</AlertDialogTitle>
@@ -511,13 +605,13 @@ export default function OrganizerDashboard() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteChampionship}
-              className="bg-[#F32735] hover:bg-[#d11f2d] text-white"
+              className="bg-[#D71C1D] hover:bg-[#d11f2d] text-white"
             >
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
-    </div>
+      </AlertDialog >
+    </div >
   );
 }

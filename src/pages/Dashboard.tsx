@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode } from 'lucide-react';
+import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode, DollarSign, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsCard } from '@/components/stats/StatsCard';
@@ -22,9 +22,13 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [editInfoOpen, setEditInfoOpen] = useState(false);
   const [editInfoData, setEditInfoData] = useState({
+    name: '',
     date: '',
-    location: '',
-    registrationEndDate: '',
+    description: '',
+    address: '',
+    city: '',
+    state: '',
+    registrationDeadline: '',
   });
   const [savingInfo, setSavingInfo] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -33,7 +37,11 @@ export default function Dashboard() {
     categories: 0,
     wods: 0,
     teams: 0,
+    revenue: 0,
   });
+  const [editRegulationOpen, setEditRegulationOpen] = useState(false);
+  const [regulationText, setRegulationText] = useState("");
+
   const [formData, setFormData] = useState({
     name: '',
     date: '',
@@ -70,7 +78,7 @@ export default function Dashboard() {
 
   const loadStats = async () => {
     if (!selectedChampionship) return;
-    
+
     setLoading(true);
     try {
       const [categoriesResult, wodsResult, registrationsResult] = await Promise.all([
@@ -84,7 +92,7 @@ export default function Dashboard() {
           .eq("championship_id", selectedChampionship.id),
         supabase
           .from("registrations")
-          .select("id, team_name, team_members, category_id")
+          .select("id, team_name, team_members, category_id, payment_status, subtotal_cents")
           .eq("championship_id", selectedChampionship.id),
       ]);
 
@@ -132,11 +140,16 @@ export default function Dashboard() {
 
       const teams = registrations.filter((registration: any) => registration.team_name).length;
 
-    setStats({
+      const revenue = registrations
+        .filter((r: any) => r.payment_status === 'approved')
+        .reduce((sum: number, r: any) => sum + (r.subtotal_cents || 0), 0);
+
+      setStats({
         categories: categoriesResult.count || 0,
         wods: wodsResult.count || 0,
         athletes: totalAthletes,
         teams: teams,
+        revenue,
       });
     } catch (error: any) {
       console.error("Error loading stats:", error);
@@ -147,7 +160,7 @@ export default function Dashboard() {
 
   const loadScheduleConfig = async () => {
     if (!selectedChampionship) return;
-    
+
     try {
       const { data, error } = await supabase
         .from("championships")
@@ -175,7 +188,7 @@ export default function Dashboard() {
 
   const loadWODs = async () => {
     if (!selectedChampionship) return;
-    
+
     try {
       const { data, error } = await supabase
         .from("wods")
@@ -192,7 +205,7 @@ export default function Dashboard() {
 
   const loadChampionshipDays = async () => {
     if (!selectedChampionship) return;
-    
+
     try {
       const { data: daysData, error: daysError } = await supabase
         .from("championship_days")
@@ -238,11 +251,11 @@ export default function Dashboard() {
 
     const days = [];
     const baseDate = new Date(selectedChampionship.date);
-    
+
     for (let i = 1; i <= scheduleConfig.totalDays; i++) {
       const dayDate = new Date(baseDate);
       dayDate.setDate(baseDate.getDate() + (i - 1));
-      
+
       const { data, error } = await supabase
         .from("championship_days")
         .insert({
@@ -270,13 +283,13 @@ export default function Dashboard() {
     if (!selectedChampionship) return;
 
     const currentDays = championshipDays.length;
-    
+
     if (newDays > currentDays) {
       const baseDate = new Date(selectedChampionship.date);
       for (let i = currentDays + 1; i <= newDays; i++) {
         const dayDate = new Date(baseDate);
         dayDate.setDate(baseDate.getDate() + (i - 1));
-        
+
         const { data, error } = await supabase
           .from("championship_days")
           .insert({
@@ -322,7 +335,7 @@ export default function Dashboard() {
     if (!day) return;
 
     const dayWodsList = dayWods.get(day.day_number) || [];
-    const maxOrder = dayWodsList.length > 0 
+    const maxOrder = dayWodsList.length > 0
       ? Math.max(...dayWodsList.map(w => w.order_num))
       : 0;
 
@@ -367,7 +380,7 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      setChampionshipDays(prev => prev.map(day => 
+      setChampionshipDays(prev => prev.map(day =>
         day.id === dayId ? { ...day, enable_break: enabled } : day
       ));
 
@@ -387,10 +400,10 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      setChampionshipDays(prev => prev.map(day => 
+      setChampionshipDays(prev => prev.map(day =>
         day.id === dayId ? { ...day, [field]: value } : day
       ));
-      
+
       toast.success("Configuração atualizada!");
     } catch (error: any) {
       console.error("Error updating day break:", error);
@@ -433,6 +446,26 @@ export default function Dashboard() {
       .replace(/(^-|-$)/g, "");
   };
 
+  const handleSaveRegulation = async () => {
+    try {
+      if (!selectedChampionship) return;
+
+      const { error } = await supabase
+        .from('championships')
+        .update({ regulation: regulationText })
+        .eq('id', selectedChampionship.id);
+
+      if (error) throw error;
+
+      toast.success("Regulamento atualizado com sucesso!");
+      setEditRegulationOpen(false);
+      loadDashboardData(); // Reload to update state
+    } catch (error: any) {
+      console.error("Erro ao salvar regulamento:", error);
+      toast.error("Erro ao salvar regulamento");
+    }
+  };
+
   const handleCreateChampionship = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCreating(true);
@@ -446,7 +479,7 @@ export default function Dashboard() {
       }
 
       const { name, date, location, description } = formData;
-      
+
       if (!name || !date || !location) {
         toast.error("Preencha todos os campos obrigatórios");
         setCreating(false);
@@ -456,14 +489,14 @@ export default function Dashboard() {
       let slug = generateSlug(name);
       let slugExists = true;
       let attempts = 0;
-      
+
       while (slugExists && attempts < 10) {
         const { data: existing } = await supabase
           .from("championships")
           .select("id")
           .eq("slug", slug)
           .maybeSingle();
-        
+
         if (!existing) {
           slugExists = false;
         } else {
@@ -492,7 +525,7 @@ export default function Dashboard() {
       toast.success("Campeonato criado com sucesso!");
       setIsDialogOpen(false);
       setFormData({ name: '', date: '', location: '', description: '' });
-      
+
       await loadChampionships();
       if (championship) {
         setSelectedChampionship(championship);
@@ -549,43 +582,43 @@ export default function Dashboard() {
                 <form onSubmit={handleCreateChampionship} className="space-y-4">
                   <div>
                     <Label htmlFor="name">Nome do Campeonato *</Label>
-                    <Input 
-                      id="name" 
+                    <Input
+                      id="name"
                       name="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ex: Open 2024" 
-                      required 
+                      placeholder="Ex: Open 2024"
+                      required
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="date">Data *</Label>
-                      <Input 
-                        id="date" 
+                      <Input
+                        id="date"
                         name="date"
-                        type="date" 
+                        type="date"
                         value={formData.date}
                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                        required 
+                        required
                       />
                     </div>
                     <div>
                       <Label htmlFor="location">Local *</Label>
-                      <Input 
-                        id="location" 
+                      <Input
+                        id="location"
                         name="location"
                         value={formData.location}
                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        placeholder="Ex: Box CrossFit SP" 
-                        required 
+                        placeholder="Ex: Box CrossFit SP"
+                        required
                       />
                     </div>
                   </div>
                   <div>
                     <Label htmlFor="description">Descrição</Label>
-                    <Textarea 
-                      id="description" 
+                    <Textarea
+                      id="description"
                       name="description"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -594,9 +627,9 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="flex gap-4">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsDialogOpen(false)}
                       className="flex-1"
                     >
@@ -617,8 +650,8 @@ export default function Dashboard() {
               </DialogContent>
             </Dialog>
             <div className="mt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="lg"
                 onClick={() => navigate("/dashboard")}
               >
@@ -665,7 +698,9 @@ export default function Dashboard() {
           }}
         >
           <SelectTrigger className="w-full md:w-[400px] bg-card">
-            <SelectValue placeholder="Escolha um campeonato" />
+            <SelectValue placeholder="Escolha um campeonato">
+              {selectedChampionship ? selectedChampionship.name : "Escolha um campeonato"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {championships.map((champ) => (
@@ -711,9 +746,13 @@ export default function Dashboard() {
                         size="sm"
                         onClick={() => {
                           setEditInfoData({
+                            name: selectedChampionship.name || '',
                             date: selectedChampionship.date ? selectedChampionship.date.split('T')[0] : '',
-                            location: selectedChampionship.location || '',
-                            registrationEndDate: selectedChampionship.registration_end_date ? selectedChampionship.registration_end_date.split('T')[0] : '',
+                            description: selectedChampionship.description || '',
+                            address: selectedChampionship.address || '',
+                            city: selectedChampionship.city || '',
+                            state: selectedChampionship.state || '',
+                            registrationDeadline: selectedChampionship.registration_deadline ? selectedChampionship.registration_deadline.split('T')[0] : '',
                           });
                         }}
                       >
@@ -729,38 +768,85 @@ export default function Dashboard() {
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-date">Data do Campeonato *</Label>
+                        <div>
+                          <Label htmlFor="edit-name">Nome do Campeonato *</Label>
                           <Input
-                            id="edit-date"
-                            type="date"
-                            value={editInfoData.date}
-                            onChange={(e) => setEditInfoData({ ...editInfoData, date: e.target.value })}
+                            id="edit-name"
+                            value={editInfoData.name}
+                            onChange={(e) => setEditInfoData({ ...editInfoData, name: e.target.value })}
+                            placeholder="Ex: Open 2024"
                             required
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-location">Local *</Label>
-                          <Input
-                            id="edit-location"
-                            value={editInfoData.location}
-                            onChange={(e) => setEditInfoData({ ...editInfoData, location: e.target.value })}
-                            placeholder="Ex: Box CrossFit, Rua Exemplo, 123"
-                            required
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="edit-date">Data do Evento *</Label>
+                            <Input
+                              id="edit-date"
+                              type="date"
+                              value={editInfoData.date}
+                              onChange={(e) => setEditInfoData({ ...editInfoData, date: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-registrationDeadline">Encerramento Inscrições</Label>
+                            <Input
+                              id="edit-registrationDeadline"
+                              type="date"
+                              value={editInfoData.registrationDeadline}
+                              onChange={(e) => setEditInfoData({ ...editInfoData, registrationDeadline: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="edit-address">Endereço *</Label>
+                            <Input
+                              id="edit-address"
+                              value={editInfoData.address}
+                              onChange={(e) => setEditInfoData({ ...editInfoData, address: e.target.value })}
+                              placeholder="Rua, Número, Bairro"
+                              required
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="edit-city">Cidade *</Label>
+                              <Input
+                                id="edit-city"
+                                value={editInfoData.city}
+                                onChange={(e) => setEditInfoData({ ...editInfoData, city: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="edit-state">Estado (UF) *</Label>
+                              <Input
+                                id="edit-state"
+                                value={editInfoData.state}
+                                onChange={(e) => setEditInfoData({ ...editInfoData, state: e.target.value })}
+                                required
+                                maxLength={2}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="edit-description">Descrição</Label>
+                          <Textarea
+                            id="edit-description"
+                            value={editInfoData.description}
+                            onChange={(e) => setEditInfoData({ ...editInfoData, description: e.target.value })}
+                            placeholder="Descreva seu campeonato..."
+                            rows={3}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="edit-registration-end-date">Data de Encerramento das Inscrições</Label>
-                          <Input
-                            id="edit-registration-end-date"
-                            type="date"
-                            value={editInfoData.registrationEndDate}
-                            onChange={(e) => setEditInfoData({ ...editInfoData, registrationEndDate: e.target.value })}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Deixe em branco para não ter data limite de inscrição
-                          </p>
-                        </div>
+
                         <div className="flex justify-end gap-2">
                           <Button
                             variant="outline"
@@ -772,23 +858,26 @@ export default function Dashboard() {
                           <Button
                             onClick={async () => {
                               if (!selectedChampionship?.id) return;
-                              if (!editInfoData.date || !editInfoData.location) {
-                                toast.error('Data e Local são obrigatórios');
+                              if (!editInfoData.name || !editInfoData.date || !editInfoData.address || !editInfoData.city || !editInfoData.state) {
+                                toast.error('Preencha os campos obrigatórios');
                                 return;
                               }
 
                               try {
                                 setSavingInfo(true);
-                                const updateData: Record<string, any> = {
-                                  date: editInfoData.date,
-                                  location: editInfoData.location.trim(),
-                                };
 
-                                if (editInfoData.registrationEndDate) {
-                                  updateData.registration_end_date = editInfoData.registrationEndDate;
-                                } else {
-                                  updateData.registration_end_date = null;
-                                }
+                                const location = `${editInfoData.address} - ${editInfoData.city}/${editInfoData.state}`;
+
+                                const updateData: Record<string, any> = {
+                                  name: editInfoData.name,
+                                  date: editInfoData.date,
+                                  location: location,
+                                  address: editInfoData.address,
+                                  city: editInfoData.city,
+                                  state: editInfoData.state,
+                                  description: editInfoData.description || null,
+                                  registration_deadline: editInfoData.registrationDeadline || null
+                                };
 
                                 const { error } = await supabase
                                   .from('championships')
@@ -822,6 +911,41 @@ export default function Dashboard() {
                       </div>
                     </DialogContent>
                   </Dialog>
+
+                  {/* Regulation Button */}
+                  <Dialog open={editRegulationOpen} onOpenChange={setEditRegulationOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setRegulationText(selectedChampionship.regulation || "");
+                        }}
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Regulamento
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+                      <DialogHeader>
+                        <DialogTitle>Editar Regulamento</DialogTitle>
+                        <DialogDescription>
+                          Insira o texto completo do regulamento do campeonato.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex-1 py-4">
+                        <Textarea
+                          value={regulationText}
+                          onChange={(e) => setRegulationText(e.target.value)}
+                          className="h-full min-h-[300px] font-sans text-sm"
+                          placeholder="Cole o regulamento aqui..."
+                        />
+                      </div>
+                      <Button onClick={handleSaveRegulation} className="text-white">
+                        Salvar Regulamento
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </CardHeader>
@@ -829,25 +953,25 @@ export default function Dashboard() {
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatsCard
-          title="Total de Atletas"
-          value={stats.athletes}
-          icon={Users}
-          trend="Inscritos"
-        />
-        <StatsCard
-          title="Categorias Ativas"
-          value={stats.categories}
-          icon={Target}
-          trend="Disponíveis"
-        />
-        <StatsCard
-          title="WODs Criados"
-          value={stats.wods}
-          icon={Dumbbell}
-          trend="Ativos"
-        />
-      </div>
+            <StatsCard
+              title="Total de Atletas"
+              value={stats.athletes}
+              icon={Users}
+              trend="Inscritos"
+            />
+            <StatsCard
+              title="Receita Total"
+              value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.revenue / 100)}
+              icon={DollarSign}
+              trend="Faturamento"
+            />
+            <StatsCard
+              title="WODs Criados"
+              value={stats.wods}
+              icon={Dumbbell}
+              trend="Ativos"
+            />
+          </div>
 
           {/* Schedule Configuration */}
           <Card className="mb-8">
@@ -863,7 +987,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-              <div>
+                  <div>
                     <Label htmlFor="totalDays">Duração do Evento (dias)</Label>
                     <Input
                       id="totalDays"
@@ -913,7 +1037,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <Label className="text-lg font-semibold">Distribuição de Provas por Dia</Label>
                   </div>
-                  
+
                   {championshipDays.length === 0 && (
                     <div className="p-5 rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 flex flex-col gap-3">
                       <p className="text-sm text-muted-foreground">
@@ -943,7 +1067,7 @@ export default function Dashboard() {
                       Array.from(dayWods.values()).flat().map(w => w.id)
                     );
                     const availableWods = wods.filter(w => !allAssignedWodIds.has(w.id));
-                    
+
                     return (
                       <Card key={day.id} className="p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -954,21 +1078,21 @@ export default function Dashboard() {
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2 mb-3">
                           <Label className="text-sm">Provas do Dia:</Label>
                           <div className="flex flex-wrap gap-2">
                             {dayWodsList.map((wod, idx) => (
                               <div key={wod.id} className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-md">
                                 <span className="text-sm font-medium">{idx + 1}º - {wod.name}</span>
-        <Button 
+                                <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-5 w-5 p-0"
                                   onClick={() => removeWodFromDay(day.id, wod.id)}
                                 >
                                   ×
-        </Button>
+                                </Button>
                               </div>
                             ))}
                             {dayWodsList.length === 0 && (
@@ -1072,7 +1196,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
-        <Button 
+                  <Button
                     onClick={handleSaveScheduleConfig}
                     disabled={savingSchedule || loadingSchedule}
                     className="flex-1"
@@ -1089,7 +1213,7 @@ export default function Dashboard() {
                       </>
                     )}
                   </Button>
-      </div>
+                </div>
               </div>
             </CardContent>
           </Card>

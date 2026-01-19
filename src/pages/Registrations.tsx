@@ -30,17 +30,17 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 // Componente SortableRegistrationItem para drag and drop
-function SortableRegistrationItem({ 
-  reg, 
-  onEdit, 
-  onDelete, 
-  onPreviewEmail, 
+function SortableRegistrationItem({
+  reg,
+  onEdit,
+  onDelete,
+  onPreviewEmail,
   onSendEmail,
   isExpanded,
-  onToggleExpand 
-}: { 
-  reg: any; 
-  onEdit: () => void; 
+  onToggleExpand
+}: {
+  reg: any;
+  onEdit: () => void;
   onDelete: () => void;
   onPreviewEmail: () => void;
   onSendEmail: () => void;
@@ -75,7 +75,7 @@ function SortableRegistrationItem({
         >
           <GripVertical className="w-5 h-5" />
         </button>
-        
+
         <div className="flex-1 min-w-0">
           {/* Header - Nome e Número */}
           <div className="flex items-center gap-2 mb-2">
@@ -84,19 +84,20 @@ function SortableRegistrationItem({
             </span>
             <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
           </div>
-          
+
           {/* Info Simplificada - Apenas Categoria e Data */}
           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold">{reg.category?.name}</span>
             </div>
             <div className="text-xs">
-              Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', { 
-                day: '2-digit', 
-                month: '2-digit', 
+              Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
                 year: '2-digit',
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
+                hour12: false
               })}
             </div>
           </div>
@@ -136,6 +137,7 @@ function SortableRegistrationItem({
                         <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
                       )}
                       {member.shirtSize && <div>👕 Tamanho: {member.shirtSize}</div>}
+                      {member.box && <div>🏋️ Box: {member.box}</div>}
                     </div>
                   </div>
                 ))}
@@ -148,7 +150,7 @@ function SortableRegistrationItem({
             </CollapsibleContent>
           </Collapsible>
         </div>
-        
+
         {/* Botões de Ação */}
         <div className="flex gap-1 shrink-0 justify-end sm:justify-start">
           <Button
@@ -203,8 +205,223 @@ export default function Registrations() {
   const [filteredRegistrations, setFilteredRegistrations] = useState<any[]>([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
-  
+
   // Configurar sensores para drag and drop
+  const fileInputRef = useState<HTMLInputElement | null>(null);
+
+  const downloadCSV = () => {
+    if (registrations.length === 0) {
+      toast.error("Não há inscrições para exportar");
+      return;
+    }
+
+    const headers = [
+      "ID", "Categoria", "Nome Time/Atleta", "Box Chamada", "Status Pagamento", "Valor Total",
+      "Atleta 1 Nome", "Atleta 1 Email", "Atleta 1 CPF", "Atleta 1 Box", "Atleta 1 Tam. Camisa",
+      "Atleta 2 Nome", "Atleta 2 Email", "Atleta 2 CPF", "Atleta 2 Box", "Atleta 2 Tam. Camisa",
+      "Atleta 3 Nome", "Atleta 3 Email", "Atleta 3 CPF", "Atleta 3 Box", "Atleta 3 Tam. Camisa",
+      "Atleta 4 Nome", "Atleta 4 Email", "Atleta 4 CPF", "Atleta 4 Box", "Atleta 4 Tam. Camisa"
+    ];
+
+    const csvContent = [
+      headers.join(","),
+      ...registrations.map(reg => {
+        const members = reg.team_members || [];
+        const memberCols = [];
+        // Support up to 4 members for CSV export
+        for (let i = 0; i < 4; i++) {
+          const m = members[i] || {};
+          memberCols.push(
+            `"${m.name || ''}"`,
+            `"${m.email || ''}"`,
+            `"${m.cpf || ''}"`,
+            `"${m.box || ''}"`,
+            `"${m.shirtSize || ''}"`
+          );
+        }
+
+        return [
+          reg.id,
+          `"${reg.category?.name || ''}"`,
+          `"${reg.team_name || reg.athlete_name || ''}"`,
+          `"${reg.box_name || ''}"`,
+          reg.payment_status,
+          (reg.total_cents / 100).toFixed(2),
+          ...memberCols
+        ].join(",");
+      })
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `inscricoes_${selectedChampionship?.slug || 'campeonato'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadTemplate = () => {
+    const headers = [
+      "Nome Categoria (EXATO)", "Nome Time/Atleta", "Box Chamada",
+      "Atleta 1 Nome", "Atleta 1 Email", "Atleta 1 CPF", "Atleta 1 Box", "Atleta 1 Tam. Camisa",
+      "Atleta 2 Nome", "Atleta 2 Email", "Atleta 2 CPF", "Atleta 2 Box", "Atleta 2 Tam. Camisa",
+      "Atleta 3 Nome", "Atleta 3 Email", "Atleta 3 CPF", "Atleta 3 Box", "Atleta 3 Tam. Camisa",
+      "Atleta 4 Nome", "Atleta 4 Email", "Atleta 4 CPF", "Atleta 4 Box", "Atleta 4 Tam. Camisa"
+    ];
+
+    // Example row
+    const example = [
+      "Iniciante Masculino", "Os Fortões", "CrossFit Box",
+      "João Silva", "joao@email.com", "12345678900", "CrossFit A", "M",
+      "Pedro Souza", "pedro@email.com", "98765432100", "CrossFit B", "G",
+      "", "", "", "", "",
+      "", "", "", "", ""
+    ];
+
+    const csvContent = [headers.join(","), example.join(",")].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "modelo_importacao_inscricoes.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!selectedChampionship) {
+      toast.error("Selecione um campeonato");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n');
+        // Remove header and empty lines
+        const dataLines = lines.slice(1).filter(line => line.trim() !== '');
+
+        if (dataLines.length === 0) {
+          toast.error("Arquivo vazio ou sem dados");
+          return;
+        }
+
+        toast.info(`Processando ${dataLines.length} linhas...`);
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Pre-load categories for matching
+        const { data: cats } = await supabase
+          .from("categories")
+          .select("*")
+          .eq("championship_id", selectedChampionship.id);
+
+        if (!cats || cats.length === 0) {
+          toast.error("Nenhuma categoria encontrada no campeonato. Crie categorias antes de importar.");
+          return;
+        }
+
+        for (const line of dataLines) {
+          // Basic CSV parser logic (handling quotes simply)
+          // Note: This is specific to our simple template. 
+          // Complex CSVs with commas inside quotes might need a library like PapaParse, 
+          // but for this MVP feature without adding deps, split is risky but workable if user follows template.
+          // Replacing generic split with a regex that handles quotes is safer.
+          const row = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+          const cols = line.split(",").map(c => c.replace(/^"|"$/g, '').trim()); // Simple split fallback
+
+          if (cols.length < 3) continue;
+
+          const catName = cols[0];
+          const teamName = cols[1];
+          const boxName = cols[2];
+
+          const category = cats.find(c => c.name.toLowerCase() === catName.toLowerCase());
+
+          if (!category) {
+            console.error(`Categoria não encontrada: ${catName}`);
+            errorCount++;
+            continue;
+          }
+
+          const members = [];
+          // Process up to 4 members (groups of 5 columns starting at index 3)
+          for (let i = 0; i < 4; i++) {
+            const baseIdx = 3 + (i * 5);
+            if (baseIdx >= cols.length) break;
+
+            const name = cols[baseIdx];
+            if (name && name.trim()) {
+              members.push({
+                name: name,
+                email: cols[baseIdx + 1] || '',
+                cpf: cols[baseIdx + 2] || '',
+                box: cols[baseIdx + 3] || '',
+                shirtSize: cols[baseIdx + 4] || 'M'
+              });
+            }
+          }
+
+          if (members.length === 0 && !teamName) {
+            errorCount++;
+            continue;
+          }
+
+          // Prepare DB object
+          const athleteName = category.format === 'individual'
+            ? (members[0]?.name || teamName)
+            : teamName;
+
+          const regData = {
+            championship_id: selectedChampionship.id,
+            category_id: category.id,
+            athlete_name: athleteName,
+            team_name: category.format !== 'individual' ? teamName : null,
+            box_name: boxName,
+            status: 'approved',
+            payment_status: 'approved',
+            paid_at: new Date().toISOString(),
+            total_cents: category.price_cents,
+            subtotal_cents: category.price_cents,
+            platform_fee_cents: 0,
+            team_members: members,
+            athlete_email: members[0]?.email || null,
+            athlete_cpf: members[0]?.cpf?.replace(/\D/g, '') || null,
+            athlete_birth_date: null,
+            athlete_phone: null,
+            shirt_size: members[0]?.shirtSize || 'M'
+          };
+
+          const { error } = await supabase.from("registrations").insert(regData);
+          if (error) {
+            console.error("Erro ao inserir:", error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        }
+
+        toast.success(`Importação finalizada! Sucessos: ${successCount}, Erros: ${errorCount}`);
+        loadData();
+
+      } catch (err) {
+        console.error("Erro ao processar arquivo:", err);
+        toast.error("Erro ao ler arquivo CSV");
+      }
+
+      // Reset input
+      if (event.target) event.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -216,7 +433,7 @@ export default function Registrations() {
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [formData, setFormData] = useState({
     teamName: '',
-    members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+    members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
     boxName: '',
   });
 
@@ -276,13 +493,13 @@ export default function Registrations() {
         .order("created_at", { ascending: true }); // Fallback para created_at se order_index for NULL
 
       if (regsError) throw regsError;
-      
+
       // Calcular ordem de inscrição por categoria baseado em order_index ou created_at
       const registrationsWithOrder = (regs || []).map((reg, index) => {
         // Se order_index não existe, calcular baseado em created_at
         if (reg.order_index === null || reg.order_index === undefined) {
-          const sameCategoryRegs = (regs || []).filter(r => 
-            r.category_id === reg.category_id && 
+          const sameCategoryRegs = (regs || []).filter(r =>
+            r.category_id === reg.category_id &&
             (r.order_index === null || r.order_index === undefined) &&
             new Date(r.created_at).getTime() <= new Date(reg.created_at).getTime()
           );
@@ -292,8 +509,8 @@ export default function Registrations() {
           };
         }
         // Se order_index existe, usar ele diretamente
-        const sameCategoryRegs = (regs || []).filter(r => 
-          r.category_id === reg.category_id && 
+        const sameCategoryRegs = (regs || []).filter(r =>
+          r.category_id === reg.category_id &&
           (r.order_index === null || r.order_index === undefined || r.order_index <= reg.order_index)
         );
         return {
@@ -301,7 +518,7 @@ export default function Registrations() {
           registrationOrder: reg.order_index || sameCategoryRegs.length,
         };
       });
-      
+
       setRegistrations(registrationsWithOrder);
       setFilteredRegistrations(registrationsWithOrder);
     } catch (error: any) {
@@ -317,20 +534,20 @@ export default function Registrations() {
     if (!category) return;
 
     setSelectedCategory(category);
-    
+
     // Initialize form based on category format
     const teamSize = category.team_size || (category.format === 'dupla' ? 2 : category.format === 'trio' ? 3 : category.format === 'time' ? 4 : 1);
-    
+
     if (category.format === 'individual') {
       setFormData({
         teamName: '',
-        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
         boxName: '',
       });
     } else {
       setFormData({
         teamName: '',
-        members: Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' })),
+        members: Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' })),
         boxName: '',
       });
     }
@@ -339,7 +556,7 @@ export default function Registrations() {
   const updateMember = (index: number, field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      members: prev.members.map((member, i) => 
+      members: prev.members.map((member, i) =>
         i === index ? { ...member, [field]: value } : member
       ),
     }));
@@ -359,7 +576,7 @@ export default function Registrations() {
     let members: any[] = [];
     if (reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0) {
       // Só usar team_members se tiver dados reais (não apenas objetos vazios)
-      const validMembers = reg.team_members.filter((m: any) => 
+      const validMembers = reg.team_members.filter((m: any) =>
         m && (m.name || m.email || m.whatsapp || m.cpf || m.birthDate)
       );
       if (validMembers.length > 0) {
@@ -370,14 +587,15 @@ export default function Registrations() {
           shirtSize: m.shirtSize || 'M',
           cpf: m.cpf || '',
           birthDate: m.birthDate || '',
+          box: m.box || '',
         }));
       }
     }
-    
+
     // Se não encontrou membros válidos, inicializar vazio baseado no formato
     if (members.length === 0) {
       const teamSize = category.team_size || (category.format === 'dupla' ? 2 : category.format === 'trio' ? 3 : category.format === 'time' ? 4 : 1);
-      members = Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }));
+      members = Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }));
     }
 
     setFormData({
@@ -437,17 +655,17 @@ export default function Registrations() {
   const handlePreviewEmail = async (reg: any) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         toast.error("Você precisa estar logado");
         return;
       }
-      
+
       toast.info("Carregando visualização do email...");
-      
+
       // Fazer requisição com autorização
       const previewUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/preview-registration-email`;
-      
+
       const response = await fetch(previewUrl, {
         method: 'POST',
         headers: {
@@ -458,14 +676,14 @@ export default function Registrations() {
           registrationId: reg.id,
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`Erro ${response.status}: ${response.statusText}`);
       }
-      
+
       // Pegar o HTML retornado
       const htmlContent = await response.text();
-      
+
       // Abrir em nova aba e escrever o HTML
       const newWindow = window.open('', '_blank');
       if (newWindow) {
@@ -508,15 +726,15 @@ export default function Registrations() {
     }
 
     const newRegistrations = arrayMove(filteredRegistrations, oldIndex, newIndex);
-    
+
     // Obter a categoria do item movido (assumindo que todas as inscrições filtradas são da mesma categoria)
     // Se houver filtro por categoria, usar essa categoria
     const movedReg = newRegistrations[newIndex];
     const categoryId = movedReg.category_id;
-    
+
     // Filtrar apenas inscrições da mesma categoria e atualizar order_index
     const sameCategoryRegs = newRegistrations.filter(r => r.category_id === categoryId);
-    
+
     try {
       // Atualizar order_index no banco de dados para todas as inscrições desta categoria
       for (let i = 0; i < sameCategoryRegs.length; i++) {
@@ -539,9 +757,9 @@ export default function Registrations() {
         }
         return reg;
       });
-      
+
       setFilteredRegistrations(updatedRegistrations);
-      
+
       toast.success("Ordem das inscrições atualizada e salva!");
     } catch (error: any) {
       console.error("Erro ao salvar ordem:", error);
@@ -554,7 +772,7 @@ export default function Registrations() {
   const handleSendEmail = async (reg: any) => {
     const teamMembersCount = reg.team_members ? reg.team_members.length : 0;
     const totalRecipients = 1 + teamMembersCount; // atleta principal + membros do time
-    
+
     if (!confirm(`Enviar email de confirmação para ${reg.team_name || reg.athlete_name}?\n\nSerão enviados ${totalRecipients} email(s):\n- ${reg.athlete_email}${teamMembersCount > 0 ? `\n- + ${teamMembersCount} membro(s) do time` : ''}`)) {
       return;
     }
@@ -589,8 +807,8 @@ export default function Registrations() {
 
       // Validar apenas campos obrigatórios: nome do time/atleta e box
       if (!formData.teamName.trim()) {
-        const errorMsg = selectedCategory.format === 'individual' 
-          ? "Digite o nome do atleta" 
+        const errorMsg = selectedCategory.format === 'individual'
+          ? "Digite o nome do atleta"
           : "Digite o nome do time";
         toast.error(errorMsg);
         setSaving(false);
@@ -623,10 +841,10 @@ export default function Registrations() {
 
       // Create or update registration
       // Campos opcionais podem ser vazios/null, mas athlete_name é obrigatório (NOT NULL)
-      const athleteName = selectedCategory.format === 'individual' 
+      const athleteName = selectedCategory.format === 'individual'
         ? (formData.members[0]?.name?.trim() || formData.teamName.trim() || 'Sem nome')
         : formData.teamName.trim();
-      
+
       if (!athleteName || athleteName.trim() === '') {
         toast.error("Nome do time/atleta é obrigatório");
         setSaving(false);
@@ -639,8 +857,8 @@ export default function Registrations() {
         athlete_name: athleteName,
         athlete_email: formData.members[0]?.email?.trim() || null,
         athlete_phone: formData.members[0]?.whatsapp?.trim() || null,
-        athlete_cpf: (formData.members[0]?.cpf?.replace(/\D/g, '') || '').length > 0 
-          ? formData.members[0].cpf.replace(/\D/g, '') 
+        athlete_cpf: (formData.members[0]?.cpf?.replace(/\D/g, '') || '').length > 0
+          ? formData.members[0].cpf.replace(/\D/g, '')
           : null,
         athlete_birth_date: formData.members[0]?.birthDate?.trim() || null,
         team_name: selectedCategory.format !== 'individual' ? formData.teamName.trim() : null,
@@ -653,6 +871,7 @@ export default function Registrations() {
           if (m.shirtSize) member.shirtSize = m.shirtSize;
           if (m.cpf?.replace(/\D/g, '')) member.cpf = m.cpf.replace(/\D/g, '');
           if (m.birthDate?.trim()) member.birthDate = m.birthDate.trim();
+          if (m.box?.trim()) member.box = m.box.trim();
           return member;
         }).filter(m => Object.keys(m).length > 0) : null,
         shirt_size: selectedCategory.format === 'individual' ? (formData.members[0]?.shirtSize || 'M') : null,
@@ -675,7 +894,7 @@ export default function Registrations() {
         // Create new registration - DIRETO COMO APROVADA
         console.log("=== CRIANDO INSCRIÇÃO ===");
         console.log("Dados:", registrationData);
-        
+
         const { data: registration, error } = await supabase
           .from("registrations")
           .insert({
@@ -691,7 +910,7 @@ export default function Registrations() {
           console.error("❌ ERRO:", error);
           throw error;
         }
-        
+
         console.log("✅ Inscrição salva! ID:", registration?.id);
         toast.success("Inscrição criada com sucesso!");
       }
@@ -701,7 +920,7 @@ export default function Registrations() {
       setEditingRegistration(null);
       setFormData({
         teamName: '',
-        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
         boxName: '',
       });
       await loadData();
@@ -751,7 +970,26 @@ export default function Registrations() {
           <h1 className="text-4xl font-bold mb-2">Inscrições</h1>
           <p className="text-muted-foreground">Gerencie as inscrições do campeonato</p>
         </div>
-        
+
+        <div className="flex gap-2">
+          <input
+            type="file"
+            accept=".csv"
+            className="hidden"
+            id="csvImportInput"
+            onChange={handleImportCSV}
+          />
+          <Button variant="outline" size="sm" onClick={downloadTemplate}>
+            📥 Modelo CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => document.getElementById('csvImportInput')?.click()}>
+            📤 Importar CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={downloadCSV}>
+            📄 Exportar (Backup)
+          </Button>
+        </div>
+
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) {
@@ -759,7 +997,7 @@ export default function Registrations() {
             setEditingRegistration(null);
             setFormData({
               teamName: '',
-              members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+              members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
               boxName: '',
             });
           }
@@ -768,7 +1006,7 @@ export default function Registrations() {
             <DialogHeader>
               <DialogTitle>{editingRegistration ? 'Editar' : 'Nova'} Inscrição</DialogTitle>
             </DialogHeader>
-            
+
             {!selectedCategory ? (
               <div className="space-y-4 mt-4">
                 <Label>Categoria *</Label>
@@ -789,9 +1027,9 @@ export default function Registrations() {
                 </p>
               </div>
             ) : (
-              <form 
-                onSubmit={handleSubmit} 
-                className="space-y-4 mt-4" 
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-4 mt-4"
                 noValidate
                 onInvalid={(e) => {
                   e.preventDefault();
@@ -844,12 +1082,12 @@ export default function Registrations() {
                 )}
 
                 <div>
-                  <Label htmlFor="boxName">Nome do Box *</Label>
+                  <Label htmlFor="boxName">Box para Chamada *</Label>
                   <Input
                     id="boxName"
                     value={formData.boxName}
                     onChange={(e) => setFormData({ ...formData, boxName: e.target.value })}
-                    placeholder="Ex: CrossFit SP"
+                    placeholder="Ex: CrossFit SP (Nome do Box Principal)"
                     required
                   />
                 </div>
@@ -915,6 +1153,15 @@ export default function Registrations() {
                               required={false}
                             />
                           </div>
+                        </div>
+                        <div>
+                          <Label>Box do Atleta</Label>
+                          <Input
+                            value={member.box}
+                            onChange={(e) => updateMember(index, 'box', e.target.value)}
+                            placeholder="Box onde treina (opcional)"
+                            required={false}
+                          />
                         </div>
                         <div>
                           <Label>Tamanho da Camisa</Label>
@@ -998,13 +1245,13 @@ export default function Registrations() {
         {filteredRegistrations.length === 0 ? (
           <Card className="p-12 text-center">
             <p className="text-muted-foreground">
-              {registrations.length === 0 
-                ? "Nenhuma inscrição ainda." 
+              {registrations.length === 0
+                ? "Nenhuma inscrição ainda."
                 : "Nenhuma inscrição encontrada para o filtro selecionado."}
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              {registrations.length === 0 
-                ? "Clique no botão flutuante no canto inferior direito para criar uma nova inscrição." 
+              {registrations.length === 0
+                ? "Clique no botão flutuante no canto inferior direito para criar uma nova inscrição."
                 : "Tente selecionar outra categoria."}
             </p>
           </Card>
@@ -1044,12 +1291,12 @@ export default function Registrations() {
           setEditingRegistration(null);
           setFormData({
             teamName: '',
-            members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '' }],
+            members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
             boxName: '',
           });
           setIsDialogOpen(true);
         }}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
         aria-label="Nova inscrição"
       >
         <Plus className="w-6 h-6" />

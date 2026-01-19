@@ -77,11 +77,11 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
         >
           <GripVertical className="w-5 h-5" />
         </button>
-        
+
         <div className="p-2 rounded-lg bg-primary/10 shrink-0">
           <Dumbbell className="w-5 h-5 text-primary" />
         </div>
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
             <h3 className="font-semibold">{wod.name}</h3>
@@ -102,7 +102,7 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
             <p className="text-xs text-muted-foreground">{wod.notes}</p>
           )}
         </div>
-        
+
         <div className="flex gap-1 shrink-0">
           <Button
             size="icon"
@@ -223,7 +223,7 @@ export default function WODs() {
   // Banco aceita: 'tempo', 'reps', 'carga', 'amrap', 'emom'
   const mapWodTypeToDatabase = (frontendType: string): string => {
     if (!frontendType) return 'tempo';
-    
+
     const typeMap: Record<string, string> = {
       'for-time': 'tempo',
       'amrap': 'amrap',
@@ -236,7 +236,7 @@ export default function WODs() {
       'reps': 'reps',
       'carga': 'carga',
     };
-    
+
     const mapped = typeMap[frontendType.toLowerCase()] || 'tempo';
     console.log(`Mapeando "${frontendType}" para "${mapped}"`);
     return mapped;
@@ -361,7 +361,7 @@ export default function WODs() {
         .order("order_num", { ascending: true });
 
       if (wodsError) throw wodsError;
-      
+
       console.log("WODs loaded:", wodsData);
       setWODs(wodsData || []);
     } catch (error: any) {
@@ -409,7 +409,7 @@ export default function WODs() {
       } else {
         const base = createEmptyVariations();
         const categoriesWithData: string[] = [];
-        
+
         // Usar wodData passado como parâmetro ou editingWOD do estado
         const baseWod = wodData || editingWOD;
 
@@ -423,7 +423,7 @@ export default function WODs() {
           // Se description/notes são null, usar valores padrão do WOD para garantir texto editável
           let descriptionValue = '';
           let notesValue = '';
-          
+
           // Se há uma variação salva no banco para esta categoria, sempre carregar valores reais
           // Prioridade: valor do banco > valor padrão do WOD > string vazia
           if (variation.description !== null && variation.description !== undefined) {
@@ -433,7 +433,7 @@ export default function WODs() {
             // Se null mas há variação salva, usar valor padrão do WOD (garantir texto editável)
             descriptionValue = baseWod?.description || '';
           }
-          
+
           if (variation.notes !== null && variation.notes !== undefined) {
             // Valor real salvo no banco - usar diretamente
             notesValue = variation.notes;
@@ -496,66 +496,66 @@ export default function WODs() {
       const form = formRef.current;
       const formData = new FormData(form);
       const applyAll = applyToAllCategories;
-      
+
       // Get max order_num to add new WOD at the end
-      const maxOrder = wods.length > 0 
+      const maxOrder = wods.length > 0
         ? Math.max(...wods.map(w => w.order_num || 0))
         : 0;
 
       // Mapear o tipo do frontend para o tipo do banco
       // Banco aceita: 'tempo', 'reps', 'carga', 'amrap', 'emom'
       const databaseType = mapWodTypeToDatabase(wodType || 'for-time');
-      
+
       // Validação extra: garantir que o tipo está na lista permitida
       const validTypes = ['tempo', 'reps', 'carga', 'amrap', 'emom'];
       if (!validTypes.includes(databaseType)) {
         console.error('Tipo inválido após mapeamento:', databaseType, 'Tipo original:', wodType);
         throw new Error(`Tipo de WOD inválido: ${databaseType}. Tipos permitidos: ${validTypes.join(', ')}`);
       }
-      
+
       console.log('Tipo do frontend:', wodType);
       console.log('Tipo mapeado para banco:', databaseType);
 
       const timeCap = formData.get('timeCap') as string;
-      
+
       // Calcular duração estimada baseada no time_cap
       let estimatedDuration = 15; // Padrão
       if (timeCap && timeCap.includes(':')) {
         const [minutes, seconds] = timeCap.split(':').map(Number);
         estimatedDuration = minutes + Math.ceil(seconds / 60) + 2; // time_cap + 2min de transição
       }
-      
+
       // Validações antes de prosseguir
       const wodName = formData.get('name') as string;
       const wodDescription = formData.get('description') as string;
-      
+
       if (!wodName || wodName.trim() === '') {
         toast.error("Nome do WOD é obrigatório");
         setSaving(false);
         return;
       }
-      
+
       if (!wodDescription || wodDescription.trim() === '') {
         toast.error("Descrição do WOD é obrigatória");
         setSaving(false);
         return;
       }
-      
+
       if (!timeCap || timeCap.trim() === '') {
         toast.error("Time Cap é obrigatório");
         setSaving(false);
         return;
       }
-      
+
       if (!selectedChampionship || !selectedChampionship.id) {
         toast.error("Campeonato não selecionado");
         setSaving(false);
         return;
       }
-      
+
       // Garantir que estimatedDuration seja válido (baseEstimatedDuration para variações)
       const baseEstimatedDuration = estimatedDuration > 0 ? estimatedDuration : 15;
-      
+
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
@@ -648,7 +648,7 @@ export default function WODs() {
           .map(cat => {
             const variation = categoryVariations[cat.id];
             const hasData = hasVariationData(variation);
-            
+
             // Se applyAll está ativo, criar variação para todas as categorias (mesmo sem dados personalizados)
             // Se applyAll está desativado, só criar se houver dados personalizados
             if (!hasData && !applyAll) return null;
@@ -661,7 +661,7 @@ export default function WODs() {
                 parsedVariationDuration = parsed;
               }
             }
-            
+
             // Usar duração da variação se válida, senão usar a base
             const estimatedDurationMinutes = Number.isFinite(parsedVariationDuration) && parsedVariationDuration > 0
               ? parsedVariationDuration
@@ -673,18 +673,18 @@ export default function WODs() {
             const formData = form ? new FormData(form) : null;
             const baseDescription = formData?.get('description') as string || '';
             const baseNotes = formData?.get('notes') as string || '';
-            
+
             // Obter valores da variação (que foram copiados quando applyAll foi ativado)
             let finalDescription = '';
             let finalNotes = '';
-            
+
             if (applyAll) {
               // Quando applyAll está ativo, SEMPRE usar os valores que foram copiados para categoryVariations
               // Se os valores em categoryVariations estão vazios, usar os valores padrão do formulário
               // Isso garante que sempre há valores reais para salvar
               finalDescription = variation?.description || baseDescription;
               finalNotes = variation?.notes || baseNotes;
-              
+
               // Garantir que sejam sempre strings não-vazias quando applyAll está ativo
               if (!finalDescription || finalDescription.trim() === '') {
                 finalDescription = baseDescription;
@@ -697,7 +697,7 @@ export default function WODs() {
               finalDescription = variation?.description?.trim() || '';
               finalNotes = variation?.notes?.trim() || '';
             }
-            
+
             // Quando applyAll está ativo, SEMPRE salvar valores reais (não null, não vazio)
             // Isso permite que sejam editáveis ao recarregar
             return {
@@ -706,8 +706,8 @@ export default function WODs() {
               display_name: variation?.displayName?.trim() || null,
               description: applyAll ? (finalDescription || null) : (finalDescription || null),
               notes: applyAll ? (finalNotes || null) : (finalNotes || null),
-              estimated_duration_minutes: estimatedDurationMinutes > 0 
-                ? estimatedDurationMinutes 
+              estimated_duration_minutes: estimatedDurationMinutes > 0
+                ? estimatedDurationMinutes
                 : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
             };
           })
@@ -781,7 +781,7 @@ export default function WODs() {
         hint: error?.hint,
         stack: error?.stack
       });
-      
+
       // Mensagem de erro mais amigável
       let userMessage = "Erro ao salvar WOD";
       if (errorMessage.includes("is not defined")) {
@@ -795,7 +795,7 @@ export default function WODs() {
       } else {
         userMessage = `Erro ao salvar WOD: ${errorMessage}`;
       }
-      
+
       toast.error(userMessage);
     } finally {
       setSaving(false);
@@ -812,7 +812,7 @@ export default function WODs() {
         .eq("id", id);
 
       if (error) throw error;
-      
+
       toast.success("WOD removido com sucesso!");
       await loadWODs();
     } catch (error: any) {
@@ -858,7 +858,7 @@ export default function WODs() {
             )}
           </p>
         </div>
-        
+
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) {
@@ -876,18 +876,18 @@ export default function WODs() {
             <form ref={formRef} onSubmit={(e) => { e.preventDefault(); }} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nome do WOD *</Label>
-                <Input 
-                  id="name" 
+                <Input
+                  id="name"
                   name="name"
                   defaultValue={editingWOD?.name}
-                  placeholder="Ex: Fran" 
-                  required 
+                  placeholder="Ex: Fran"
+                  required
                 />
               </div>
 
               <div>
                 <Label htmlFor="type">Tipo de WOD *</Label>
-                <Select 
+                <Select
                   value={wodType}
                   onValueChange={setWodType}
                   required
@@ -907,8 +907,8 @@ export default function WODs() {
 
               <div>
                 <Label htmlFor="description">Descrição do Workout *</Label>
-                <Textarea 
-                  id="description" 
+                <Textarea
+                  id="description"
                   name="description"
                   defaultValue={editingWOD?.description}
                   placeholder="21-15-9&#10;Thrusters (95/65 lb)&#10;Pull-ups"
@@ -919,8 +919,8 @@ export default function WODs() {
 
               <div>
                 <Label htmlFor="timeCap">Time Cap da Prova *</Label>
-                <Input 
-                  id="timeCap" 
+                <Input
+                  id="timeCap"
                   name="timeCap"
                   type="text"
                   defaultValue={editingWOD?.time_cap || ''}
@@ -934,8 +934,8 @@ export default function WODs() {
 
               <div>
                 <Label htmlFor="notes">Notas e Padrões de Movimento</Label>
-                <Textarea 
-                  id="notes" 
+                <Textarea
+                  id="notes"
                   name="notes"
                   defaultValue={editingWOD?.notes}
                   placeholder="Padrões de movimento, escalas, regras especiais..."
@@ -963,17 +963,17 @@ export default function WODs() {
                         // Ler valores diretamente dos elementos do formulário para garantir valores reais
                         const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
                         const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
-                        
+
                         // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
                         // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
                         const descriptionValue = descriptionInput?.value ?? '';
                         const notesValue = notesInput?.value ?? '';
-                        
+
                         console.log('Copiando valores para todas as categorias:', {
                           description: descriptionValue,
                           notes: notesValue
                         });
-                        
+
                         setCategoryVariations(prev => {
                           const updated: Record<string, CategoryVariationForm> = {};
                           categories.forEach(cat => {
@@ -989,7 +989,7 @@ export default function WODs() {
                           });
                           return updated;
                         });
-                        
+
                         // Marcar todas as categorias como tendo dados (para que sejam salvas)
                         const allCategoryIds = categories.map(cat => cat.id);
                         setVariationCategoriesWithData(prev => {
@@ -1091,19 +1091,19 @@ export default function WODs() {
               </div>
 
               <div className="flex gap-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setIsDialogOpen(false)}
                   className="flex-1"
                 >
                   Cancelar
                 </Button>
-                <Button 
-                  type="button" 
+                <Button
+                  type="button"
                   variant="outline"
                   onClick={() => handleSubmit(false)}
-                  className="flex-1" 
+                  className="flex-1"
                   disabled={saving}
                 >
                   <FileText className="w-4 h-4 mr-2" />
@@ -1116,10 +1116,10 @@ export default function WODs() {
                     'Salvar WOD'
                   )}
                 </Button>
-                <Button 
+                <Button
                   type="button"
                   onClick={() => handleSubmit(true)}
-                  className="flex-1" 
+                  className="flex-1"
                   disabled={saving}
                 >
                   <Globe className="w-4 h-4 mr-2" />
@@ -1173,7 +1173,7 @@ export default function WODs() {
       {/* Floating Action Button */}
       <button
         onClick={() => navigate('/wods/new')}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
         aria-label="Criar novo WOD"
       >
         <Plus className="w-6 h-6" />

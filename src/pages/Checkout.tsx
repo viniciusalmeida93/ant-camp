@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard } from "lucide-react";
+import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard, RefreshCcw } from "lucide-react";
 import { getPixPayloadForDisplay } from "@/utils/pix";
+import { PublicHeader } from "@/components/layout/PublicHeader";
 
 export default function Checkout() {
   const { registrationId } = useParams();
@@ -32,7 +34,9 @@ export default function Checkout() {
     addressNumber: "", // Número do endereço
   });
   const [hasAsaasIntegration, setHasAsaasIntegration] = useState(false);
+
   const [isSandbox, setIsSandbox] = useState(false);
+  const [pixCpf, setPixCpf] = useState("");
 
   useEffect(() => {
     loadRegistration();
@@ -80,11 +84,24 @@ export default function Checkout() {
 
       if (regError) throw regError;
       setRegistration(reg);
-      
+
+      // Tentar obter o CPF da inscrição (pode estar na coluna athlete_cpf (legado) ou dentro de team_members[0].cpf)
+      let registrationCpf = (reg as any).athlete_cpf; // Casting as any because type definition might be outdated
+      if (!registrationCpf && reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0) {
+        // @ts-ignore
+        registrationCpf = reg.team_members[0].cpf;
+      }
+
       // Inicializar CPF do cartão com o CPF da inscrição se disponível
-      if (reg.athlete_cpf && !cardData.cpf) {
-        const formattedCpf = reg.athlete_cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-        setCardData(prev => ({ ...prev, cpf: formattedCpf }));
+      if (registrationCpf && !cardData.cpf) {
+        // Formatar apenas para exibição inicial no input se ainda não tiver valor
+        const cleanCpf = registrationCpf.replace(/\D/g, "");
+        if (cleanCpf.length === 11) {
+          const formattedCpf = cleanCpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+          setCardData(prev => ({ ...prev, cpf: formattedCpf }));
+        } else {
+          setCardData(prev => ({ ...prev, cpf: cleanCpf }));
+        }
       }
 
       // Verificar se o campeonato tem integração Asaas e se é sandbox
@@ -95,57 +112,45 @@ export default function Checkout() {
           .eq("organizer_id", reg.championships.organizer_id)
           .eq("is_active", true)
           .maybeSingle();
-        
+
         setHasAsaasIntegration(!!integration);
         // Verificar se é sandbox (API key começa com $aact_hmlg_)
-        if (integration?.asaas_api_key) {
-          setIsSandbox(integration.asaas_api_key.startsWith("$aact_hmlg_"));
+        if (integration?.asaas_api_key?.startsWith("$aact_hmlg_")) {
+          setIsSandbox(true);
         }
       }
+      // Verificar se o sistema platform possui configuração sandbox (para pagamentos sem organizador definido)
+      if (import.meta.env.VITE_ASAAS_API_KEY?.startsWith("$aact_hmlg_")) {
+        setIsSandbox(true);
+      }
 
+      // Buscar status do pagamento se já existir um ID
       if (reg.payment_id) {
-        const { data: pay, error: payError } = await supabase
+        const { data: pData } = await supabase
           .from("payments")
           .select("*")
           .eq("id", reg.payment_id)
-          .single();
+          .maybeSingle();
 
-        if (!payError && pay) {
-          setPayment(pay);
-          
-          // Se for PIX e não tiver QR Code ou código copia e cola, tentar atualizar
-          if (pay.payment_method === "pix" && pay.asaas_payment_id && (!pay.pix_qr_code || !pay.pix_copy_paste)) {
-            console.log("QR Code PIX não encontrado, tentando atualizar...");
-            await refreshPixQrCode(pay.id);
-          }
-        }
+        if (pData) setPayment(pData);
       }
-    } catch (error: any) {
-      toast.error("Erro ao carregar dados");
-      console.error(error);
-    } finally {
+
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao carregar dados da inscrição");
       setLoading(false);
     }
   };
 
-  const createPayment = async () => {
+  const handlePayment = async () => {
+    if (!registration) return;
     setProcessing(true);
-    
+
     try {
-      // Validar dados do cartão se método for cartão de crédito
       if (paymentMethod === "credit_card") {
-        if (!cardData.holderName.trim()) {
-          toast.error("Digite o nome do portador do cartão");
-          setProcessing(false);
-          return;
-        }
-        if (!cardData.number.replace(/\s/g, "").match(/^\d{13,19}$/)) {
-          toast.error("Número do cartão inválido");
-          setProcessing(false);
-          return;
-        }
-        if (!cardData.expiryMonth || !cardData.expiryYear) {
-          toast.error("Digite a data de validade do cartão");
+        if (!cardData.holderName || !cardData.number || !cardData.expiryMonth || !cardData.expiryYear || !cardData.cvv) {
+          toast.error("Preencha todos os dados do cartão");
           setProcessing(false);
           return;
         }
@@ -154,8 +159,16 @@ export default function Checkout() {
           setProcessing(false);
           return;
         }
+
+        // Obter CPF da inscrição (fonte confiável)
+        let regCpf = (registration as any).athlete_cpf;
+        if (!regCpf && registration.team_members && Array.isArray(registration.team_members) && registration.team_members.length > 0) {
+          // @ts-ignore
+          regCpf = registration.team_members[0].cpf;
+        }
+
         // Validar CPF - usar o CPF do portador do cartão se informado, senão usar o CPF do atleta
-        const cpfToUse = cardData.cpf.trim() || registration?.athlete_cpf;
+        const cpfToUse = cardData.cpf.trim() || regCpf;
         if (!cpfToUse) {
           toast.error("CPF é obrigatório para pagamento com cartão de crédito");
           setProcessing(false);
@@ -167,13 +180,9 @@ export default function Checkout() {
           setProcessing(false);
           return;
         }
-        // Validar CEP (obrigatório pelo Asaas)
+
+        // Validar CEP
         const postalCodeClean = cardData.postalCode.replace(/\D/g, "");
-        console.log("CEP validation:", {
-          original: cardData.postalCode,
-          cleaned: postalCodeClean,
-          length: postalCodeClean.length,
-        });
         if (!postalCodeClean || postalCodeClean.length !== 8) {
           toast.error("CEP é obrigatório e deve ter 8 dígitos");
           setProcessing(false);
@@ -183,10 +192,32 @@ export default function Checkout() {
 
       // Não precisa de autenticação - a inscrição pública não cria usuário
       // A Edge Function usa service_role_key e não precisa de JWT do usuário
-      // Para cartão de crédito, usar CPF do portador do cartão se informado, senão usar CPF do atleta
-      const cpfToUse = paymentMethod === "credit_card" 
-        ? (cardData.cpf.trim() || registration.athlete_cpf)?.replace(/\D/g, "") 
-        : registration.athlete_cpf;
+
+      // Obter CPF da inscrição novamente para payload
+      let regCpf = (registration as any).athlete_cpf;
+      if (!regCpf && registration.team_members && Array.isArray(registration.team_members) && registration.team_members.length > 0) {
+        // @ts-ignore
+        regCpf = registration.team_members[0].cpf;
+      }
+
+      // Para PIX, usamos o CPF digitado (pixCpf) se houver, ou a inscrição (fallback)
+      // ISSO É IMPORTANTE: Se o usuário editar o CPF na tela, temos que usar o editado (pixCpf)
+      const cpfToUse = paymentMethod === "credit_card"
+        ? (cardData.cpf.trim() || regCpf)?.replace(/\D/g, "")
+        : (pixCpf || regCpf)?.replace(/\D/g, "");
+
+      // Validação específica para PIX se não tiver CPF
+      if (paymentMethod === 'pix' && !cpfToUse) {
+        toast.error("CPF é obrigatório para gerar o PIX. Por favor, preencha o campo de CPF.");
+        setProcessing(false);
+        return;
+      }
+
+      if (cpfToUse && (cpfToUse.length !== 11 && cpfToUse.length !== 14)) {
+        toast.error("CPF inválido. Verifique os dígitos.");
+        setProcessing(false);
+        return;
+      }
 
       console.log("Calling create-payment with:", {
         registrationId: registration.id,
@@ -194,15 +225,13 @@ export default function Checkout() {
         athleteName: registration.athlete_name,
         athleteEmail: registration.athlete_email,
         athleteCpf: cpfToUse,
-        athleteBirthDate: registration.athlete_birth_date,
-        priceCents: registration.total_cents, // Usar total_cents que já inclui a taxa de 5%
+        priceCents: registration.total_cents,
         paymentMethod,
       });
 
-      // Chamar diretamente via fetch para evitar problemas com JWT
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      
+
       const response = await fetch(`${supabaseUrl}/functions/v1/create-payment`, {
         method: "POST",
         headers: {
@@ -216,22 +245,26 @@ export default function Checkout() {
           athleteName: registration.athlete_name,
           athleteEmail: registration.athlete_email,
           athletePhone: registration.athlete_phone,
-          athleteCpf: paymentMethod === "credit_card" 
-            ? (cardData.cpf.trim() || registration.athlete_cpf)?.replace(/\D/g, "") 
-            : registration.athlete_cpf,
+          athleteCpf: cpfToUse, // Mandando o CPF limpo e resolvido
           athleteBirthDate: registration.athlete_birth_date,
           teamName: registration.team_name,
-          priceCents: registration.total_cents, // Usar total_cents que já inclui a taxa de 5%
-          paymentMethod,
+          priceCents: registration.total_cents,
+          paymentMethod: paymentMethod === "credit_card" ? "CREDIT_CARD" : "PIX",
           cardData: paymentMethod === "credit_card" ? {
             holderName: cardData.holderName,
             number: cardData.number.replace(/\s/g, ""),
             expiryMonth: cardData.expiryMonth,
             expiryYear: cardData.expiryYear,
-            cvv: cardData.cvv,
-            postalCode: cardData.postalCode.replace(/\D/g, ""), // CEP sem formatação
-            addressNumber: (cardData.addressNumber && cardData.addressNumber.trim()) || "S/N", // Número do endereço ou "S/N"
+            ccv: cardData.cvv
           } : undefined,
+          creditCardHolderInfo: paymentMethod === "credit_card" ? {
+            name: cardData.holderName,
+            email: registration.athlete_email,
+            cpfCnpj: cpfToUse, // Usar o mesmo CPF validado
+            postalCode: cardData.postalCode.replace(/\D/g, ""),
+            addressNumber: (cardData.addressNumber && cardData.addressNumber.trim()) || "S/N",
+            phone: registration.athlete_phone || registration.athlete_phone // Fallback if mobilePhone exists
+          } : undefined
         }),
       });
 
@@ -256,47 +289,24 @@ export default function Checkout() {
       }
 
       console.log("Payment creation response:", { data, error });
-      console.log("Full error object:", JSON.stringify(error, null, 2));
-      console.log("Full data object:", JSON.stringify(data, null, 2));
 
       // Verificar se há erro na resposta
       if (error) {
         let errorMessage = error.message || "Erro ao criar pagamento";
-        
-        // Tentar extrair mensagem de erro mais detalhada da resposta
         try {
-          // Se o erro tem uma propriedade context ou response, tentar extrair
           if (error.context && error.context.body) {
-            const errorBody = typeof error.context.body === 'string' 
-              ? JSON.parse(error.context.body) 
-              : error.context.body;
-            if (errorBody.error) {
-              errorMessage = errorBody.error;
-            }
+            const errorBody = typeof error.context.body === 'string' ? JSON.parse(error.context.body) : error.context.body;
+            if (errorBody.error) errorMessage = errorBody.error;
           }
-          
-          // Tentar extrair do data também
-          if (data?.error) {
-            errorMessage = data.error;
-          } else if (data?.details) {
-            errorMessage = `${data.error || errorMessage}\n\nDetalhes: ${data.details}`;
-          }
-        } catch (e) {
-          console.error("Error parsing error message:", e);
-        }
-        
-        // Silenciar erros técnicos de desenvolvimento
-        console.error("Payment creation error - Full details:", {
-          error,
-          errorString: JSON.stringify(error, null, 2),
-          data,
-          dataString: JSON.stringify(data, null, 2)
-        });
-        // Mostrar apenas mensagens amigáveis ao usuário
+          if (data?.error) errorMessage = data.error;
+          else if (data?.details) errorMessage = `${data.error || errorMessage} \n\nDetalhes: ${data.details} `;
+        } catch (e) { console.error(e); }
+
+        console.error("Payment error details:", { error, data });
         if (errorMessage?.includes("violates check constraint") || errorMessage?.includes("registrations_status_check")) {
           toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
         } else {
-          toast.error("Erro ao criar pagamento. Tente novamente.");
+          toast.error(`Erro ao criar pagamento: ${errorMessage} `);
         }
         return;
       }
@@ -304,27 +314,18 @@ export default function Checkout() {
       // Verificar se a resposta tem erro mesmo sem error object
       if (data?.error) {
         console.error("Payment creation error in data:", data);
-        // Silenciar erros técnicos
-        if (data.error?.includes("violates check constraint") || data.error?.includes("registrations_status_check")) {
-          toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
-        } else {
-          toast.error("Erro ao criar pagamento. Tente novamente.");
-        }
+        toast.error(`Erro ao criar pagamento: ${data.error} `);
         return;
       }
 
       // Verificar se foi sucesso
       if (data?.success) {
         if (paymentMethod === "credit_card") {
-          // Recarregar após um delay para verificar status
           setTimeout(async () => {
             await loadRegistration();
           }, 2000);
         } else {
-          // Para PIX, atualizar o estado imediatamente com os dados retornados
           if (data.payment) {
-            // A resposta vem em camelCase (pixQrCode, pixCopyPaste)
-            // Converter para snake_case para compatibilidade com o estado
             const paymentData = {
               id: data.payment.id,
               asaas_payment_id: data.payment.asaasPaymentId,
@@ -336,10 +337,7 @@ export default function Checkout() {
               amount_cents: data.payment.totalCents,
               platform_fee_cents: data.payment.platformFeeCents || 0,
             };
-            console.log("Atualizando payment state com:", paymentData);
             setPayment(paymentData);
-            
-            // Atualizar também o registration para incluir o payment_id
             if (registration) {
               setRegistration({
                 ...registration,
@@ -349,7 +347,6 @@ export default function Checkout() {
             }
           }
         }
-        // Sempre recarregar para garantir que temos os dados mais atualizados do banco
         await loadRegistration();
       } else {
         toast.error("Resposta inesperada do servidor");
@@ -357,13 +354,7 @@ export default function Checkout() {
       }
     } catch (error: any) {
       console.error("Payment creation exception:", error);
-      const errorMessage = error.message || error.error || "";
-      // Silenciar erros técnicos de desenvolvimento
-      if (errorMessage.includes("violates check constraint") || errorMessage.includes("registrations_status_check")) {
-        toast.error("Erro ao processar pagamento. Verifique os dados e tente novamente.");
-      } else {
-        toast.error("Erro ao criar pagamento. Tente novamente.");
-      }
+      toast.error(`Erro ao criar pagamento: ${error.message} `);
     } finally {
       setProcessing(false);
     }
@@ -383,8 +374,8 @@ export default function Checkout() {
   const pixCopyPayload = manualPixData.copyPayload || rawPixPayload;
   const pixImageUrl = hasManualPix
     ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-        manualPixData.qrPayload
-      )}`
+      manualPixData.qrPayload
+    )}`
     : "";
 
   const copyPixCode = () => {
@@ -432,8 +423,9 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-4 sm:py-12 px-2 sm:px-4">
-      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex flex-col">
+      <PublicHeader />
+      <div className="w-full mx-auto px-6 py-12 max-w-[98%] flex-1">
         <Card className="mb-8">
           <CardHeader>
             <div className="flex items-start justify-between">
@@ -447,8 +439,8 @@ export default function Checkout() {
                 {registration.payment_status === "approved"
                   ? "Pago"
                   : hasManualPix
-                  ? "À confirmar"
-                  : "Pendente"}
+                    ? "À confirmar"
+                    : "Pendente"}
               </Badge>
             </div>
           </CardHeader>
@@ -500,12 +492,12 @@ export default function Checkout() {
                 <p className="text-muted-foreground">
                   Sua inscrição foi confirmada. Você receberá um email com os detalhes.
                 </p>
-                <Button onClick={() => navigate(`/public/${registration.championships.slug}/leaderboard`)}>
+                <Button onClick={() => navigate(`/ public / ${registration.championships.slug}/leaderboard`)}>
                   Ver Leaderboard
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </Button >
+              </div >
+            </CardContent >
+          </Card >
         ) : hasManualPix ? (
           <Card>
             <CardHeader>
@@ -515,6 +507,7 @@ export default function Checkout() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 px-3 sm:px-6">
+              {/* Manual Pix Content */}
               <div className="flex flex-col items-center gap-4">
                 {pixImageUrl ? (
                   <div className="bg-white p-4 rounded-lg border shadow-sm">
@@ -569,7 +562,7 @@ export default function Checkout() {
               <CardDescription>Selecione como deseja pagar sua inscrição</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 px-3 sm:px-6">
-              <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "pix" | "credit_card")}>
+              <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "pix" | "credit_card")} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-center space-x-2 p-4 border rounded-lg">
                   <RadioGroupItem value="pix" id="pix" />
                   <Label htmlFor="pix" className="flex-1 cursor-pointer">
@@ -582,6 +575,7 @@ export default function Checkout() {
                     </div>
                   </Label>
                 </div>
+
                 <div className="flex items-center space-x-2 p-4 border rounded-lg">
                   <RadioGroupItem value="credit_card" id="credit_card" />
                   <Label htmlFor="credit_card" className="flex-1 cursor-pointer">
@@ -589,147 +583,168 @@ export default function Checkout() {
                       <CreditCard className="w-5 h-5" />
                       <div>
                         <div className="font-medium">Cartão de Crédito</div>
-                          <div className="text-sm text-muted-foreground">Pagamento seguro via Asaas</div>
-                        </div>
+                        <div className="text-sm text-muted-foreground">Pagamento seguro via Asaas</div>
                       </div>
-                    </Label>
-                  </div>
+                    </div>
+                  </Label>
+                </div>
               </RadioGroup>
 
-              {paymentMethod === "credit_card" && (
-                <Card className="border-2">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Dados do Cartão</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 px-3 sm:px-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="holderName">Nome no Cartão *</Label>
-                      <Input
-                        id="holderName"
-                        value={cardData.holderName}
-                        onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
-                        placeholder="NOME COMO ESTÁ NO CARTÃO"
-                        className="uppercase"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cardNumber">Número do Cartão *</Label>
-                      <Input
-                        id="cardNumber"
-                        value={cardData.number}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
-                          setCardData({ ...cardData, number: value });
-                        }}
-                        placeholder="0000 0000 0000 0000"
-                        maxLength={19}
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="expiryMonth">Mês *</Label>
-                        <Input
-                          id="expiryMonth"
-                          value={cardData.expiryMonth}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "").slice(0, 2);
-                            if (value === "" || (parseInt(value) >= 1 && parseInt(value) <= 12)) {
-                              setCardData({ ...cardData, expiryMonth: value });
-                            }
-                          }}
-                          placeholder="MM"
-                          maxLength={2}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="expiryYear">Ano *</Label>
-                        <Input
-                          id="expiryYear"
-                          value={cardData.expiryYear}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                            setCardData({ ...cardData, expiryYear: value });
-                          }}
-                          placeholder="AAAA"
-                          maxLength={4}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cvv">CVV *</Label>
-                        <Input
-                          id="cvv"
-                          type="password"
-                          value={cardData.cvv}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                            setCardData({ ...cardData, cvv: value });
-                          }}
-                          placeholder="123"
-                          maxLength={4}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cpf">CPF do Portador do Cartão *</Label>
-                      <Input
-                        id="cpf"
-                        value={cardData.cpf}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          // Formatar como CPF (11 dígitos)
-                          let formatted = value;
-                          if (value.length <= 11) {
-                            formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-                          }
-                          setCardData({ ...cardData, cpf: formatted });
-                        }}
-                        placeholder={registration?.athlete_cpf ? "Deixe em branco para usar CPF da inscrição" : "000.000.000-00"}
-                        maxLength={14}
-                      />
-                      {registration?.athlete_cpf && (
-                        <p className="text-xs text-muted-foreground">
-                          CPF da inscrição: {registration.athlete_cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2 col-span-1">
-                        <Label htmlFor="postalCode">CEP *</Label>
-                        <Input
-                          id="postalCode"
-                          value={cardData.postalCode}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "").slice(0, 8);
-                            const formatted = value.replace(/(\d{5})(\d{3})/, "$1-$2");
-                            setCardData({ ...cardData, postalCode: formatted });
-                          }}
-                          placeholder="00000-000"
-                          maxLength={9}
-                        />
-                      </div>
-                      <div className="space-y-2 col-span-1">
-                        <Label htmlFor="addressNumber">Número</Label>
-                        <Input
-                          id="addressNumber"
-                          value={cardData.addressNumber}
-                          onChange={(e) => {
-                            setCardData({ ...cardData, addressNumber: e.target.value });
-                          }}
-                          placeholder="Deixe em branco se não tiver"
-                          maxLength={10}
-                        />
-                      </div>
-                    </div>
-                    <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-                      <Shield className="w-4 h-4 inline mr-2" />
-                      Seus dados são processados de forma segura pela Asaas. Não armazenamos informações do cartão.
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
-              <Button 
-                onClick={createPayment} 
+
+              {
+                paymentMethod === "pix" && (
+                  <Card className="border-2 mt-4 bg-muted/20">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <QrCode className="w-5 h-5" />
+                        Pagamento via PIX
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      <p>Ao confirmar, um código QR (Copia e Cola) será gerado para você.</p>
+                      <p className="mt-1">O sistema identificará seu pagamento automaticamente em alguns segundos.</p>
+                    </CardContent>
+                  </Card>
+                )
+              }
+
+              {
+                paymentMethod === "credit_card" && (
+                  <Card className="border-2">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Dados do Cartão</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-3 sm:px-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="holderName">Nome no Cartão *</Label>
+                        <Input
+                          id="holderName"
+                          value={cardData.holderName}
+                          onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
+                          placeholder="NOME COMO ESTÁ NO CARTÃO"
+                          className="uppercase"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cardNumber">Número do Cartão *</Label>
+                        <Input
+                          id="cardNumber"
+                          value={cardData.number}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+                            setCardData({ ...cardData, number: value });
+                          }}
+                          placeholder="0000 0000 0000 0000"
+                          maxLength={19}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="expiryMonth">Mês *</Label>
+                          <Input
+                            id="expiryMonth"
+                            value={cardData.expiryMonth}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "").slice(0, 2);
+                              if (value === "" || (parseInt(value) >= 1 && parseInt(value) <= 12)) {
+                                setCardData({ ...cardData, expiryMonth: value });
+                              }
+                            }}
+                            placeholder="MM"
+                            maxLength={2}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="expiryYear">Ano *</Label>
+                          <Input
+                            id="expiryYear"
+                            value={cardData.expiryYear}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+                              setCardData({ ...cardData, expiryYear: value });
+                            }}
+                            placeholder="AAAA"
+                            maxLength={4}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cvv">CVV *</Label>
+                          <Input
+                            id="cvv"
+                            type="password"
+                            value={cardData.cvv}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+                              setCardData({ ...cardData, cvv: value });
+                            }}
+                            placeholder="123"
+                            maxLength={4}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cpf">CPF do Portador do Cartão *</Label>
+                        <Input
+                          id="cpf"
+                          value={cardData.cpf}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            // Formatar como CPF (11 dígitos)
+                            let formatted = value;
+                            if (value.length <= 11) {
+                              formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+                            }
+                            setCardData({ ...cardData, cpf: formatted });
+                          }}
+                          placeholder={registration?.athlete_cpf ? "Deixe em branco para usar CPF da inscrição" : "000.000.000-00"}
+                          maxLength={14}
+                        />
+                        {registration?.athlete_cpf && (
+                          <p className="text-xs text-muted-foreground">
+                            CPF da inscrição: {registration.athlete_cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2 col-span-1">
+                          <Label htmlFor="postalCode">CEP *</Label>
+                          <Input
+                            id="postalCode"
+                            value={cardData.postalCode}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "").slice(0, 8);
+                              const formatted = value.replace(/(\d{5})(\d{3})/, "$1-$2");
+                              setCardData({ ...cardData, postalCode: formatted });
+                            }}
+                            placeholder="00000-000"
+                            maxLength={9}
+                          />
+                        </div>
+                        <div className="space-y-2 col-span-1">
+                          <Label htmlFor="addressNumber">Número</Label>
+                          <Input
+                            id="addressNumber"
+                            value={cardData.addressNumber}
+                            onChange={(e) => {
+                              setCardData({ ...cardData, addressNumber: e.target.value });
+                            }}
+                            placeholder="Deixe em branco se não tiver"
+                            maxLength={10}
+                          />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                        <Shield className="w-4 h-4 inline mr-2" />
+                        Seus dados são processados de forma segura pela Asaas. Não armazenamos informações do cartão.
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              }
+
+              <Button
+                onClick={handlePayment}
                 disabled={processing}
                 size="lg"
                 className="w-full"
@@ -742,6 +757,33 @@ export default function Checkout() {
                 ) : (
                   paymentMethod === "credit_card" ? "Pagar com Cartão" : "Gerar PIX"
                 )}
+              </Button>
+            </CardContent >
+          </Card >
+        ) : payment.payment_method === 'credit_card' ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Pagamento em Análise</CardTitle>
+              <CardDescription>
+                Seu pagamento com cartão de crédito está sendo processado ou ficou pendente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 px-3 sm:px-6 text-center">
+              <div className="bg-yellow-50 p-6 rounded-lg text-yellow-800 border border-yellow-200">
+                <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p className="font-medium">Status: {payment.status === 'pending' ? 'Pendente' : payment.status}</p>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Se houve algum erro ou se você deseja tentar outro cartão ou forma de pagamento, clique abaixo.
+              </p>
+
+              <Button
+                onClick={() => setPayment(null)}
+                variant="outline"
+                className="w-full"
+              >
+                Tentar Novamente (Novo Pagamento)
               </Button>
             </CardContent>
           </Card>
@@ -756,7 +798,7 @@ export default function Checkout() {
                     ⚠️ Ambiente SANDBOX detectado
                   </p>
                   <p className="text-xs text-yellow-700 mt-1">
-                    Os códigos PIX gerados no sandbox <strong>não funcionam</strong> em apps bancários reais. 
+                    Os códigos PIX gerados no sandbox <strong>não funcionam</strong> em apps bancários reais.
                     Eles são apenas para testes da API. Para pagamentos reais, configure uma API key de produção.
                   </p>
                 </div>
@@ -773,15 +815,15 @@ export default function Checkout() {
                     pixCopyPasteLength: payment.pix_copy_paste?.length,
                     paymentKeys: Object.keys(payment || {}),
                   });
-                  
+
                   if (payment.pix_qr_code) {
-                    const qrCodeSrc = payment.pix_qr_code.startsWith('data:image') 
-                      ? payment.pix_qr_code 
+                    const qrCodeSrc = payment.pix_qr_code.startsWith('data:image')
+                      ? payment.pix_qr_code
                       : `data:image/png;base64,${payment.pix_qr_code}`;
-                    
+
                     return (
                       <div className="bg-white p-4 rounded-lg inline-block border shadow-sm">
-                        <img 
+                        <img
                           src={qrCodeSrc}
                           alt="QR Code PIX"
                           className="w-60 h-60"
@@ -797,7 +839,7 @@ export default function Checkout() {
                     const cleanPixCode = payment.pix_copy_paste.replace(/\s+/g, '');
                     return (
                       <div className="bg-white p-4 rounded-lg inline-block border shadow-sm">
-                        <img 
+                        <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(cleanPixCode)}`}
                           alt="QR Code PIX"
                           className="w-60 h-60"
@@ -815,16 +857,16 @@ export default function Checkout() {
                     );
                   }
                 })()}
-                
+
                 {payment.pix_copy_paste && (
                   <div className="space-y-2 max-w-2xl mx-auto">
                     <p className="text-sm text-muted-foreground">
                       Ou copie o código PIX "copia e cola":
                     </p>
                     <div className="flex gap-2">
-                      <Input 
-                        value={payment.pix_copy_paste.replace(/\s+/g, '')} 
-                        readOnly 
+                      <Input
+                        value={payment.pix_copy_paste.replace(/\s+/g, '')}
+                        readOnly
                         className="font-mono text-xs break-all"
                         onFocus={(e) => {
                           e.target.select();
@@ -852,7 +894,7 @@ export default function Checkout() {
                 {/* Botão para atualizar QR Code se necessário */}
                 {payment.id && payment.payment_method === "pix" && (
                   <div className="text-center pt-4">
-                    <Button 
+                    <Button
                       onClick={async () => {
                         if (payment.id) {
                           toast.loading("Atualizando QR Code...");
@@ -863,7 +905,7 @@ export default function Checkout() {
                             toast.error("Não foi possível atualizar o QR Code. Verifique se o pagamento ainda está válido.");
                           }
                         }
-                      }} 
+                      }}
                       variant="outline"
                       className="mt-2"
                     >
@@ -875,27 +917,37 @@ export default function Checkout() {
                     </p>
                   </div>
                 )}
+                <div className="flex flex-col gap-2 mt-4">
+                  <Button
+                    onClick={() => setPayment(null)}
+                    variant="ghost"
+                    className="w-full text-muted-foreground"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Escolher outra forma de pagamento (Cartão)
+                  </Button>
+                </div>
 
-          {!payment.pix_qr_code && !payment.pix_copy_paste && payment.id && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">
-                QR Code PIX não disponível. Clique no botão abaixo para atualizar.
-              </p>
-              <Button 
-                onClick={async () => {
-                  if (payment.id) {
-                    const refreshed = await refreshPixQrCode(payment.id);
-                    if (!refreshed) {
-                      toast.error("Não foi possível atualizar o QR Code. Tente criar um novo pagamento.");
-                    }
-                  }
-                }} 
-                variant="outline"
-              >
-                Atualizar QR Code
-              </Button>
-            </div>
-          )}
+                {!payment.pix_qr_code && !payment.pix_copy_paste && payment.id && (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">
+                      QR Code PIX não disponível. Clique no botão abaixo para atualizar.
+                    </p>
+                    <Button
+                      onClick={async () => {
+                        if (payment.id) {
+                          const refreshed = await refreshPixQrCode(payment.id);
+                          if (!refreshed) {
+                            toast.error("Não foi possível atualizar o QR Code. Tente criar um novo pagamento.");
+                          }
+                        }
+                      }}
+                      variant="outline"
+                    >
+                      Atualizar QR Code
+                    </Button>
+                  </div>
+                )}
 
                 {(payment.pix_qr_code || payment.pix_copy_paste) && (
                   <Badge variant="secondary" className="mt-4">
@@ -918,17 +970,9 @@ export default function Checkout() {
               </div>
             </CardContent>
           </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ${className}`}
-      {...props}
-    />
+        )
+        }
+      </div >
+    </div >
   );
 }

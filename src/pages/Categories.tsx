@@ -2,18 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Loader2, Copy, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
-// REMOVIDO: Não criar resultados fictícios automaticamente
-// import { ensureScaleTrios } from '@/utils/ensureScaleTrios';
-// import { ensureRandomResults } from '@/utils/ensureRandomResults';
 import {
   DndContext,
   closestCenter,
@@ -44,7 +35,7 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
   const categoryRegs = registrations.filter(r => r.category_id === category.id);
   const teamsCount = categoryRegs.filter(r => r.team_name).length;
   const individualsCount = categoryRegs.filter(r => !r.team_name).length;
-  
+
   // Formatar texto de contagem
   const getCountText = () => {
     if (category.format === 'individual') {
@@ -70,9 +61,17 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: isDragging ? 'none' : transition,
+    opacity: isDragging ? 0.8 : 1,
+    zIndex: isDragging ? 999 : 1,
+    scale: isDragging ? '1.02' : '1',
+    boxShadow: isDragging ? '0 10px 20px rgba(0,0,0,0.2)' : 'none',
   };
+
+  // Calculate display price (lowest batch price if batches exist, else standard price)
+  const displayPrice = category.has_batches && category.batches?.length > 0
+    ? Math.min(...category.batches.map((b: any) => b.price_cents))
+    : category.price_cents;
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -85,7 +84,7 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
         >
           <GripVertical className="w-5 h-5" />
         </button>
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <h3 className="font-semibold">{category.name}</h3>
@@ -93,9 +92,14 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                 {category.format}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
                 {category.gender}
               </span>
+              {category.has_batches && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
+                  Lotes Ativos
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
@@ -103,14 +107,14 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
             {category.team_size && <span>• Tamanho do time: {category.team_size} pessoas</span>}
             <span className="font-semibold text-foreground">• {getCountText()} cadastrado(s)</span>
             {category.gender_composition && <span>• {category.gender_composition}</span>}
-            {category.price_cents > 0 && (
+            {displayPrice > 0 && (
               <span className="font-semibold text-foreground">
-                • R$ {(category.price_cents / 100).toFixed(2).replace('.', ',')}
+                • {category.has_batches ? 'A partir de ' : ''} R$ {(displayPrice / 100).toFixed(2).replace('.', ',')}
               </span>
             )}
           </div>
         </div>
-        
+
         <div className="flex gap-1 shrink-0">
           <Button
             size="icon"
@@ -149,13 +153,9 @@ export default function Categories() {
   const navigate = useNavigate();
   const { selectedChampionship } = useChampionship();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [updatingOrder, setUpdatingOrder] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
-  const [heats, setHeats] = useState<any[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -187,17 +187,6 @@ export default function Categories() {
         return;
       }
 
-      // DESABILITADO: Não criar resultados fictícios automaticamente
-      // Os resultados devem ser lançados manualmente
-      /*
-      const [scaleResult, randomResult] = await Promise.all([
-        ensureScaleTrios(selectedChampionship.id),
-        ensureRandomResults(selectedChampionship.id),
-      ]);
-      */
-
-      // Development helpers removed - no need to show to end users
-
       // Load categories ordered by order_index
       const { data: cats, error: catsError } = await supabase
         .from("categories")
@@ -206,8 +195,8 @@ export default function Categories() {
         .order("order_index", { ascending: true });
 
       if (catsError) throw catsError;
-      
-      // Load registrations com nomes
+
+      // Load registrations
       const { data: regs, error: regsError } = await supabase
         .from("registrations")
         .select("id, category_id, team_name, athlete_name")
@@ -216,105 +205,23 @@ export default function Categories() {
 
       if (regsError) throw regsError;
       setRegistrations(regs || []);
-      
-      // Se não tiver order_index, inicializar com base no índice
+
       const categoriesWithOrder = (cats || []).map((cat, index) => ({
         ...cat,
         order_index: cat.order_index ?? index,
       }));
-      
+
       setCategories(categoriesWithOrder);
     } catch (error: any) {
       console.error("Error loading categories:", error);
-      // Silenciar erro - não mostrar toast ao usuário
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-
-    try {
-      const form = e.target as HTMLFormElement;
-      const formData = new FormData(form);
-      
-      const capacityValue = formData.get('capacity') as string;
-      const capacity = capacityValue && capacityValue.trim() !== '' 
-        ? parseInt(capacityValue) 
-        : 999999; // 999999 representa capacidade ilimitada
-
-      // Converter preço de reais para centavos
-      const priceValue = formData.get('price') as string;
-      const price_cents = priceValue && priceValue.trim() !== '' 
-        ? Math.round(parseFloat(priceValue.replace(',', '.')) * 100)
-        : 0;
-
-      // Obter athletes_per_heat
-      const athletesPerHeatValue = formData.get('athletesPerHeat') as string;
-      const athletes_per_heat = athletesPerHeatValue && athletesPerHeatValue.trim() !== '' 
-        ? parseInt(athletesPerHeatValue)
-        : 10; // Valor padrão
-
-      // Determinar order_index: se for nova categoria, adiciona no final
-      const maxOrder = categories.length > 0 
-        ? Math.max(...categories.map(c => c.order_index ?? 0))
-        : -1;
-
-      if (!selectedChampionship) {
-        toast.error("Selecione um campeonato primeiro");
-        setSaving(false);
-        return;
-      }
-
-      const categoryData = {
-        championship_id: selectedChampionship.id,
-        name: formData.get('name') as string,
-        format: formData.get('format') as string,
-        gender: formData.get('gender') as string,
-        capacity: capacity,
-        team_size: formData.get('teamSize') ? parseInt(formData.get('teamSize') as string) : null,
-        gender_composition: formData.get('genderComposition') as string || null,
-        rules: formData.get('rules') as string || null,
-        price_cents: price_cents,
-        athletes_per_heat: athletes_per_heat,
-        order_index: editingCategory ? editingCategory.order_index : maxOrder + 1,
-      };
-
-      if (editingCategory) {
-        const { error } = await supabase
-          .from("categories")
-          .update(categoryData)
-          .eq("id", editingCategory.id);
-
-        if (error) throw error;
-        toast.success("Categoria atualizada com sucesso!");
-      } else {
-        const { error } = await supabase
-          .from("categories")
-          .insert(categoryData)
-          .select()
-          .single();
-
-        if (error) throw error;
-        toast.success("Categoria criada com sucesso!");
-      }
-
-      setIsDialogOpen(false);
-      setEditingCategory(null);
-      await loadChampionshipAndCategories();
-    } catch (error: any) {
-      console.error("Error saving category:", error);
-      toast.error("Erro ao salvar categoria");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleDuplicate = async (category: any) => {
     try {
-      const maxOrder = categories.length > 0 
+      const maxOrder = categories.length > 0
         ? Math.max(...categories.map(c => c.order_index ?? 0))
         : -1;
 
@@ -330,6 +237,8 @@ export default function Categories() {
         price_cents: category.price_cents,
         athletes_per_heat: category.athletes_per_heat || 10,
         order_index: maxOrder + 1,
+        has_batches: category.has_batches,
+        batches: category.batches
       };
 
       const { error } = await supabase
@@ -339,7 +248,7 @@ export default function Categories() {
         .single();
 
       if (error) throw error;
-      
+
       toast.success("Categoria duplicada com sucesso!");
       await loadChampionshipAndCategories();
     } catch (error: any) {
@@ -358,7 +267,7 @@ export default function Categories() {
         .eq("id", id);
 
       if (error) throw error;
-      
+
       toast.success("Categoria removida com sucesso!");
       await loadChampionshipAndCategories();
     } catch (error: any) {
@@ -370,7 +279,7 @@ export default function Categories() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || active.id === over.id) {
+    if (!over || active.id === active.id) {
       return;
     }
 
@@ -444,159 +353,6 @@ export default function Categories() {
           <h1 className="text-4xl font-bold mb-2">Categorias</h1>
           <p className="text-muted-foreground">Gerencie as categorias do campeonato</p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingCategory ? 'Editar' : 'Criar'} Categoria</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Nome da Categoria *</Label>
-                  <Input 
-                    id="name" 
-                    name="name" 
-                    defaultValue={editingCategory?.name}
-                    placeholder="Ex: RX Individual Masculino" 
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="format">Formato *</Label>
-                  <Select name="format" defaultValue={editingCategory?.format || 'individual'} required>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individual">Individual</SelectItem>
-                      <SelectItem value="dupla">Dupla</SelectItem>
-                      <SelectItem value="trio">Trio</SelectItem>
-                      <SelectItem value="time">Time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="gender">Gênero *</Label>
-                  <Select name="gender" defaultValue={editingCategory?.gender || 'masculino'} required>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="masculino">Masculino</SelectItem>
-                      <SelectItem value="feminino">Feminino</SelectItem>
-                      <SelectItem value="misto">Misto</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="capacity">Capacidade</Label>
-                  <Input 
-                    id="capacity" 
-                    name="capacity" 
-                    type="number" 
-                    defaultValue={editingCategory?.capacity && editingCategory.capacity !== 999999 ? editingCategory.capacity : ''}
-                    placeholder="Deixe vazio para ilimitada" 
-                    min="1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Deixe vazio para capacidade ilimitada
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="teamSize">Tamanho do Time (se aplicável)</Label>
-                  <Input 
-                    id="teamSize" 
-                    name="teamSize" 
-                    type="number"
-                    defaultValue={editingCategory?.team_size}
-                    placeholder="4"
-                    min="1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="genderComposition">Composição de Gênero (misto)</Label>
-                  <Input 
-                    id="genderComposition" 
-                    name="genderComposition"
-                    defaultValue={editingCategory?.gender_composition}
-                    placeholder="Ex: 2M/2F"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="athletesPerHeat">Atletas/Times por Bateria</Label>
-                <Input 
-                  id="athletesPerHeat" 
-                  name="athletesPerHeat" 
-                  type="number" 
-                  defaultValue={editingCategory?.athletes_per_heat || 10}
-                  placeholder="10" 
-                  min="1"
-                  max="30"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Número padrão de atletas/times por bateria para esta categoria. Este valor será usado automaticamente ao gerar baterias.
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="price">Preço por Categoria (R$)</Label>
-                <Input 
-                  id="price" 
-                  name="price" 
-                  type="text"
-                  inputMode="decimal"
-                  defaultValue={editingCategory?.price_cents ? (editingCategory.price_cents / 100).toFixed(2).replace('.', ',') : ''}
-                  placeholder="300,00"
-                  pattern="[0-9]+([,\.][0-9]{1,2})?"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Preço total da inscrição para esta categoria (não por atleta). Ex: Trio = R$ 300,00, Dupla = R$ 200,00, Individual = R$ 100,00
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="rules">Regras e Observações</Label>
-                <Textarea 
-                  id="rules" 
-                  name="rules"
-                  defaultValue={editingCategory?.rules}
-                  placeholder="Regras específicas da categoria..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex gap-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" className="flex-1" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    editingCategory ? 'Atualizar' : 'Criar'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {categories.length === 0 ? (
@@ -625,10 +381,7 @@ export default function Categories() {
                     key={category.id}
                     category={category}
                     registrations={registrations}
-                    onEdit={() => {
-                      setEditingCategory(category);
-                      setIsDialogOpen(true);
-                    }}
+                    onEdit={() => navigate(`/categories/${category.id}/edit`)}
                     onDuplicate={() => handleDuplicate(category)}
                     onDelete={() => handleDelete(category.id)}
                   />
@@ -647,11 +400,8 @@ export default function Categories() {
 
       {/* Floating Action Button */}
       <button
-        onClick={() => {
-          setEditingCategory(null);
-          setIsDialogOpen(true);
-        }}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#F32735] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        onClick={() => navigate('/categories/new')}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
         aria-label="Criar nova categoria"
       >
         <Plus className="w-6 h-6" />

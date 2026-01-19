@@ -12,35 +12,46 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const webhookData = await req.json();
-    console.log("Webhook received:", webhookData);
+    console.log("Webhook received:", JSON.stringify(webhookData));
 
     const { event, payment } = webhookData;
+
+    if (!payment || !payment.id) {
+      return new Response(JSON.stringify({ message: "Ignored: No payment data" }), { status: 200, headers: corsHeaders });
+    }
 
     // Find payment by Asaas ID
     const { data: paymentRecord, error: findError } = await supabase
       .from("payments")
       .select("*, registrations(*)")
       .eq("asaas_payment_id", payment.id)
-      .single();
+      .maybeSingle();
 
-    if (findError || !paymentRecord) {
-      console.error("Payment not found:", payment.id);
-      return new Response(JSON.stringify({ error: "Payment not found" }), {
-        status: 404,
+    if (findError) {
+      console.error("Error finding payment:", findError);
+      return new Response(JSON.stringify({ error: "Database error" }), { status: 500, headers: corsHeaders });
+    }
+
+    if (!paymentRecord) {
+      console.warn("Payment not found in database:", payment.id);
+      // Return 200 to acknowledge webhook (otherwise Asaas keeps retrying)
+      return new Response(JSON.stringify({ message: "Payment not found locally, ignored." }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle different webhook events
     let newStatus = paymentRecord.status;
-    let registrationStatus = paymentRecord.registrations.payment_status;
+    let registrationStatus = paymentRecord.registrations?.payment_status;
     let paidAt = paymentRecord.approved_at;
+
+    let shouldUpdate = false;
 
     switch (event) {
       case "PAYMENT_RECEIVED":
@@ -48,77 +59,57 @@ serve(async (req) => {
         newStatus = "approved";
         registrationStatus = "approved";
         paidAt = new Date().toISOString();
+        shouldUpdate = true;
         break;
       case "PAYMENT_OVERDUE":
         registrationStatus = "expired";
+        shouldUpdate = true;
         break;
       case "PAYMENT_DELETED":
       case "PAYMENT_REFUNDED":
         newStatus = "refunded";
         registrationStatus = "refunded";
+        shouldUpdate = true;
         break;
     }
 
-    // Update payment status
-    const { error: updatePaymentError } = await supabase
-      .from("payments")
-      .update({
-        status: newStatus,
-        approved_at: paidAt,
-        metadata: { ...paymentRecord.metadata, lastWebhookEvent: event },
-      })
-      .eq("id", paymentRecord.id);
+    if (shouldUpdate) {
+      // Update payment status
+      await supabase
+        .from("payments")
+        .update({
+          status: newStatus,
+          approved_at: paidAt,
+          metadata: { ...paymentRecord.metadata, lastWebhookEvent: event, webhookPayload: webhookData },
+        })
+        .eq("id", paymentRecord.id);
 
-    if (updatePaymentError) {
-      console.error("Error updating payment:", updatePaymentError);
-      throw updatePaymentError;
-    }
+      // Update registration status
+      await supabase
+        .from("registrations")
+        .update({
+          payment_status: registrationStatus,
+          paid_at: paidAt
+        })
+        .eq("id", paymentRecord.registration_id);
 
-    // Update registration status
-    const { error: updateRegistrationError } = await supabase
-      .from("registrations")
-      .update({
-        payment_status: registrationStatus,
-        paid_at: paidAt,
-      })
-      .eq("id", paymentRecord.registration_id);
+      console.log(`Updated Payment ${paymentRecord.id} and Registration ${paymentRecord.registration_id} to status: ${registrationStatus}`);
 
-    if (updateRegistrationError) {
-      console.error("Error updating registration:", updateRegistrationError);
-      throw updateRegistrationError;
-    }
-
-    // If approved, send confirmation email
-    if (registrationStatus === "approved") {
-      console.log("Payment approved for registration:", paymentRecord.registration_id);
-      
-      // Enviar email de confirmação automaticamente
-      try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-        
-        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            registrationId: paymentRecord.registration_id,
-          }),
-        });
-
-        if (emailResponse.ok) {
-          const emailData = await emailResponse.json();
-          console.log("Confirmation email sent successfully:", emailData);
-        } else {
-          const errorData = await emailResponse.text();
-          console.error("Failed to send confirmation email:", errorData);
-          // Não falhar o webhook se o email falhar
+      // If approved, trigger email logic (optional, call another function or let triggers handle it)
+      if (registrationStatus === 'approved' && paymentRecord.registrations?.payment_status !== 'approved') {
+        // Logic to send confirmation email
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKey}`
+            },
+            body: JSON.stringify({ registrationId: paymentRecord.registration_id })
+          });
+        } catch (e) {
+          console.error("Failed to trigger email function:", e);
         }
-      } catch (emailError: any) {
-        console.error("Error sending confirmation email:", emailError);
-        // Não falhar o webhook se o email falhar
       }
     }
 

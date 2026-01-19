@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { 
-  Users, DollarSign, Trophy, TrendingUp, 
+import {
+  Users, DollarSign, Trophy, TrendingUp,
   LogOut, Settings, BarChart3, Building2,
   ArrowLeft, Loader2
 } from "lucide-react";
@@ -47,12 +47,10 @@ export default function SuperAdminDashboard() {
     paid_payments: 0,
   });
   const [organizers, setOrganizers] = useState<OrganizerStats[]>([]);
+  const [feeConfig, setFeeConfig] = useState<{ type: 'percentage' | 'fixed', value: number }>({ type: 'percentage', value: 5 });
+  const [savingFee, setSavingFee] = useState(false);
 
-  useEffect(() => {
-    checkAuth();
-    loadDashboard();
-  }, []);
-
+  // 1. Helper Functions (Defined FIRST to avoid ReferenceError)
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -61,8 +59,6 @@ export default function SuperAdminDashboard() {
     }
     setUser(session.user);
 
-    // Verificar se o usuário é admin
-    // Verificar se o usuário é super_admin (apenas super_admin pode acessar esta página)
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -79,34 +75,49 @@ export default function SuperAdminDashboard() {
     setIsAdmin(true);
   };
 
+  const loadFeeConfig = async () => {
+    const { data } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'platform_fee_config')
+      .maybeSingle();
+
+    if (data?.value) {
+      try {
+        const parsed = JSON.parse(data.value);
+        setFeeConfig(parsed);
+      } catch (e) {
+        console.error("Error parsing fee config", e);
+      }
+    }
+  };
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
 
-      // Carregar estatísticas por organizador usando função RPC
       const { data: organizerData, error: orgError } = await supabase.rpc(
         "get_organizer_stats"
       );
 
       if (orgError) {
         console.error("Error calling RPC:", orgError);
-        // Se a função RPC não funcionar, usar query SQL direta via execute_sql
-        toast.warning("Carregando dados...");
+        toast.warning("Carregando dados com fallback...");
       }
 
-      if (organizerData && organizerData.length > 0) {
-        setOrganizers(organizerData as OrganizerStats[]);
-        const platformStats: PlatformStats = {
-          total_organizers: organizerData.length,
-          total_championships: organizerData.reduce((sum: number, org: OrganizerStats) => sum + org.total_championships, 0),
-          total_registrations: organizerData.reduce((sum: number, org: OrganizerStats) => sum + org.total_registrations, 0),
-          total_revenue_cents: organizerData.reduce((sum: number, org: OrganizerStats) => sum + org.total_revenue_cents, 0),
+      const orgs = organizerData as OrganizerStats[] || [];
+
+      if (orgs.length > 0) {
+        setOrganizers(orgs);
+        setPlatformStats({
+          total_organizers: orgs.length,
+          total_championships: orgs.reduce((sum, org) => sum + org.total_championships, 0),
+          total_registrations: orgs.reduce((sum, org) => sum + org.total_registrations, 0),
+          total_revenue_cents: orgs.reduce((sum, org) => sum + org.total_revenue_cents, 0),
           total_platform_fee_cents: 0,
-          paid_payments: organizerData.reduce((sum: number, org: OrganizerStats) => sum + org.paid_payments, 0),
-        };
-        setPlatformStats(platformStats);
+          paid_payments: orgs.reduce((sum, org) => sum + org.paid_payments, 0),
+        });
       } else {
-        // Dados vazios - ainda não há organizadores ou pagamentos
         setOrganizers([]);
         setPlatformStats({
           total_organizers: 0,
@@ -125,6 +136,27 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const handleSaveFeeConfig = async () => {
+    setSavingFee(true);
+    try {
+      const { error } = await supabase
+        .from('platform_settings')
+        .upsert({
+          key: 'platform_fee_config',
+          value: JSON.stringify(feeConfig),
+          description: 'Configuração global da taxa da plataforma'
+        });
+
+      if (error) throw error;
+      toast.success("Taxa da plataforma atualizada com sucesso!");
+    } catch (error: any) {
+      console.error("Error saving fee config:", error);
+      toast.error("Erro ao salvar taxa");
+    } finally {
+      setSavingFee(false);
+    }
+  };
+
   const formatCurrency = (cents: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -137,6 +169,16 @@ export default function SuperAdminDashboard() {
     navigate("/auth");
   };
 
+  // 2. Effects (Called AFTER functions are defined)
+  useEffect(() => {
+    const init = async () => {
+      await checkAuth();
+      await Promise.all([loadDashboard(), loadFeeConfig()]);
+    }
+    init();
+  }, []);
+
+  // 3. Render
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -156,10 +198,7 @@ export default function SuperAdminDashboard() {
         <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
+
               <div>
                 <h1 className="text-2xl font-bold">Super Admin Dashboard</h1>
                 <p className="text-sm text-muted-foreground">
@@ -240,7 +279,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Estatísticas de Receita Total */}
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
+        <div className="grid grid-cols-1 gap-6 mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -317,4 +356,3 @@ export default function SuperAdminDashboard() {
     </div>
   );
 }
-

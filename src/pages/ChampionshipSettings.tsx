@@ -20,47 +20,25 @@ export default function ChampionshipSettings() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [copying, setCopying] = useState(false);
   const [championship, setChampionship] = useState<any>(null);
-  const [showColumnError, setShowColumnError] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
     location: "",
     date: "",
     registrationEndDate: "",
-    pixPayload: "",
+    description: "",
+    address: "",
+    city: "",
+    state: "",
   });
 
   useEffect(() => {
     if (championshipId) {
       checkAuth();
-      ensurePixColumnExists();
       loadChampionship();
     }
   }, [championshipId]);
-
-  const ensurePixColumnExists = async () => {
-    try {
-      // Tenta verificar se a coluna existe fazendo uma query simples
-      const { error: testError } = await supabase
-        .from("championships")
-        .select("pix_payload")
-        .limit(1);
-
-      // Se der erro relacionado à coluna, mostra instruções para executar SQL
-      if (testError && (testError.message.includes("pix_payload") || testError.message.includes("column") || testError.message.includes("schema cache"))) {
-        console.warn("Coluna pix_payload não encontrada. É necessário executar a migration.");
-        setShowColumnError(true);
-      } else {
-        setShowColumnError(false);
-      }
-    } catch (error) {
-      console.error("Error checking pix_payload column:", error);
-    }
-  };
-
-  // Removido: useEffect que buscava do contexto - agora usamos apenas loadChampionship que busca do banco
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -89,7 +67,7 @@ export default function ChampionshipSettings() {
       setLoading(true);
       const { data, error } = await supabase
         .from("championships")
-        .select("id, name, slug, location, date, registration_end_date, pix_payload, is_published")
+        .select("id, name, slug, location, date, registration_end_date, is_published, description, city, state, address")
         .eq("id", championshipId)
         .single();
 
@@ -102,7 +80,10 @@ export default function ChampionshipSettings() {
         location: data.location || "",
         date: data.date ? data.date.split("T")[0] : "",
         registrationEndDate: data.registration_end_date ? data.registration_end_date.split("T")[0] : "",
-        pixPayload: data.pix_payload || "",
+        description: data.description || "",
+        address: data.address || "",
+        city: data.city || "",
+        state: data.state || "",
       });
       // Atualiza o contexto também
       if (championshipId) {
@@ -122,37 +103,23 @@ export default function ChampionshipSettings() {
 
     try {
       setSaving(true);
-      const payload = formData.pixPayload.trim();
-      
-      // Validação básica do PIX
-      if (payload) {
-        // Se for uma chave simples, verifica se tem formato válido
-        if (!isEmvPixPayload(payload)) {
-          // Validação básica de chave PIX (email, telefone, CPF/CNPJ, chave aleatória)
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-          const cpfCnpjRegex = /^\d{11,14}$/;
-          
-          const isValidKey = 
-            emailRegex.test(payload) ||
-            phoneRegex.test(payload.replace(/\D/g, '')) ||
-            cpfCnpjRegex.test(payload.replace(/\D/g, '')) ||
-            payload.length >= 10; // Chave aleatória genérica
-            
-          if (!isValidKey && payload.length < 10) {
-            toast.error("Chave PIX inválida. Verifique se está correta.");
-            setSaving(false);
-            return;
-          }
-        }
-      }
 
       const updateData: Record<string, any> = {
-        pix_payload: payload || null,
+        name: formData.name,
+        description: formData.description || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        state: formData.state || null,
       };
 
-      if (formData.location.trim()) {
-        updateData.location = formData.location.trim();
+      // Construct location string
+      let finalLocation = formData.location;
+      if (formData.address || formData.city || formData.state) {
+        finalLocation = `${formData.address}${formData.city ? ` - ${formData.city}` : ''}${formData.state ? `/${formData.state}` : ''}`;
+      }
+
+      if (finalLocation.trim()) {
+        updateData.location = finalLocation.trim();
       }
 
       if (formData.date) {
@@ -174,7 +141,7 @@ export default function ChampionshipSettings() {
 
       const updatedChampionship = {
         ...(championship || {}),
-        pix_payload: payload || null,
+        ...updateData
       };
       setChampionship(updatedChampionship);
       if (championshipId) {
@@ -195,37 +162,6 @@ export default function ChampionshipSettings() {
       setSaving(false);
     }
   };
-
-  const pixDisplayData = useMemo(
-    () =>
-      getPixPayloadForDisplay({
-        rawPayload: formData.pixPayload,
-        merchantName: championship?.name,
-        merchantCity: championship?.location,
-      }),
-    [formData.pixPayload, championship?.name, championship?.location]
-  );
-
-  const handleCopyPix = async () => {
-    if (!pixDisplayData.copyPayload) return;
-
-    try {
-      setCopying(true);
-      await navigator.clipboard.writeText(pixDisplayData.copyPayload);
-      toast.success("Código PIX copiado!");
-      setTimeout(() => setCopying(false), 3000);
-    } catch (error) {
-      toast.error("Não foi possível copiar");
-      setCopying(false);
-    }
-  };
-
-  const pixPreviewUrl = useMemo(() => {
-    if (!pixDisplayData.qrPayload) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-      pixDisplayData.qrPayload
-    )}`;
-  }, [pixDisplayData]);
 
   if (loading) {
     return (
@@ -303,6 +239,16 @@ export default function ChampionshipSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome do Campeonato *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Data do Campeonato *</Label>
@@ -327,14 +273,51 @@ export default function ChampionshipSettings() {
                 </p>
               </div>
             </div>
+
+            <div className="space-y-4 pt-2">
+              <h3 className="text-sm font-medium">Endereço</h3>
+              <div className="space-y-2">
+                <Label htmlFor="address">Endereço *</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Rua, Número, Bairro"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">Cidade *</Label>
+                  <Input
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">Estado (UF) *</Label>
+                  <Input
+                    id="state"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    maxLength={2}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="location">Local *</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Ex: Box CrossFit, Rua Exemplo, 123"
-                required
+              <Label htmlFor="description">Descrição</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                placeholder="Descreva o campeonato..."
               />
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -345,139 +328,7 @@ export default function ChampionshipSettings() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Pagamentos via PIX</CardTitle>
-            <CardDescription>
-              Cadastre a chave ou payload PIX que será exibido para os atletas durante a inscrição.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Alert>
-              <AlertDescription>
-                <p className="font-medium mb-2">Como configurar o PIX:</p>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li><strong>Chave PIX simples:</strong> Cole sua chave (email, CPF/CNPJ, telefone ou chave aleatória)</li>
-                  <li><strong>Código "Copia e Cola":</strong> Cole o código completo do QR Code PIX (começa com 000201)</li>
-                  <li>O sistema gera automaticamente o QR Code a partir da chave, ou usa o código completo se fornecido</li>
-                </ul>
-              </AlertDescription>
-            </Alert>
 
-            <div className="space-y-2">
-              <Label htmlFor="pixPayload">Chave/QR Code PIX *</Label>
-              <Textarea
-                id="pixPayload"
-                value={formData.pixPayload}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, pixPayload: e.target.value }))
-                }
-                placeholder="Exemplo de chave: seuemail@exemplo.com ou 00020126360014BR.GOV.BCB.PIX..."
-                rows={4}
-                className="font-mono text-sm"
-              />
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p>
-                  Aceitamos chave simples (email, CPF/CNPJ, telefone, chave aleatória) ou o código "copia e cola" completo do QR Code.
-                </p>
-                {pixDisplayData.generatedFromKey && (
-                  <p className="text-primary font-medium">
-                    ✓ Geramos automaticamente o código "copia e cola" a partir da sua chave para garantir que o QR Code funcione.
-                  </p>
-                )}
-                {formData.pixPayload && !pixDisplayData.generatedFromKey && isEmvPixPayload(formData.pixPayload) && (
-                  <p className="text-primary font-medium">
-                    ✓ Código "copia e cola" detectado. O QR Code será gerado diretamente deste código.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {pixPreviewUrl ? (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-4 rounded-lg border p-4 bg-muted/40">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="flex items-center justify-center bg-white p-4 rounded-lg border-2 border-primary/20 shadow-sm">
-                      <img
-                        src={pixPreviewUrl}
-                        alt="QR Code PIX"
-                        className="w-48 h-48"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Escaneie com o app do seu banco
-                    </p>
-                  </div>
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-center gap-2">
-                      <QrCode className="w-5 h-5 text-primary" />
-                      <p className="font-semibold text-lg">Pré-visualização do QR Code</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Este QR Code será exibido aos atletas na tela de checkout. 
-                      <strong className="text-foreground"> Teste o pagamento com um valor simbólico</strong> para garantir que está tudo correto antes de publicar o campeonato.
-                    </p>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Código "Copia e Cola" PIX:</Label>
-                      <div className="flex gap-2">
-                        <Textarea
-                          value={pixDisplayData.copyPayload}
-                          readOnly
-                          className="font-mono text-xs h-20 resize-none"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleCopyPix}
-                          disabled={copying || !pixDisplayData.copyPayload}
-                          className="shrink-0"
-                        >
-                          {copying ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 mr-2" />
-                              Copiado
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-4 h-4 mr-2" />
-                              Copiar
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <Alert>
-                  <AlertDescription className="text-xs">
-                    <strong>Dica:</strong> Após salvar, você pode testar o QR Code escaneando-o com o app do seu banco. 
-                    Se aparecer um erro, verifique se a chave PIX está correta e se está ativa no seu banco.
-                  </AlertDescription>
-                </Alert>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground p-4 border rounded-lg bg-muted/20">
-                <QrCode className="w-4 h-4" />
-                <span>Nenhum QR Code disponível — informe uma chave PIX acima para gerar a visualização.</span>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button onClick={handleSave} disabled={saving} className="sm:w-auto">
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Salvar Configurações
-              </Button>
-              <Button
-                variant="outline"
-                onClick={loadChampionship}
-                disabled={saving}
-                className="sm:w-auto"
-              >
-                Recarregar dados
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
       </div>
     </div>

@@ -2,111 +2,178 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Forçar formato 24 horas em todos os inputs de hora */
+input[type="time"] {
+  /* Forçar formato 24h - alguns navegadores podem exibir AM/PM dependendo do locale */
+  color-scheme: dark;
+}
+
+/* Ocultar campo AM/PM no Chrome/Safari */
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  display: none !important;
+}
+
+input[type="time"]::-webkit-datetime-edit-hour-field {
+  -webkit-appearance: textfield;
+}
+
+input[type="time"]::-webkit-datetime-edit-minute-field {
+  -webkit-appearance: textfield;
+}
+
+/* Ocultar campo AM/PM no Firefox */
+input[type="time"]::-moz-datetime-edit-ampm-field {
+  display: none !important;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* Custom class for red clock icon */
+.time-input-red-icon::-webkit-calendar-picker-indicator {
+  /* Filter to generate #F32735 (Red) from black */
+  filter: invert(26%) sepia(93%) saturate(7484%) hue-rotate(358deg) brightness(101%) contrast(119%) !important;
+  cursor: pointer;
+}
+
+/* Garantir que o valor seja sempre exibido em formato 24h */
+input[type="time"]::before {
+  content: '';
+}
+
+/* Para Edge */
+input[type="time"]::-ms-clear {
+  display: none;
+}
+
+input[type="time"]::-ms-reveal {
+  display: none;
+}
 
 @layer base {
-  /* Forçar formato 24 horas em inputs de time */
-  input[type="time"] {
-    font-variant-numeric: tabular-nums;
-  }
-  
-  input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(0);
-  }
-
   :root {
-    /* Design System Colors - Figma */
-    --antcamp-red: 355 87% 52%; /* #F32735 */
-    --antcamp-white: 0 0% 98%; /* #FAFAFA */
-    --antcamp-dark-blue: 205 79% 10%; /* #051C2C */
-    --antcamp-light-gray: 0 0% 85%; /* #D9D9D9 */
-    --antcamp-dark-gray: 205 35% 20%; /* #1F3342 */
+    --background: 200 100% 9%;
+    /* #051C2C - Azul marinho */
+    --foreground: 0 0% 98%;
+    /* Texto branco/claro */
 
-    --background: 0 0% 98%;
-    --foreground: 0 0% 10%;
+    --card: 200 100% 11%;
+    /* Cards um pouco mais claro que o fundo, mas ainda escuro */
+    --card-foreground: 0 0% 98%;
+    /* Texto branco nos cards */
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --popover: 200 100% 11%;
+    --popover-foreground: 0 0% 98%;
+    /* #051C2C no lugar de 0 0% 3.9% */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
+    --primary: 359 76% 47%;
+    /* Vermelho da marca - #D71C1D */
+    --primary-foreground: 0 85.7% 97.3%;
 
-    --primary: 355 87% 52%;
-    --primary-foreground: 0 0% 100%;
+    --secondary: 200 100% 18%;
+    --secondary-foreground: 0 0% 98%;
+    /* #051C2C no lugar de 0 0% 9% */
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 10%;
+    --muted: 200 100% 20%;
+    --muted-foreground: 0 0% 70%;
 
-    --muted: 0 0% 95%;
-    --muted-foreground: 0 0% 40%;
+    --accent: 200 100% 18%;
+    --accent-foreground: 0 0% 98%;
+    /* #051C2C no lugar de 0 0% 9% */
 
-    --accent: 355 87% 52%;
-    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --border: 200 100% 25%;
+    --input: 200 100% 20%;
+    --ring: 359 76% 47%;
+    /* Vermelho da marca - #D71C1D */
 
-    --border: 0 0% 90%;
-    --input: 0 0% 95%;
-    --ring: 355 87% 52%;
+    --radius: 0.5rem;
 
-    --radius: 1rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(355 87% 52%), hsl(355 87% 42%));
-    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(0 0% 98%));
-    --shadow-glow: 0 0 40px hsl(355 87% 52% / 0.15);
-    --shadow-card: 0 10px 30px -5px hsl(0 0% 0% / 0.1);
-    
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 355 87% 52%;
+    --gradient-primary: linear-gradient(135deg, hsl(0 87% 52%), hsl(0 75% 40%));
+    --gradient-accent: linear-gradient(135deg, hsl(0 75% 60%), hsl(0 87% 52%));
+    --gradient-dark: linear-gradient(135deg, hsl(240 6% 10%), hsl(240 8% 16%));
+    --shadow-premium: 0 10px 40px -12px hsl(359 76% 47% / 0.4);
+    --shadow-soft: 0 4px 16px -4px hsl(240 10% 3.9% / 0.1);
+
+    --sidebar-background: 200 100% 12%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 359 76% 47%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 96%;
-    --sidebar-accent-foreground: 0 0% 10%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 355 87% 52%;
+    --sidebar-accent: 200 100% 18%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 200 100% 25%;
+    --sidebar-ring: 0 87% 52%;
+
+    /* Legacy aliases for backward compatibility */
+    --shadow-glow: var(--shadow-premium);
+    --shadow-card: var(--shadow-soft);
+    --gradient-card: linear-gradient(135deg, hsl(200 100% 11%), hsl(200 100% 9%));
   }
 
   .dark {
-    /* Dashboard Theme - Figma Design */
-    --background: 205 79% 10%; /* #051C2C - Dark blue background */
-    --foreground: 0 0% 98%; /* #FAFAFA - White text */
+    --background: 200 100% 9%;
+    /* #051C2C no lugar de 0 0% 3.9% */
+    --foreground: 0 0% 98%;
 
-    --card: 205 35% 20%; /* #1F3342 - Dark gray cards */
-    --card-foreground: 0 0% 98%; /* #FAFAFA - White text on cards */
+    --card: 200 100% 11%;
+    /* Cards um pouco mais claro que o fundo, mas ainda escuro */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 205 35% 20%;
+    --popover: 200 100% 9%;
+    /* #051C2C no lugar de 0 0% 3.9% */
     --popover-foreground: 0 0% 98%;
 
-    --primary: 355 87% 52%; /* #F32735 - Red */
-    --primary-foreground: 0 0% 100%;
+    --primary: 359 76% 47%;
+    /* Vermelho da marca - #D71C1D */
+    --primary-foreground: 0 85.7% 97.3%;
 
-    --secondary: 205 35% 25%;
+    --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 205 35% 25%;
-    --muted-foreground: 0 0% 85%; /* #D9D9D9 - Light gray text */
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
 
-    --accent: 355 87% 52%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 85%; /* #D9D9D9 - Light gray borders */
-    --input: 205 35% 25%;
-    --ring: 355 87% 52%;
-    
-    --sidebar-background: 205 79% 10%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 355 87% 52%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 87% 52%;
+    /* Vermelho da marca - mantido */
+
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(0 87% 52%), hsl(0 75% 40%));
+    --gradient-accent: linear-gradient(135deg, hsl(0 75% 60%), hsl(0 87% 52%));
+    --gradient-dark: linear-gradient(135deg, hsl(240 6% 10%), hsl(240 8% 16%));
+    --shadow-premium: 0 10px 40px -12px hsl(0 87% 52% / 0.5);
+    --shadow-soft: 0 4px 16px -4px hsl(0 0% 0% / 0.3);
+
+    --sidebar-background: 240 6% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 0 87% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 205 35% 25%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 0 0% 85%;
-    --sidebar-ring: 355 87% 52%;
+    --sidebar-accent: 240 4% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 4% 18%;
+    --sidebar-ring: 0 87% 52%;
   }
 }
 
@@ -115,50 +182,85 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    @apply bg-background;
+  }
+
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01";
-    font-variant-numeric: tabular-nums;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  /* Melhorias para mobile */
-  @media (max-width: 640px) {
-    input, textarea, select {
-      font-size: 16px !important; /* Evita zoom automático no iOS */
-    }
-    
-    .container {
-      padding-left: 0.75rem;
-      padding-right: 0.75rem;
-    }
+  #root {
+    @apply min-h-screen w-full bg-background;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-bold tracking-tight;
   }
+}
+
+/* Estilos para react-easy-crop */
+.reactEasyCrop_Container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.reactEasyCrop_Image {
+  max-width: unset;
+  max-height: unset;
+}
+
+.reactEasyCrop_CropArea {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.5);
+}
+
+.reactEasyCrop_CropAreaRound {
+  border-radius: 50%;
+}
+
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari and Opera */
 }
 
 @layer utilities {
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-card {
     background: var(--gradient-card);
   }
-  
+
   .shadow-glow {
     box-shadow: var(--shadow-glow);
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .animate-fade-in {
     animation: fade-in 0.5s ease-out;
   }
-  
+
   .animate-slide-up {
     animation: slide-up 0.5s ease-out;
   }
@@ -169,6 +271,7 @@ All colors MUST be HSL.
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -180,6 +283,7 @@ All colors MUST be HSL.
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

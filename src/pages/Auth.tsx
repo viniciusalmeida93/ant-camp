@@ -7,12 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, UserPlus, LogIn } from "lucide-react";
 
 export default function Auth() {
+  const [activeTab, setActiveTab] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Sign Up States
+  const [fullName, setFullName] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [phone, setPhone] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -22,12 +31,15 @@ export default function Auth() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check if user is already logged in and redirect based on role
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate("/dashboard");
+        // Redirection logic...
+        checkRoleAndRedirect(session.user.id);
       }
-    });
+    };
+    checkSession();
 
     // Carregar email salvo do localStorage
     const savedEmail = localStorage.getItem("rememberedEmail");
@@ -36,6 +48,33 @@ export default function Auth() {
       setRememberMe(true);
     }
   }, [navigate]);
+
+  const checkRoleAndRedirect = async (userId: string) => {
+    // Check super_admin
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "super_admin")
+      .maybeSingle();
+
+    if (roles) {
+      navigate("/super-admin");
+      return;
+    }
+
+    // Check organizer
+    const { count } = await supabase
+      .from("championships")
+      .select("id", { count: "exact", head: true })
+      .eq("organizer_id", userId);
+
+    if (count && count > 0) {
+      navigate("/dashboard");
+    } else {
+      navigate("/athlete-dashboard");
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,16 +95,81 @@ export default function Auth() {
         localStorage.removeItem("rememberedEmail");
       }
 
-      // Check if password reset is required
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("password_reset_required")
-        .eq("id", data.user.id)
-        .maybeSingle();
+      await checkRoleAndRedirect(data.user.id);
 
-      navigate("/dashboard");
     } catch (error: any) {
-      toast.error("Email ou senha incorretos");
+      console.error("Erro detalhado do login:", error);
+      const errorMessage = error.message || "Erro ao tentar fazer login";
+
+      if (errorMessage.includes("Invalid login credentials")) {
+        toast.error("Email ou senha incorretos.");
+      } else if (errorMessage.includes("Email not confirmed")) {
+        toast.error("Email não confirmado. Verifique sua caixa de entrada.");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Criar o usuário na Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            cpf: cpf,
+            phone: phone
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // 2. Atualizar o perfil (caso o trigger não pegue tudo ou para garantir)
+        // Tentamos atualizar a tabela profiles.
+        // Se a tabela profiles tiver RLS que permite update no proprio user, isso vai funcionar.
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            cpf: cpf,
+            phone: phone,
+          })
+          .eq('id', data.user.id);
+
+        if (profileError) {
+          console.error("Erro ao atualizar perfil:", profileError);
+          // Não vamos bloquear o cadastro por isso, mas logamos
+        }
+
+        toast.success("Conta criada com sucesso! Verifique seu email.");
+        // Opcional: Já logar direto ou pedir confirmação de email?
+        // Supabase por padrão pede confirmação se configurado.
+      }
+
+    } catch (error: any) {
+      console.error("Erro no cadastro:", error);
+      toast.error(error.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }
@@ -95,17 +199,24 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-2">
-            <img 
-              src="/group_9.webp" 
-              alt="ANT Camp" 
+            <img
+              src="/group_9.webp"
+              alt="ANT Camp"
               className="h-24 sm:h-32 w-auto"
             />
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4 mt-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Criar Conta</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login">
+              <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
@@ -162,7 +273,10 @@ export default function Auth() {
                       Entrando...
                     </>
                   ) : (
-                    "Entrar"
+                    <>
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Entrar
+                    </>
                   )}
                 </Button>
                 <div className="text-center mt-4">
@@ -175,6 +289,96 @@ export default function Auth() {
                   </button>
                 </div>
               </form>
+            </TabsContent>
+
+            <TabsContent value="signup">
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-name">Nome e Sobrenome</Label>
+                  <Input
+                    id="signup-name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-cpf">CPF</Label>
+                    <Input
+                      id="signup-cpf"
+                      value={cpf}
+                      onChange={(e) => setCpf(e.target.value)}
+                      placeholder="000.000.000-00"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-phone">Telefone</Label>
+                    <Input
+                      id="signup-phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(00) 99999-9999"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Senha</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-confirm">Repetir Senha</Label>
+                  <Input
+                    id="signup-confirm"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando conta...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Criar Conta
+                    </>
+                  )}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

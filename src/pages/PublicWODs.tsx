@@ -5,9 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dumbbell, Loader2 } from "lucide-react";
+import { Dumbbell, Loader2, ChevronLeft } from "lucide-react";
+import { Button } from "@/components/ui/button"; // Ensure Button is imported if not already, usually it is.
+import { useNavigate } from "react-router-dom";
+import { PublicHeader } from "@/components/layout/PublicHeader"; // IMPORTED
 
 export default function PublicWODs() {
+  const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const [loading, setLoading] = useState(true);
   const [championship, setChampionship] = useState<any>(null);
@@ -58,7 +62,7 @@ export default function PublicWODs() {
         setLoading(false);
         return;
       }
-      
+
       setChampionship(champ);
 
       // Load categories, WODs
@@ -146,9 +150,12 @@ export default function PublicWODs() {
 
   if (loading) {
     return (
-      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
+        <PublicHeader />
+        <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
         </div>
       </div>
     );
@@ -156,134 +163,144 @@ export default function PublicWODs() {
 
   if (!championship) {
     return (
-      <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-        <div className="text-center py-12">
-          <Card className="max-w-md mx-auto p-6">
-            <p className="text-muted-foreground mb-4">Campeonato não encontrado.</p>
-          </Card>
+      <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
+        <PublicHeader />
+        <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
+          <div className="text-center py-12">
+            <Card className="max-w-md mx-auto p-6">
+              <p className="text-muted-foreground mb-4">Campeonato não encontrado.</p>
+            </Card>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-      <div className="flex items-center justify-between mb-6 animate-fade-in">
-        <div className="flex items-center gap-3">
-          <Dumbbell className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold">{championship.name}</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">WODs</p>
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
+      <PublicHeader />
+      <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/${slug || championship?.slug}`)} className="mb-2 pl-0 hover:bg-transparent hover:text-primary">
+          <ChevronLeft className="w-4 h-4 mr-2" />
+          Voltar
+        </Button>
+        <div className="flex items-center justify-between mb-4 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <Dumbbell className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold">{championship.name}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">WODs</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {wods.length === 0 ? (
-        <Card className="p-6">
-          <CardContent className="text-center py-8">
-            <p className="text-muted-foreground">
-              Nenhum WOD publicado ainda para este campeonato.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          <Card className="p-4 sm:p-6 shadow-card">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm mb-2 block">Categoria</Label>
-                <Select
-                  value={selectedCategory}
-                  onValueChange={(value) => setSelectedCategory(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-sm mb-2 block">WOD</Label>
-                <Select
-                  value={selectedWod}
-                  onValueChange={setSelectedWod}
-                  disabled={!selectedCategory}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um WOD" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wods.map(wod => {
-                      const variation = selectedCategory ? getVariationFor(wod.id, selectedCategory) : null;
-                      const label = variation?.display_name || wod.name;
-                      return (
-                        <SelectItem key={wod.id} value={wod.id}>
-                          {label}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+        {wods.length === 0 ? (
+          <Card className="p-6">
+            <CardContent className="text-center py-8">
+              <p className="text-muted-foreground">
+                Nenhum WOD publicado ainda para este campeonato.
+              </p>
+            </CardContent>
           </Card>
-
-          {activeWod && (
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <h3 className="text-2xl font-semibold">
-                      {activeVariation?.display_name || activeWod.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {categories.find(category => category.id === selectedCategory)?.name}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-xs uppercase tracking-wider w-fit">
-                    {getWodTypeLabel(activeWod.type)}
-                  </Badge>
+        ) : (
+          <div className="space-y-6">
+            <Card className="p-4 sm:p-6 shadow-card">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Categoria</Label>
+                  <Select
+                    value={selectedCategory}
+                    onValueChange={(value) => setSelectedCategory(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(category => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                {(activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes) && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">Time Cap:</span>
-                    <span>
-                      {activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes} min
-                    </span>
-                  </div>
-                )}
-
-                <div className="rounded-lg bg-muted/40 p-4">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                    Estrutura da prova
-                  </Label>
-                  <pre className="mt-2 text-sm whitespace-pre-wrap leading-relaxed font-sans">
-                    {activeVariation?.description || activeWod.description}
-                  </pre>
+                <div>
+                  <Label className="text-sm mb-2 block">WOD</Label>
+                  <Select
+                    value={selectedWod}
+                    onValueChange={setSelectedWod}
+                    disabled={!selectedCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um WOD" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wods.map(wod => {
+                        const variation = selectedCategory ? getVariationFor(wod.id, selectedCategory) : null;
+                        const label = variation?.display_name || wod.name;
+                        return (
+                          <SelectItem key={wod.id} value={wod.id}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                {(activeVariation?.notes || activeWod.notes) && (
-                  <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">
-                      Observações
-                    </Label>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {activeVariation?.notes || activeWod.notes}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
+              </div>
             </Card>
-          )}
-        </div>
-      )}
+
+            {activeWod && (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-semibold">
+                        {activeVariation?.display_name || activeWod.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {categories.find(category => category.id === selectedCategory)?.name}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs uppercase tracking-wider w-fit">
+                      {getWodTypeLabel(activeWod.type)}
+                    </Badge>
+                  </div>
+
+                  {(activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes) && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-medium">Time Cap:</span>
+                      <span>
+                        {activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes} min
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg bg-muted/40 p-4">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+                      Estrutura da prova
+                    </Label>
+                    <pre className="mt-2 text-sm whitespace-pre-wrap leading-relaxed font-sans">
+                      {activeVariation?.description || activeWod.description}
+                    </pre>
+                  </div>
+
+                  {(activeVariation?.notes || activeWod.notes) && (
+                    <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wider">
+                        Observações
+                      </Label>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {activeVariation?.notes || activeWod.notes}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

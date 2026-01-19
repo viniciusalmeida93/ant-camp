@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X } from 'lucide-react';
+import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -12,6 +12,7 @@ const navItems = [
   { path: '/results', label: 'Resultados', icon: Calculator },
   { path: '/heats', label: 'Baterias', icon: Grid },
   { path: '/leaderboard', label: 'Leaderboard', icon: Award },
+  { path: '/payments', label: 'Pagamento', icon: CreditCard },
 ];
 
 export const Sidebar = () => {
@@ -54,7 +55,7 @@ export const Sidebar = () => {
           <div className="p-6 border-b border-[#1F3342]">
             <Link to="/app" className="flex items-center gap-3" onClick={() => setMobileMenuOpen(false)}>
               <img
-                src="/logo-antcamp.svg"
+                src="/logohorizontal.webp"
                 alt="AntCamp"
                 className="h-10 w-auto"
               />
@@ -66,9 +67,9 @@ export const Sidebar = () => {
             <div className="flex flex-col gap-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path || 
+                const isActive = location.pathname === item.path ||
                   (item.path !== '/app' && location.pathname.startsWith(item.path));
-                
+
                 return (
                   <Link
                     key={item.path}
@@ -76,8 +77,8 @@ export const Sidebar = () => {
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-sm transition-all duration-200 text-sm",
-                      isActive 
-                        ? "bg-[#F32735] text-white font-semibold" 
+                      isActive
+                        ? "bg-[#D71C1D] text-white font-semibold"
                         : "hover:bg-[#1F3342] text-[#D9D9D9] hover:text-[#FAFAFA]"
                     )}
                   >

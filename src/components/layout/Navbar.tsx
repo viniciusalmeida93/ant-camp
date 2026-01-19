@@ -24,27 +24,27 @@ export const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/app" className="flex items-center gap-3">
             <img
-              src="/logo-antcamp.svg"
+              src="/logohorizontal.webp"
               alt="AntCamp"
               className="h-10 w-auto"
             />
           </Link>
-          
+
           {/* Desktop Menu */}
           <div className="hidden lg:flex gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || 
+              const isActive = location.pathname === item.path ||
                 (item.path !== '/app' && location.pathname.startsWith(item.path));
-              
+
               return (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={cn(
                     "flex items-center gap-2 px-3 xl:px-4 py-2 rounded-lg transition-all duration-200 text-sm",
-                    isActive 
-                      ? "bg-primary text-primary-foreground font-semibold" 
+                    isActive
+                      ? "bg-primary text-primary-foreground font-semibold"
                       : "hover:bg-secondary text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -75,9 +75,9 @@ export const Navbar = () => {
             <div className="flex flex-col gap-2">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path || 
+                const isActive = location.pathname === item.path ||
                   (item.path !== '/app' && location.pathname.startsWith(item.path));
-                
+
                 return (
                   <Link
                     key={item.path}
@@ -85,8 +85,8 @@ export const Navbar = () => {
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
-                      isActive 
-                        ? "bg-primary text-primary-foreground font-semibold" 
+                      isActive
+                        ? "bg-primary text-primary-foreground font-semibold"
                         : "hover:bg-secondary text-muted-foreground hover:text-foreground"
                     )}
                   >
