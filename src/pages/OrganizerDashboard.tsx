@@ -241,10 +241,6 @@ export default function OrganizerDashboard() {
           slug,
           date,
           location: finalLocation, // using the constructed location
-          city: formData.city,
-          state: formData.state,
-          address: formData.address,
-          registration_deadline: registrationDeadline || null,
           description: description || null,
           organizer_id: session.user.id,
           is_published: false,
@@ -272,7 +268,14 @@ export default function OrganizerDashboard() {
       await loadChampionships();
     } catch (error: any) {
       console.error("Error creating championship:", error);
-      toast.error("Erro ao criar campeonato");
+
+      if (error.message?.includes("Refresh Token") || error.code === "PGRST301") {
+        toast.error("Sua sessão expirou. Por favor, faça login novamente.");
+        await supabase.auth.signOut();
+        navigate("/auth");
+      } else {
+        toast.error("Erro ao criar campeonato. Tente novamente.");
+      }
     } finally {
       setCreating(false);
     }

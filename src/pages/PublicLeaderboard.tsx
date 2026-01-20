@@ -374,7 +374,7 @@ export default function PublicLeaderboard() {
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       <PublicHeader />
       <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/${slug || championship?.slug}`)} className="mb-2 pl-0 hover:bg-transparent hover:text-primary">
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/links/${slug || championship?.slug}`)} className="mb-2 pl-0 hover:bg-transparent hover:text-primary">
           <ChevronLeft className="w-4 h-4 mr-2" />
           Voltar
         </Button>
