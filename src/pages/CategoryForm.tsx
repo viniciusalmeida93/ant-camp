@@ -25,11 +25,19 @@ export default function CategoryForm() {
         format: 'individual',
         gender: 'masculino',
         capacity: '',
-        teamSize: '',
-        genderComposition: '',
+        minAge: '',
+        maxAge: '',
         rules: '',
         price: '',
     });
+
+    // Team Config State
+    const [teamConfig, setTeamConfig] = useState<{ gender: string, minAge: string, maxAge: string }[]>([
+        { gender: 'misto', minAge: '', maxAge: '' },
+        { gender: 'misto', minAge: '', maxAge: '' },
+        { gender: 'misto', minAge: '', maxAge: '' },
+        { gender: 'misto', minAge: '', maxAge: '' },
+    ]);
 
     // Batches State
     const [hasBatches, setHasBatches] = useState(false);
@@ -52,27 +60,40 @@ export default function CategoryForm() {
             if (error) throw error;
             const data = rawData as any;
 
-            if (data) {
-                setFormData({
-                    name: data.name,
-                    format: data.format,
-                    gender: data.gender,
-                    capacity: data.capacity === 999999 ? '' : String(data.capacity),
-                    teamSize: data.team_size ? String(data.team_size) : '',
-                    genderComposition: data.gender_composition || '',
-                    rules: data.rules || '',
-                    price: data.price_cents ? (data.price_cents / 100).toFixed(2).replace('.', ',') : '',
-                });
+            setFormData({
+                name: data.name,
+                format: data.format,
+                gender: data.gender,
+                capacity: data.capacity === 999999 ? '' : String(data.capacity),
+                minAge: data.min_age ? String(data.min_age) : '',
+                maxAge: data.max_age ? String(data.max_age) : '',
+                rules: data.rules || '',
+                price: data.price_cents ? (data.price_cents / 100).toFixed(2).replace('.', ',') : '',
+            });
 
-                setHasBatches(data.has_batches || false);
-                if (data.batches && Array.isArray(data.batches)) {
-                    setBatches(data.batches.map((b: any) => ({
-                        name: b.name,
-                        quantity: b.quantity ? String(b.quantity) : '',
-                        price: b.price_cents ? (b.price_cents / 100).toFixed(2).replace('.', ',') : '',
-                        end_date: b.end_date || ''
-                    })));
-                }
+            if (data.team_config && Array.isArray(data.team_config) && data.team_config.length > 0) {
+                setTeamConfig(data.team_config.map((m: any) => ({
+                    gender: m.gender || 'misto',
+                    minAge: m.min_age ? String(m.min_age) : '',
+                    maxAge: m.max_age ? String(m.max_age) : ''
+                })));
+            } else if (data.format === 'time') {
+                setTeamConfig([
+                    { gender: 'misto', minAge: '', maxAge: '' },
+                    { gender: 'misto', minAge: '', maxAge: '' },
+                    { gender: 'misto', minAge: '', maxAge: '' },
+                    { gender: 'misto', minAge: '', maxAge: '' },
+                ]);
+            }
+
+            setHasBatches(data.has_batches || false);
+            if (data.batches && Array.isArray(data.batches)) {
+                setBatches(data.batches.map((b: any) => ({
+                    name: b.name,
+                    quantity: b.quantity ? String(b.quantity) : '',
+                    price: b.price_cents ? (b.price_cents / 100).toFixed(2).replace('.', ',') : '',
+                    end_date: b.end_date || ''
+                })));
             }
         } catch (error) {
             console.error('Error loading category:', error);
@@ -97,6 +118,23 @@ export default function CategoryForm() {
         const newBatches = [...batches];
         newBatches[index][field] = value;
         setBatches(newBatches);
+    };
+
+    const handleAddTeamMember = () => {
+        setTeamConfig([...teamConfig, { gender: 'misto', minAge: '', maxAge: '' }]);
+    };
+
+    const handleRemoveTeamMember = (index: number) => {
+        const newConfig = [...teamConfig];
+        newConfig.splice(index, 1);
+        setTeamConfig(newConfig);
+    };
+
+    const handleTeamConfigChange = (index: number, field: 'gender' | 'minAge' | 'maxAge', value: string) => {
+        const newConfig = [...teamConfig];
+        // @ts-ignore
+        newConfig[index][field] = value;
+        setTeamConfig(newConfig);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -130,14 +168,39 @@ export default function CategoryForm() {
                 })).filter(b => b.name.trim() !== '');
             }
 
+            // Process team config
+            const processedTeamConfig = formData.format === 'time' ? teamConfig.map(m => ({
+                gender: m.gender,
+                min_age: m.minAge ? parseInt(m.minAge) : null,
+                max_age: m.maxAge ? parseInt(m.maxAge) : null
+            })) : [];
+
+            // Calculate derived fields (backward compatibility)
+            const teamSize = formData.format === 'time' ? processedTeamConfig.length : null;
+            let genderComposition = null;
+            if (formData.format === 'time') {
+                const m = processedTeamConfig.filter(t => t.gender === 'masculino').length;
+                const f = processedTeamConfig.filter(t => t.gender === 'feminino').length;
+                const x = processedTeamConfig.filter(t => t.gender === 'misto').length;
+
+                const parts = [];
+                if (m > 0) parts.push(`${m}M`);
+                if (f > 0) parts.push(`${f}F`);
+                if (x > 0) parts.push(`${x}X`);
+                genderComposition = parts.join('/');
+            }
+
             const categoryData = {
                 championship_id: selectedChampionship.id,
                 name: formData.name,
                 format: formData.format,
                 gender: formData.gender,
                 capacity: capacity,
-                team_size: formData.teamSize ? parseInt(formData.teamSize) : null,
-                gender_composition: formData.genderComposition || null,
+                min_age: formData.minAge ? parseInt(formData.minAge) : null,
+                max_age: formData.maxAge ? parseInt(formData.maxAge) : null,
+                team_size: teamSize,
+                gender_composition: genderComposition,
+                team_config: processedTeamConfig,
                 rules: formData.rules || null,
                 price_cents: price_cents,
                 athletes_per_heat: athletes_per_heat,
@@ -256,44 +319,126 @@ export default function CategoryForm() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="col-span-2 md:col-span-1">
-                            <Label htmlFor="capacity">Capacidade</Label>
-                            <Input
-                                id="capacity"
-                                type="number"
-                                value={formData.capacity}
-                                onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                                placeholder="Deixe vazio para ilimitada"
-                                min="1"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Deixe vazio para capacidade ilimitada
-                            </p>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="col-span-2 md:col-span-1">
+                                <Label htmlFor="capacity">Capacidade</Label>
+                                <Input
+                                    id="capacity"
+                                    type="number"
+                                    value={formData.capacity}
+                                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                                    placeholder="Deixe vazio para ilimitada"
+                                    min="1"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Deixe vazio para capacidade ilimitada
+                                </p>
+                            </div>
+                            <div className="col-span-2 md:col-span-1 grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor="minAge">Idade Mínima</Label>
+                                    <Input
+                                        id="minAge"
+                                        type="number"
+                                        value={formData.minAge}
+                                        onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
+                                        placeholder="Min"
+                                        min="0"
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="maxAge">Idade Máxima</Label>
+                                    <Input
+                                        id="maxAge"
+                                        type="number"
+                                        value={formData.maxAge}
+                                        onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
+                                        placeholder="Max"
+                                        min="0"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="col-span-2 md:col-span-1">
-                            <Label htmlFor="teamSize">Tamanho do Time (se aplicável)</Label>
-                            <Input
-                                id="teamSize"
-                                type="number"
-                                value={formData.teamSize}
-                                onChange={(e) => setFormData({ ...formData, teamSize: e.target.value })}
-                                placeholder="4"
-                                min="1"
-                            />
+                    {formData.format === 'time' && (
+                        <div className="space-y-4 border rounded-lg p-6 bg-muted/20">
+                            <div className="space-y-0.5">
+                                <Label className="text-base">Composição do Time</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Defina os integrantes do time. Deixe as idades vazias para qualquer idade.
+                                </p>
+                            </div>
+
+                            <div className="space-y-4 pt-2">
+                                {teamConfig.map((member, index) => (
+                                    <div key={index} className="grid grid-cols-12 gap-4 items-end animate-fade-in border-b border-border/50 pb-4 last:border-0 last:pb-0">
+                                        <div className="col-span-12 md:col-span-4">
+                                            <Label className="text-xs">Gênero</Label>
+                                            <Select
+                                                value={member.gender}
+                                                onValueChange={(value) => handleTeamConfigChange(index, 'gender', value)}
+                                            >
+                                                <SelectTrigger className="mt-1">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="masculino">Masculino</SelectItem>
+                                                    <SelectItem value="feminino">Feminino</SelectItem>
+                                                    <SelectItem value="misto">Misto/Qualquer</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="col-span-5 md:col-span-3">
+                                            <Label className="text-xs">Idade Min.</Label>
+                                            <Input
+                                                type="number"
+                                                value={member.minAge}
+                                                onChange={(e) => handleTeamConfigChange(index, 'minAge', e.target.value)}
+                                                placeholder="Qualquer"
+                                                className="mt-1"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="col-span-5 md:col-span-3">
+                                            <Label className="text-xs">Idade Max.</Label>
+                                            <Input
+                                                type="number"
+                                                value={member.maxAge}
+                                                onChange={(e) => handleTeamConfigChange(index, 'maxAge', e.target.value)}
+                                                placeholder="Qualquer"
+                                                className="mt-1"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div className="col-span-2 md:col-span-2 flex justify-end">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleRemoveTeamMember(index)}
+                                                className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                                                disabled={teamConfig.length <= 1}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleAddTeamMember}
+                                    className="w-full mt-2 border-dashed"
+                                >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Adicionar Integrante
+                                </Button>
+                            </div>
                         </div>
-                        <div className="col-span-2 md:col-span-1">
-                            <Label htmlFor="genderComposition">Composição de Gênero (misto)</Label>
-                            <Input
-                                id="genderComposition"
-                                value={formData.genderComposition}
-                                onChange={(e) => setFormData({ ...formData, genderComposition: e.target.value })}
-                                placeholder="Ex: 2M/2F"
-                            />
-                        </div>
-                    </div>
+                    )}
 
                     {/* Batches Section */}
                     <div className="space-y-4 border rounded-lg p-6 bg-muted/20">

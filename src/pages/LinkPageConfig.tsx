@@ -25,6 +25,9 @@ import {
 
   ArrowLeft,
   Share2,
+  MapPin,
+  User,
+  Menu,
 } from "lucide-react";
 
 const buttonTypes = [
@@ -49,6 +52,7 @@ export default function LinkPageConfig() {
     banner_alt: "",
     theme_color: "#ED1B24",
   });
+  const [championshipInfo, setChampionshipInfo] = useState<any>(null);
 
   useEffect(() => {
     if (championshipId) {
@@ -123,6 +127,33 @@ export default function LinkPageConfig() {
           }));
         }
       }
+
+      // Fetch Championship Info for Preview
+      const { data: champDetails } = await supabase
+        .from("championships")
+        .select("name, date, location, organizer_id")
+        .eq("id", championshipId)
+        .single();
+
+      if (champDetails) {
+        let organizerName = "Organizador";
+        if (champDetails.organizer_id) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", champDetails.organizer_id)
+            .maybeSingle();
+          if (profile && profile.full_name) organizerName = profile.full_name;
+        }
+
+        setChampionshipInfo({
+          name: champDetails.name,
+          date: champDetails.date,
+          location: champDetails.location,
+          organizer: organizerName
+        });
+      }
+
     } catch (error: any) {
       console.error("Error loading link page:", error);
       toast.error("Erro ao carregar configurações");
@@ -313,323 +344,439 @@ export default function LinkPageConfig() {
           </p>
         </div>
 
-        <div className="space-y-6">
-          {/* Basic Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Informações Básicas</CardTitle>
-              <CardDescription>
-                Configure o título e URL da sua página de links
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* <div>
-                <Label htmlFor="title">Título</Label>
-                  }
-                placeholder="Título da página de links"
-                />
-              </div> */
-              }
-              <div>
-                <Label htmlFor="slug">Slug (URL)</Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    antsports.com.br/links/
-                  </span>
-                  <Input
-                    id="slug"
-                    value={formData.slug}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-                      })
-                    }
-                    placeholder="meu-campeonato"
-                  />
-                </div>
-                {previewUrl && (
-                  <div className="mt-4 space-y-4">
-                    <div className="p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DA BIO:</p>
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
-                          {previewUrl}
-                        </code>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => {
-                            navigator.clipboard.writeText(previewUrl);
-                            toast.success("Link da Bio copiado!");
-                          }}
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          asChild
-                        >
-                          <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Configuration Forms */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Basic Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Informações Básicas</CardTitle>
+                <CardDescription>
+                  Configure o título e URL da sua página de links
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="slug">Slug (URL)</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      antsports.com.br/links/
+                    </span>
+                    <Input
+                      id="slug"
+                      value={formData.slug}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+                        })
+                      }
+                      placeholder="meu-campeonato"
+                    />
+                  </div>
+                  {previewUrl && (
+                    <div className="mt-4 space-y-4">
+                      <div className="p-3 bg-muted rounded-lg border border-border">
+                        <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DA BIO:</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
+                            {previewUrl}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(previewUrl);
+                              toast.success("Link da Bio copiado!");
+                            }}
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            asChild
+                          >
+                            <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-muted rounded-lg border border-border">
+                        <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DE INSCRIÇÃO:</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
+                            {previewUrl.replace('/links/', '/inscricao/')}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(previewUrl.replace('/links/', '/inscricao/'));
+                              toast.success("Link de Inscrição copiado!");
+                            }}
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            asChild
+                          >
+                            <a href={previewUrl.replace('/links/', '/inscricao/')} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </Button>
+                        </div>
                       </div>
                     </div>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="theme_color">Cor do Tema</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="theme_color"
+                      type="color"
+                      value={formData.theme_color}
+                      onChange={(e) =>
+                        setFormData({ ...formData, theme_color: e.target.value })
+                      }
+                      className="w-20 h-10"
+                    />
+                    <Input
+                      value={formData.theme_color}
+                      onChange={(e) =>
+                        setFormData({ ...formData, theme_color: e.target.value })
+                      }
+                      placeholder="#ED1B24"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                    <div className="p-3 bg-muted rounded-lg border border-border">
-                      <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">LINK DE INSCRIÇÃO:</p>
+            {/* Banner */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Banner</CardTitle>
+                <CardDescription>
+                  Adicione uma imagem de banner no topo da página (recomendado: 1200x400px)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {linkPage?.banner_url && (
+                  <div className="rounded-lg overflow-hidden border">
+                    <img
+                      src={linkPage.banner_url}
+                      alt={formData.banner_alt}
+                      className="w-full h-auto"
+                    />
+                  </div>
+                )}
+                <div>
+                  <Label htmlFor="banner">Upload de Banner</Label>
+                  <Input
+                    id="banner"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerUpload}
+                    disabled={uploading}
+                    className="mt-2"
+                  />
+                  {uploading && (
+                    <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando...
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="banner_alt">Texto Alternativo (Alt)</Label>
+                  <Input
+                    id="banner_alt"
+                    value={formData.banner_alt}
+                    onChange={(e) =>
+                      setFormData({ ...formData, banner_alt: e.target.value })
+                    }
+                    placeholder="Descrição da imagem"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Buttons */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Botões</CardTitle>
+                    <CardDescription>
+                      Adicione e organize os botões da sua página
+                    </CardDescription>
+                  </div>
+                  <Button onClick={addButton} size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {buttons.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum botão adicionado. Clique em "Adicionar" para começar.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {buttons.map((button, index) => {
+                      const currentButtonType = button.button_type || "external";
+                      return (
+                        <Card key={button.id} className="border-2">
+                          <CardContent className="p-4">
+                            <div className="flex flex-col sm:flex-row items-start gap-3">
+                              <div className="flex flex-row sm:flex-col gap-1 pt-2">
+                                <button
+                                  onClick={() => moveButton(index, "up")}
+                                  disabled={index === 0}
+                                  className="disabled:opacity-30 p-1"
+                                >
+                                  <GripVertical className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => moveButton(index, "down")}
+                                  disabled={index === buttons.length - 1}
+                                  className="disabled:opacity-30 p-1"
+                                >
+                                  <GripVertical className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <div className="flex-1 space-y-3 w-full">
+                                <div>
+                                  <Label>Rótulo do Botão</Label>
+                                  <Input
+                                    value={button.label || ""}
+                                    onChange={(e) =>
+                                      updateButton(button.id, "label", e.target.value)
+                                    }
+                                    placeholder="Ex: Leaderboard"
+                                  />
+                                </div>
+                                <div>
+                                  <Label>Tipo de Botão</Label>
+                                  <Select
+                                    value={currentButtonType}
+                                    onValueChange={(value) => {
+                                      setButtons(prevButtons =>
+                                        prevButtons.map((b) =>
+                                          b.id === button.id
+                                            ? { ...b, button_type: value, icon: value }
+                                            : b
+                                        )
+                                      );
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Selecione o tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {buttonTypes.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                          {type.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Tipo atual: {currentButtonType}
+                                  </p>
+                                </div>
+                                {currentButtonType === "external" && (
+                                  <div>
+                                    <Label>URL</Label>
+                                    <Input
+                                      value={button.url || ""}
+                                      onChange={(e) =>
+                                        updateButton(button.id, "url", e.target.value)
+                                      }
+                                      placeholder="https://exemplo.com"
+                                    />
+                                  </div>
+                                )}
+                                {currentButtonType !== "external" && currentButtonType !== "wods" && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Este botão será vinculado automaticamente ao seu campeonato.
+                                  </div>
+                                )}
+                                {currentButtonType === "wods" && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Este botão abre a página pública de WODs do campeonato.
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeButton(button.id)}
+                                className="text-destructive hover:text-destructive shrink-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Save Button */}
+            <div className="flex gap-4">
+              <Button onClick={handleSave} disabled={saving} className="flex-1" size="lg">
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar Configurações
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Column: Mobile Preview */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-6">
+              <h3 className="text-lg font-bold mb-4">Prévia</h3>
+              <div className="relative mx-auto border-gray-800 dark:border-gray-800 bg-gray-900 border-[14px] rounded-[2.5rem] h-[600px] w-[300px] shadow-xl">
+                <div className="w-[148px] h-[18px] bg-gray-800 top-0 rounded-b-[1rem] left-1/2 -translate-x-1/2 absolute z-10"></div>
+                <div className="h-[14px] w-[3px] bg-gray-800 absolute -start-[17px] top-[72px] rounded-s-lg"></div>
+                <div className="h-[26px] w-[3px] bg-gray-800 absolute -start-[17px] top-[124px] rounded-s-lg"></div>
+                <div className="h-[26px] w-[3px] bg-gray-800 absolute -start-[17px] top-[164px] rounded-s-lg"></div>
+                <div className="h-[40px] w-[3px] bg-gray-800 absolute -end-[17px] top-[110px] rounded-e-lg"></div>
+                <div className="rounded-[2rem] overflow-hidden w-full h-full bg-background relative flex flex-col font-sans">
+                  {/* HEADER - MATCHING PublicHeader.tsx */}
+                  <div className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0f172a] text-white shrink-0">
+                    <div className="px-4 h-16 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono bg-background px-2 py-1.5 rounded flex-1 break-all border border-input">
-                          {previewUrl.replace('/links/', '/inscricao/')}
-                        </code>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => {
-                            navigator.clipboard.writeText(previewUrl.replace('/links/', '/inscricao/'));
-                            toast.success("Link de Inscrição copiado!");
+                        <img
+                          src="/logohorizontal.webp"
+                          alt="AntCamp"
+                          className="h-6 w-auto"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement!.innerText = 'AntCamp';
+                            e.currentTarget.parentElement!.className = "text-xl font-bold text-primary tracking-tighter"
                           }}
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          asChild
-                        >
-                          <a href={previewUrl.replace('/links/', '/inscricao/')} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </Button>
+                        />
+                      </div>
+                      <button className="text-white">
+                        <Menu className="w-6 h-6" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* MAIN CONTENT AREA - MATCHING LinkPage.tsx */}
+                  <div className="flex-1 overflow-y-auto bg-background">
+                    <div className="w-full h-full px-4 py-8 flex flex-col gap-6">
+
+                      {/* 1. Banner/Logo Area */}
+                      <div className="rounded-xl overflow-hidden aspect-video relative flex items-center justify-center bg-muted shrink-0">
+                        {linkPage?.banner_url ? (
+                          <img
+                            src={linkPage.banner_url}
+                            alt="Banner Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-center p-2">
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px] uppercase">
+                              Sem Banner
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Info Card - MATCHING LinkPage.tsx */}
+                      {championshipInfo && (
+                        <Card className="border-0 bg-card shadow-lg shrink-0">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center justify-between border-b border-border pb-2">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Calendar className="w-3 h-3" />
+                                <span className="text-[10px] font-medium">Data</span>
+                              </div>
+                              <span className="font-medium text-foreground text-[10px]">
+                                {championshipInfo.date ? new Date(championshipInfo.date).toLocaleDateString('pt-BR') : 'Data não definida'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between border-b border-border pb-2">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <MapPin className="w-3 h-3" />
+                                <span className="text-[10px] font-medium">Local</span>
+                              </div>
+                              <span className="font-medium text-foreground text-right max-w-[60%] truncate uppercase text-[10px]">
+                                {championshipInfo.location || 'Local não definido'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <User className="w-3 h-3" />
+                                <span className="text-[10px] font-medium">Organizador</span>
+                              </div>
+                              <span className="font-medium text-foreground text-[10px]">
+                                {championshipInfo.organizer || 'Organizador'}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* 3. Buttons - MATCHING LinkPage.tsx */}
+                      <div className="space-y-4 shrink-0">
+                        {buttons.length === 0 ? (
+                          <p className="text-xs text-center text-muted-foreground mt-4">Adicione botões para visualizar</p>
+                        ) : (
+                          buttons.map((btn, idx) => (
+                            <div
+                              key={idx}
+                              className="w-full h-12 flex items-center justify-between px-4 text-sm font-semibold border-none shadow-md rounded cursor-default transition-opacity hover:opacity-90"
+                              style={{
+                                backgroundColor: formData.theme_color || undefined,
+                                color: formData.theme_color ? '#ffffff' : undefined,
+                                boxShadow: formData.theme_color ? `0 4px 6px -1px ${formData.theme_color}40` : undefined
+                              }}
+                            >
+                              <span className="truncate w-full text-center">{btn.label || "Sem rótulo"}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Footer Mockup */}
+                      <div className="pb-8 pt-2 text-center shrink-0">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest opacity-50">Desenvolvido por AntCamp</p>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="theme_color">Cor do Tema</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="theme_color"
-                    type="color"
-                    value={formData.theme_color}
-                    onChange={(e) =>
-                      setFormData({ ...formData, theme_color: e.target.value })
-                    }
-                    className="w-20 h-10"
-                  />
-                  <Input
-                    value={formData.theme_color}
-                    onChange={(e) =>
-                      setFormData({ ...formData, theme_color: e.target.value })
-                    }
-                    placeholder="#ED1B24"
-                    className="flex-1"
-                  />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Banner */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Banner</CardTitle>
-              <CardDescription>
-                Adicione uma imagem de banner no topo da página (recomendado: 1200x400px)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {linkPage?.banner_url && (
-                <div className="rounded-lg overflow-hidden border">
-                  <img
-                    src={linkPage.banner_url}
-                    alt={formData.banner_alt}
-                    className="w-full h-auto"
-                  />
-                </div>
-              )}
-              <div>
-                <Label htmlFor="banner">Upload de Banner</Label>
-                <Input
-                  id="banner"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBannerUpload}
-                  disabled={uploading}
-                  className="mt-2"
-                />
-                {uploading && (
-                  <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Enviando...
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="banner_alt">Texto Alternativo (Alt)</Label>
-                <Input
-                  id="banner_alt"
-                  value={formData.banner_alt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, banner_alt: e.target.value })
-                  }
-                  placeholder="Descrição da imagem"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Buttons */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Botões</CardTitle>
-                  <CardDescription>
-                    Adicione e organize os botões da sua página
-                  </CardDescription>
-                </div>
-                <Button onClick={addButton} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {buttons.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhum botão adicionado. Clique em "Adicionar" para começar.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {buttons.map((button, index) => {
-                    const currentButtonType = button.button_type || "external";
-                    return (
-                      <Card key={button.id} className="border-2">
-                        <CardContent className="p-4">
-                          <div className="flex flex-col sm:flex-row items-start gap-3">
-                            <div className="flex flex-row sm:flex-col gap-1 pt-2">
-                              <button
-                                onClick={() => moveButton(index, "up")}
-                                disabled={index === 0}
-                                className="disabled:opacity-30 p-1"
-                              >
-                                <GripVertical className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => moveButton(index, "down")}
-                                disabled={index === buttons.length - 1}
-                                className="disabled:opacity-30 p-1"
-                              >
-                                <GripVertical className="w-4 h-4" />
-                              </button>
-                            </div>
-                            <div className="flex-1 space-y-3 w-full">
-                              <div>
-                                <Label>Rótulo do Botão</Label>
-                                <Input
-                                  value={button.label || ""}
-                                  onChange={(e) =>
-                                    updateButton(button.id, "label", e.target.value)
-                                  }
-                                  placeholder="Ex: Leaderboard"
-                                />
-                              </div>
-                              <div>
-                                <Label>Tipo de Botão</Label>
-                                <Select
-                                  value={currentButtonType}
-                                  onValueChange={(value) => {
-                                    console.log("Select onValueChange called:", value, "for button:", button.id);
-                                    console.log("Button before update:", button);
-                                    // Atualizar ambos os campos em uma única operação
-                                    setButtons(prevButtons =>
-                                      prevButtons.map((b) =>
-                                        b.id === button.id
-                                          ? { ...b, button_type: value, icon: value }
-                                          : b
-                                      )
-                                    );
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Selecione o tipo" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {buttonTypes.map((type) => (
-                                      <SelectItem key={type.value} value={type.value}>
-                                        {type.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Tipo atual: {currentButtonType}
-                                </p>
-                              </div>
-                              {currentButtonType === "external" && (
-                                <div>
-                                  <Label>URL</Label>
-                                  <Input
-                                    value={button.url || ""}
-                                    onChange={(e) =>
-                                      updateButton(button.id, "url", e.target.value)
-                                    }
-                                    placeholder="https://exemplo.com"
-                                  />
-                                </div>
-                              )}
-                              {currentButtonType !== "external" && currentButtonType !== "wods" && (
-                                <div className="text-sm text-muted-foreground">
-                                  Este botão será vinculado automaticamente ao seu campeonato.
-                                </div>
-                              )}
-                              {currentButtonType === "wods" && (
-                                <div className="text-sm text-muted-foreground">
-                                  Este botão abre a página pública de WODs do campeonato.
-                                </div>
-                              )}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeButton(button.id)}
-                              className="text-destructive hover:text-destructive shrink-0"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Save Button */}
-          <div className="flex gap-4">
-            <Button onClick={handleSave} disabled={saving} className="flex-1">
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar Configurações
-                </>
-              )}
-            </Button>
+              <p className="text-xs text-center text-muted-foreground mt-4">
+                Prévia aproximada do layout móvel
+              </p>
+            </div>
           </div>
         </div>
       </div>

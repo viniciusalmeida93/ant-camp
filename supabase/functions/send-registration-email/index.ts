@@ -254,7 +254,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "onboarding@resend.dev", // Domínio de teste - SEMPRE funciona
+        from: Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev",
         to: recipients, // Envia para todos os membros do time
         subject: `✅ Inscrição Confirmada - ${championship.name}`,
         html: emailHtml,

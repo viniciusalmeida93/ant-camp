@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import Auth from "./pages/Auth";
+import Logout from "./pages/Logout";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import PublicRegistration from "./pages/PublicRegistration";
 import Checkout from "./pages/Checkout";
@@ -41,6 +42,7 @@ import SuperAdminSettings from "./pages/SuperAdminSettings";
 import AssignRoles from "./pages/AssignRoles";
 import AthleteDashboard from "./pages/AthleteDashboard";
 import PaymentConfig from "./pages/PaymentConfig";
+import Coupons from "./pages/Coupons";
 import { ChampionshipProvider } from "./contexts/ChampionshipContext";
 
 const queryClient = new QueryClient();
@@ -56,6 +58,7 @@ const App = () => (
             {/* Public routes without navbar */}
             <Route path="/" element={<Auth />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/logout" element={<Logout />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/links/:slug" element={<LinkPage />} />
@@ -104,6 +107,7 @@ const App = () => (
                     <Route path="/heats" element={<HeatsNew />} />
                     <Route path="/leaderboard" element={<Leaderboard />} />
                     <Route path="/payments" element={<PaymentConfig />} />
+                    <Route path="/coupons" element={<Coupons />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>

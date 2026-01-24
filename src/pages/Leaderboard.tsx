@@ -333,7 +333,8 @@ export default function Leaderboard() {
     console.log('📊 Total de participantes no leaderboard:', entries.length);
 
     // Ordenar usando a função de comparação completa com desempate
-    entries.sort((a, b) => compareLeaderboardEntries(a, b));
+    const sortDirection = presetType === 'simple-order' ? 'asc' : 'desc';
+    entries.sort((a, b) => compareLeaderboardEntries(a, b, sortDirection));
 
     // Atribuir posições finais (sem empates - cada um tem posição única)
     // A função de comparação garante que não haverá empates absolutos
@@ -352,11 +353,13 @@ export default function Leaderboard() {
     id?: string;
     presetType: string;
     pointsTableText: string;
+    rankingMethod: string;
     dnfPoints: number;
     dnsPoints: number;
   }>({
     presetType: 'crossfit-games',
     pointsTableText: '',
+    rankingMethod: 'simple',
     dnfPoints: 0,
     dnsPoints: 0,
   });
@@ -456,6 +459,7 @@ export default function Leaderboard() {
         category_id: selectedCategory,
         preset_type: editingConfig.presetType,
         points_table: pointsTable,
+        ranking_method: editingConfig.rankingMethod,
         dnf_points: editingConfig.dnfPoints,
         dns_points: editingConfig.dnsPoints,
         updated_at: new Date().toISOString(),
@@ -620,7 +624,6 @@ export default function Leaderboard() {
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div className="flex items-center gap-3">
-          <Trophy className="w-8 h-8 text-primary" />
           <div>
             <h1 className="text-4xl font-bold">Leaderboard</h1>
             <p className="text-muted-foreground">Classificação ao vivo do campeonato</p>
@@ -662,6 +665,26 @@ export default function Leaderboard() {
             </div>
           ) : (
             <div className="space-y-4 py-4">
+
+              <div className="space-y-2">
+                <Label>Critério de Pontuação (Empates)</Label>
+                <Select
+                  value={editingConfig.rankingMethod}
+                  onValueChange={(val) => setEditingConfig(prev => ({ ...prev, rankingMethod: val }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="simple">Critério Simples (1º, 1º, 2º...)</SelectItem>
+                    <SelectItem value="standard">Critério da Crossfit (1º, 1º, 3º...)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Simples: não pula posições. Crossfit: pula posições após empates.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label>Preset de Pontuação</Label>
                 <Select
@@ -672,7 +695,7 @@ export default function Leaderboard() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="crossfit-games">CrossFit Games (Padrão)</SelectItem>
+                    <SelectItem value="crossfit-games">Crossfit (Padrão)</SelectItem>
                     <SelectItem value="simple-order">Ordem Simples (1º=1pt, 2º=2pts...)</SelectItem>
                     <SelectItem value="custom">Personalizado</SelectItem>
                   </SelectContent>

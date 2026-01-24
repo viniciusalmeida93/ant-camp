@@ -1,18 +1,19 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard } from 'lucide-react';
+import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
 const navItems = [
   { path: '/app', label: 'Dashboard', icon: Trophy },
-  { path: '/categories', label: 'Categorias', icon: Users },
-  { path: '/wods', label: 'WODs', icon: Dumbbell },
-  { path: '/registrations', label: 'Inscrições', icon: ClipboardList },
   { path: '/scoring', label: 'Pontuação', icon: Settings },
-  { path: '/results', label: 'Resultados', icon: Calculator },
+  { path: '/categories', label: 'Categorias', icon: Users },
+  { path: '/wods', label: 'Eventos', icon: Dumbbell },
+  { path: '/registrations', label: 'Inscrições', icon: ClipboardList },
   { path: '/heats', label: 'Baterias', icon: Grid },
+  { path: '/results', label: 'Resultados', icon: Calculator },
   { path: '/leaderboard', label: 'Leaderboard', icon: Award },
   { path: '/payments', label: 'Pagamento', icon: CreditCard },
+  { path: '/coupons', label: 'Cupons', icon: Ticket },
 ];
 
 export const Sidebar = () => {

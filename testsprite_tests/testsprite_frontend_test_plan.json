@@ -1,0 +1,463 @@
+[
+  {
+    "id": "TC001",
+    "title": "Create Championship with Valid Data",
+    "description": "Verify that an organizer can create a championship with valid name, dates, categories, and WODs successfully.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as organizer."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to championship creation page."
+      },
+      {
+        "type": "action",
+        "description": "Fill in championship name, start and end dates, and add multiple categories and WODs."
+      },
+      {
+        "type": "action",
+        "description": "Submit championship creation form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify championship is created successfully and visible in organizer dashboard."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Prevent Championship Creation with Invalid Dates",
+    "description": "Validate that the system prevents championship creation when start date is after end date.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as organizer."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to championship creation page."
+      },
+      {
+        "type": "action",
+        "description": "Input championship start date later than the end date."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit the form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that an error message prevents submission and highlights invalid dates."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Public Multi-step Registration Flow Success",
+    "description": "Verify public user can complete multi-step registration flow with valid data and coupon application.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Access the public registration page via a championship's unique link."
+      },
+      {
+        "type": "action",
+        "description": "If not authenticated, create a new user account or log in."
+      },
+      {
+        "type": "action",
+        "description": "Select a category for registration."
+      },
+      {
+        "type": "action",
+        "description": "Fill in required athlete and team data."
+      },
+      {
+        "type": "action",
+        "description": "Apply a valid coupon code."
+      },
+      {
+        "type": "action",
+        "description": "Proceed to checkout and select a payment method (PIX, credit card, boleto)."
+      },
+      {
+        "type": "action",
+        "description": "Complete payment process."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify registration is confirmed, coupon is applied correctly, and payment is authorized."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Reject Registration when Category is Full",
+    "description": "Ensure registration cannot proceed if the selected category has no available slots.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to register for a category that has reached maximum capacity."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system shows an error preventing registration due to lack of availability."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Validate Unique CPF Per Championship",
+    "description": "Verify system disallows multiple registrations with the same CPF within the same championship.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Register an athlete with a valid CPF in a championship."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to register another athlete with the same CPF for the same championship."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system rejects the second registration citing duplicate CPF."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Apply Coupon Validation Rules",
+    "description": "Verify coupons are only applied if within validity period, usage limits, and championship association.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to apply an expired coupon during registration."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify coupon is rejected for expiration."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to apply a coupon that has reached its usage limit."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify coupon is rejected due to usage limit."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to apply a valid coupon not associated with the current championship."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify coupon is rejected due to championship association."
+      },
+      {
+        "type": "action",
+        "description": "Apply a valid coupon that meets all criteria."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify coupon discount is correctly applied during checkout."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Asaas Payment Authorization via Webhook",
+    "description": "Verify payment is confirmed only after receiving authorization webhook from Asaas for all payment methods.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Complete a registration payment using PIX."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm payment is marked successful only after webhook confirmation."
+      },
+      {
+        "type": "action",
+        "description": "Complete a registration payment using credit card."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm payment success status only upon webhook confirmation."
+      },
+      {
+        "type": "action",
+        "description": "Complete a registration payment using boleto."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify payment is finalized after webhook notification."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Organizer Dashboard - Approve and Reject Registrations",
+    "description": "Verify that organizers can view pending registrations and approve or reject them with appropriate updates.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as organizer and navigate to dashboard."
+      },
+      {
+        "type": "action",
+        "description": "Locate pending registration."
+      },
+      {
+        "type": "action",
+        "description": "Approve a registration and verify status updates."
+      },
+      {
+        "type": "action",
+        "description": "Reject another registration and verify status updates."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirmed registrations are marked approved, rejected registrations are marked rejected and not counted."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Automatic and Manual Generation of Athlete Batches (Baterias)",
+    "description": "Verify automatic batch generation distributes athletes based on categories and manual editing is possible.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Generate batches automatically for a championship."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify athletes are assigned to batches respecting category constraints."
+      },
+      {
+        "type": "action",
+        "description": "Edit batches manually by the organizer."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm manual changes are saved and visible on the public results and TV mode."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Publish Results and Update Leaderboard in Real Time",
+    "description": "Verify that organizers can publish results for multiple WOD types, and leaderboard updates live publicly.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as organizer and access results publication page."
+      },
+      {
+        "type": "action",
+        "description": "Enter results for different WOD types including time-based and scored WODs."
+      },
+      {
+        "type": "action",
+        "description": "Publish the results."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify leaderboard updates immediately on public facing pages."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Role-based Access Control Enforcement",
+    "description": "Validate that athletes, organizers, and super admins have access restricted to their permitted features only.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as athlete and attempt to access organizer dashboard and admin settings."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access is denied to unauthorized areas."
+      },
+      {
+        "type": "action",
+        "description": "Log in as organizer and try to access super admin settings."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access is denied."
+      },
+      {
+        "type": "action",
+        "description": "Log in as super admin and access all areas including fee and tax configuration."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify full access to all functionalities."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Security Validation: Server-side Validations and RLS",
+    "description": "Check that server-side validation and Row Level Security prevent unauthorized data modifications and exposures.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to modify registration data or championship settings with insufficient privileges via API or UI."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify modification is rejected by server validation."
+      },
+      {
+        "type": "action",
+        "description": "Query database for data not owned by the user role."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that data access is limited by RLS policies."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Performance Under Load: 1000+ Registrations Simultaneous",
+    "description": "Verify application performance and response time remain within acceptable limits during 1000+ concurrent registration attempts.",
+    "category": "performance",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate 1000+ simultaneous registration requests with valid data."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure initial load time remains below 3 seconds and no data loss or failure occurs."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Age Verification for Category Eligibility",
+    "description": "Confirm that system validates athlete age against category restrictions during registration.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to register an athlete in a category with minimum age requirement not met."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify registration is rejected with appropriate error message."
+      },
+      {
+        "type": "action",
+        "description": "Register an athlete meeting age requirements."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify registration is accepted."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Organizer Dashboard: Financial Overview and Statistics Accuracy",
+    "description": "Verify that financial data and registration statistics on dashboard are accurate and updated after payments and registration actions.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as organizer and navigate to dashboard."
+      },
+      {
+        "type": "action",
+        "description": "Validate financial metrics reflect all completed payments accurately."
+      },
+      {
+        "type": "action",
+        "description": "Confirm registration counts and category statistics match actual data."
+      },
+      {
+        "type": "assertion",
+        "description": "Dashboard data matches back-end records in real-time."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Leaderboard Real-time Update on Results Editing",
+    "description": "Verify that any edits to published results dynamically update the leaderboard in real-time.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Publish initial results."
+      },
+      {
+        "type": "assertion",
+        "description": "Leaderboard updates with initial results."
+      },
+      {
+        "type": "action",
+        "description": "Edit a published result entry."
+      },
+      {
+        "type": "assertion",
+        "description": "Leaderboard is updated immediately reflecting the changes."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Public Links Page: Banner and Button Configuration",
+    "description": "Verify that organizers can customize social media link pages with banners and configurable buttons correctly reflected to viewers.",
+    "category": "functional",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Organizer customizes banner and buttons in configuration page."
+      },
+      {
+        "type": "action",
+        "description": "Save configuration."
+      },
+      {
+        "type": "assertion",
+        "description": "Public link page shows updated banner and buttons as configured."
+      }
+    ]
+  }
+]

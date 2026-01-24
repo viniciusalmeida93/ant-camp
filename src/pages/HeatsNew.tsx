@@ -2981,7 +2981,6 @@ export default function HeatsNew() {
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="mb-6 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <Users className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-bold">Baterias</h1>
         </div>
         <p className="text-muted-foreground">Organize as baterias e gerencie os horários</p>
@@ -3092,33 +3091,30 @@ export default function HeatsNew() {
                         placeholder="Quantidade de raias por bateria"
                       />
                     </div>
-                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="md:col-span-3 flex flex-row gap-2">
                       <Button
                         onClick={handleCreateInitialHeats}
-                        className="w-full"
+                        className="flex-1"
                         disabled={generating}
                         variant="default"
                       >
-                        <Plus className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                        {generating ? 'Criando...' : 'Gerar Baterias'}
-                      </Button>
-                      <Button
-                        onClick={handleUpdateHeats}
-                        className="w-full"
-                        disabled={generating}
-                        variant="secondary"
-                      >
-                        <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                        {generating ? 'Atualizando...' : 'Atualizar Baterias'}
+                        {generating ? 'Criando...' : 'Gerar Baterias Geral'}
                       </Button>
                       <Button
                         onClick={handleGenerateByCategoryAndWod}
-                        className="w-full"
+                        className="flex-1"
                         disabled={generating || !selectedCategory || !selectedWOD}
                         variant="outline"
                       >
-                        <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-                        {generating ? 'Gerando...' : 'Gerar por Categoria + WOD'}
+                        {generating ? 'Gerando...' : 'Gerar Baterias'}
+                      </Button>
+                      <Button
+                        onClick={handleUpdateHeats}
+                        className="flex-1"
+                        disabled={generating}
+                        variant="secondary"
+                      >
+                        {generating ? 'Atualizando...' : 'Atualizar Baterias'}
                       </Button>
                     </div>
                   </div>
@@ -3179,7 +3175,6 @@ export default function HeatsNew() {
                         size="sm"
                         disabled={generating || filteredHeats.length === 0}
                       >
-                        <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
                         Intercalar
                       </Button>
 

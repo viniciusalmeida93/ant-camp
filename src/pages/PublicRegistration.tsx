@@ -154,6 +154,9 @@ export default function PublicRegistration() {
       setChampionship(champ);
 
       // Fetch Platform Fee Config
+      let finalFeeConfig = { type: 'fixed', value: 900 }; // Default base fallback
+
+      // 1. Fetch Global Setting (Main Source of Truth)
       const { data: feeData } = await supabase
         .from('platform_settings')
         .select('value')
@@ -162,12 +165,20 @@ export default function PublicRegistration() {
 
       if (feeData?.value) {
         try {
-          const parsed = JSON.parse(feeData.value);
-          setPlatformFeeConfig(parsed);
+          finalFeeConfig = JSON.parse(feeData.value);
+          console.log("DEBUG: Usando taxa global da plataforma:", finalFeeConfig);
         } catch (e) {
-          console.error("Error parsing fee config", e);
+          console.error("Error parsing global fee config", e);
         }
       }
+
+      // 2. Check Championship Override (Only if specifically configured for this champ)
+      if (champ.platform_fee_configuration && typeof champ.platform_fee_configuration === 'object' && Object.keys(champ.platform_fee_configuration).length > 0) {
+        console.log("DEBUG: Usando override de taxa do campeonato:", champ.platform_fee_configuration);
+        finalFeeConfig = champ.platform_fee_configuration;
+      }
+
+      setPlatformFeeConfig(finalFeeConfig as any);
 
       if (champ.organizer_id) {
         const { data: profile } = await supabase
@@ -326,6 +337,7 @@ export default function PublicRegistration() {
   const [fullName, setFullName] = useState("");
   const [cpf, setCpf] = useState("");
   const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const loadUserProfile = async (userId: string) => {
@@ -362,28 +374,75 @@ export default function PublicRegistration() {
     }
   };
 
+  const calculateAge = (birthDateString: string) => {
+    if (!birthDateString) return 0;
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const checkAgeEligibility = (memberAge: number, category: any) => {
+    // Logic: 
+    // If min_age exists, age must be >= min_age
+    // If max_age exists, age must be <= max_age
+    // If both exist, must be within range
+    // If neither, always allowed
+
+    if (category.min_age && memberAge < category.min_age) return false;
+    if (category.max_age && memberAge > category.max_age) return false;
+    return true;
+  };
+
   const handleRegistrationStart = async () => {
     if (!selectedCategory) { toast.error("Selecione uma categoria para se inscrever."); return; }
-
-    setIsFormOpen(true);
-
-    // Compute team size first to initialize array
-    const teamSize = computeTeamSize(selectedCategory);
-    // Initialize with empty
-    let initialMembers = Array(teamSize).fill(null).map(() => ({ name: "", email: "", whatsapp: "", shirtSize: "M", cpf: "", birthDate: "", box: "" }));
-
-    // Reset/Set members state initially
-    setMembers(initialMembers);
 
     // Check session to determine start step
     const { data: { session } } = await supabase.auth.getSession();
 
+    // Initialize with empty
+    const teamSize = computeTeamSize(selectedCategory);
+    let initialMembers = Array(teamSize).fill(null).map(() => ({ name: "", email: "", whatsapp: "", shirtSize: "M", cpf: "", birthDate: "", box: "" }));
+    setMembers(initialMembers);
+
     if (session) {
+      // Validate Age if profile loaded
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (profile && profile.birth_date) {
+        if (selectedCategory.format === 'individual') {
+          const age = calculateAge(profile.birth_date);
+          if (!checkAgeEligibility(age, selectedCategory)) {
+            toast.error(`Sua idade (${age} anos) não é compatível com esta categoria (${selectedCategory.min_age ? 'Mín: ' + selectedCategory.min_age : ''}${selectedCategory.max_age ? ' Máx: ' + selectedCategory.max_age : ''}).`);
+            return;
+          }
+        }
+        // Load profile into form
+        initialMembers[0] = {
+          ...initialMembers[0],
+          name: profile.full_name || "",
+          email: session.user.email || "",
+          whatsapp: profile.phone || "",
+          cpf: profile.cpf || "",
+          birthDate: profile.birth_date || "",
+          box: profile.box || ""
+        };
+        setMembers(initialMembers);
+      }
+
       setCurrentStep(2); // Skip auth
-      // Load profile data into the reset form
-      await loadUserProfile(session.user.id);
+      setIsFormOpen(true);
     } else {
       setCurrentStep(1); // Start with auth
+      setIsFormOpen(true);
     }
   };
 
@@ -396,6 +455,27 @@ export default function PublicRegistration() {
       toast.success("Login realizado com sucesso!");
 
       if (data.user) {
+        // Age check on login
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+        if (profile && profile.birth_date && selectedCategory?.format === 'individual') {
+          const age = calculateAge(profile.birth_date);
+          if (!checkAgeEligibility(age, selectedCategory)) {
+            toast.error(`Sua idade (${age} anos) não é compatível com esta categoria.`);
+            // Don't block login, but maybe block proceeding? 
+            // For now, let's just warn and let them proceed to see the error in form if they try to save.
+            // Actually, better to block the STEP transition if invalid.
+            // But handleLogin is inside the form wizard.
+            // Let's check here.
+            setAuthLoading(false);
+            return; // Stop here if invalid? Or allow them to change category?
+            // If we stop, they are logged in but stuck on step 1.
+            // Let's allow step 2 but they will see their data populated and hopefully realize.
+            // Actually user asked to system "saber por ai", so blocking is better.
+            // But they might want to register a Team where they are the captain but not the athlete? 
+            // "Nome do Time/Pessoa" implies athlete.
+            // If individual, the user IS the athlete.
+          }
+        }
         await loadUserProfile(data.user.id);
       }
 
@@ -411,13 +491,23 @@ export default function PublicRegistration() {
     e.preventDefault();
     if (password !== confirmPassword) { toast.error("As senhas não coincidem"); return; }
     if (password.length < 6) { toast.error("Senha muito curta (mínimo 6 caracteres)"); return; }
+    if (!birthDate) { toast.error("Data de nascimento obrigatória"); return; }
+
+    // Age validation for signup before creating account?
+    if (selectedCategory?.format === 'individual') {
+      const age = calculateAge(birthDate);
+      if (!checkAgeEligibility(age, selectedCategory)) {
+        toast.error(`Sua idade (${age} anos) não é compatível com esta categoria.`);
+        return;
+      }
+    }
 
     setAuthLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName, cpf, phone } }
+        options: { data: { full_name: fullName, cpf, phone, birth_date: birthDate } }
       });
       if (error) throw error;
 
@@ -434,7 +524,7 @@ export default function PublicRegistration() {
 
         const profileExists = await waitForProfile(data.user.id);
         if (profileExists) {
-          await supabase.from('profiles').update({ full_name: fullName, cpf, phone }).eq('id', data.user.id);
+          await supabase.from('profiles').update({ full_name: fullName, cpf, phone, birth_date: birthDate }).eq('id', data.user.id);
           // Load data into form after updating profile
           await loadUserProfile(data.user.id);
         } else {
@@ -539,33 +629,16 @@ export default function PublicRegistration() {
     return (
       <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
         <PublicHeader /> {/* Header Added */}
-        {/* Header with Back Button */}
-        <div className="bg-background border-b border-border py-4 sticky top-0 z-10 w-full">
-          <div className="w-full mx-auto px-6 max-w-[800px] flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setIsFormOpen(false)} className="-ml-2 text-muted-foreground hover:text-foreground">
-              <ChevronRight className="w-4 h-4 rotate-180 mr-1" />
-              Voltar
-            </Button>
-            <span className="font-semibold text-sm">Inscrição</span>
-            <div className="w-16" /> {/* Spacer for centering if needed */}
-          </div>
-        </div>
+
 
         <div className="flex-1 w-full mx-auto px-6 py-8 max-w-[800px] pb-32">
           <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold mb-2">
-              {currentStep === 1 && "Identificação"}
-              {currentStep === 2 && "Nova Inscrição"}
-            </h2>
-            <p className="text-muted-foreground">
-              {currentStep === 1 && "Faça login ou crie sua conta para continuar."}
-              {currentStep === 2 && (
-                <>
-                  {selectedCategory?.name}
-                  <span className="block text-xs mt-1 text-muted-foreground">{selectedCategory?.description}</span>
-                </>
-              )}
-            </p>
+            {currentStep === 1 && (
+              <>
+                <h2 className="text-2xl font-bold mb-2">Identificação</h2>
+                <p className="text-muted-foreground">Faça login ou crie sua conta para continuar.</p>
+              </>
+            )}
           </div>
 
           {/* Stepper Indicator */}
@@ -586,6 +659,8 @@ export default function PublicRegistration() {
               <span className="text-[10px] md:text-xs font-medium uppercase tracking-wider">Pagamento</span>
             </div>
           </div>
+
+
 
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="p-6">
@@ -628,6 +703,10 @@ export default function PublicRegistration() {
                           <Label htmlFor="signup-phone">Celular</Label>
                           <Input id="signup-phone" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="(11) 99999-9999" />
                         </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-birth">Data de Nascimento</Label>
+                        <Input id="signup-birth" type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} required />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="signup-email">Email</Label>
@@ -769,7 +848,7 @@ export default function PublicRegistration() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </div >
     );
   }
 
@@ -911,19 +990,20 @@ export default function PublicRegistration() {
                         )}
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                           {cat.gender} • {cat.format}
+                          {cat.min_age && cat.max_age ? ` • ${cat.min_age}-${cat.max_age} ANOS` :
+                            cat.min_age ? ` • ${cat.min_age}+ ANOS` :
+                              cat.max_age ? ` • ATÉ ${cat.max_age} ANOS` : ''}
                         </span>
                       </div>
                       <h3 className="text-base font-semibold text-foreground truncate pr-2">
                         {cat.name}
                       </h3>
                       <p className="text-xs text-muted-foreground mt-1">
-                        + Taxa de {platformFeeConfig.type === 'percentage'
-                          ? `${platformFeeConfig.value}%`
-                          : formatPrice(platformFeeConfig.value)} ({formatPrice(
-                            platformFeeConfig.type === 'percentage'
-                              ? Math.round(price * (platformFeeConfig.value / 100))
-                              : platformFeeConfig.value
-                          )})
+                        + Taxa de serviço ({formatPrice(
+                          (platformFeeConfig.type === 'percentage'
+                            ? Math.round(price * (platformFeeConfig.value / 100))
+                            : platformFeeConfig.value) + 199
+                        )})
                       </p>
                     </div>
 

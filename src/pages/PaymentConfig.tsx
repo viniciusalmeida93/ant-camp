@@ -33,7 +33,6 @@ import {
     QrCode,
     Copy,
     CheckCircle2,
-
     CreditCard,
     Building,
     ExternalLink
@@ -66,6 +65,14 @@ export default function PaymentConfig() {
     const [pixPayload, setPixPayload] = useState("");
     const [asaasWalletId, setAsaasWalletId] = useState("");
     const [showColumnError, setShowColumnError] = useState(false);
+
+    // --- States for Coupons ---
+    const [coupons, setCoupons] = useState<any[]>([]);
+    const [loadingCoupons, setLoadingCoupons] = useState(false);
+    const [couponDialogOpen, setCouponDialogOpen] = useState(false);
+    const [selectedCoupon, setSelectedCoupon] = useState<any>(null);
+    const [couponFilterType, setCouponFilterType] = useState("all");
+    const [couponSearchTerm, setCouponSearchTerm] = useState("");
 
     // --- Effects ---
     useEffect(() => {
@@ -312,6 +319,80 @@ export default function PaymentConfig() {
         return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pixDisplayData.qrPayload)}`;
     }, [pixDisplayData]);
 
+    // --- Coupon Logic ---
+    const loadCoupons = async () => {
+        if (!selectedChampionship) return;
+        setLoadingCoupons(true);
+        try {
+            const { data, error } = await supabase
+                .from("coupons")
+                .select("*")
+                .eq("championship_id", selectedChampionship.id)
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+            setCoupons(data || []);
+        } catch (error) {
+            console.error("Error loading coupons:", error);
+            toast.error("Erro ao carregar cupons");
+        } finally {
+            setLoadingCoupons(false);
+        }
+    };
+
+    const handleDeleteCoupon = async (couponId: string) => {
+        if (!confirm("Tem certeza que deseja excluir este cupom?")) return;
+
+        try {
+            const { error } = await supabase
+                .from("coupons")
+                .delete()
+                .eq("id", couponId);
+
+            if (error) throw error;
+            toast.success("Cupom excluído com sucesso!");
+            loadCoupons();
+        } catch (error: any) {
+            console.error("Error deleting coupon:", error);
+            toast.error("Erro ao excluir cupom");
+        }
+    };
+
+    const handleEditCoupon = (coupon: any) => {
+        setSelectedCoupon(coupon);
+        setCouponDialogOpen(true);
+    };
+
+    const handleAddCoupon = () => {
+        setSelectedCoupon(null);
+        setCouponDialogOpen(true);
+    };
+
+    const filteredCoupons = useMemo(() => {
+        let filtered = [...coupons];
+
+        if (couponFilterType !== "all") {
+            filtered = filtered.filter(c => c.discount_type === couponFilterType);
+        }
+
+        if (couponSearchTerm) {
+            const term = couponSearchTerm.toLowerCase();
+            filtered = filtered.filter(c =>
+                c.code.toLowerCase().includes(term) ||
+                c.description?.toLowerCase().includes(term)
+            );
+        }
+
+        return filtered;
+    }, [coupons, couponFilterType, couponSearchTerm]);
+
+    const formatCouponValue = (coupon: any) => {
+        if (coupon.discount_type === "percentage") {
+            return `${coupon.discount_value}%`;
+        }
+        return formatPrice(coupon.discount_value);
+    };
+
 
     if (!selectedChampionship) {
         return (
@@ -511,46 +592,7 @@ export default function PaymentConfig() {
                             </CardContent>
                         </Card>
 
-                        {/* PIX CONFIG */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    Recebimento via PIX
-                                </CardTitle>
-                                <CardDescription>Cadastre a chave ou payload PIX direto.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="pixPayload">Chave / QR Code PIX</Label>
-                                    <Textarea
-                                        id="pixPayload"
-                                        value={pixPayload}
-                                        onChange={(e) => setPixPayload(e.target.value)}
-                                        placeholder="Ex: email@exemplo.com ou 000201..."
-                                        rows={4}
-                                        className="font-mono"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Aceitamos chave simples (email, CPF, telefone) ou o código "Copia e Cola" completo.
-                                    </p>
-                                </div>
-
-                                {pixPreviewUrl && (
-                                    <div className="flex gap-4 p-4 border rounded bg-muted/20 items-center">
-                                        <img src={pixPreviewUrl} alt="QR Code" className="w-24 h-24 bg-white p-2 rounded border" />
-                                        <div className="flex-1 space-y-2">
-                                            <p className="font-semibold text-sm">Preview do QR Code</p>
-                                            <div className="flex gap-2">
-                                                <Button variant="outline" size="sm" onClick={handleCopyPix} disabled={copyingPix}>
-                                                    {copyingPix ? <CheckCircle2 className="w-3 h-3 mr-2" /> : <Copy className="w-3 h-3 mr-2" />}
-                                                    {copyingPix ? "Copiado" : "Copiar Código"}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                        {/* PIX CONFIG REMOVED */}
 
                         <div className="flex justify-end pt-4">
                             <Button onClick={handleSaveSettings} disabled={savingSettings || loadingSettings}>

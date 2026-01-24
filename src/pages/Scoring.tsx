@@ -20,6 +20,7 @@ export default function Scoring() {
   const [categories, setCategories] = useState<any[]>([]);
   const [configs, setConfigs] = useState<any[]>([]);
   const [presetType, setPresetType] = useState<string>('crossfit-games');
+  const [rankingMethod, setRankingMethod] = useState<string>('simple');
   const [pointsTableText, setPointsTableText] = useState('');
   const [dnfPoints, setDnfPoints] = useState(0);
   const [dnsPoints, setDnsPoints] = useState(0);
@@ -47,7 +48,7 @@ export default function Scoring() {
 
   const loadData = async () => {
     if (!selectedChampionship) return;
-    
+
     setLoading(true);
     try {
       const [catsResult, configsResult] = await Promise.all([
@@ -85,12 +86,14 @@ export default function Scoring() {
 
       if (data) {
         setPresetType(data.preset_type || 'crossfit-games');
+        setRankingMethod(data.ranking_method || 'simple');
         setPointsTableText(JSON.stringify(data.points_table || {}, null, 2));
         setDnfPoints(data.dnf_points || 0);
         setDnsPoints(data.dns_points || 0);
       } else {
         // Config padrão
         setPresetType('crossfit-games');
+        setRankingMethod('simple');
         setPointsTableText(JSON.stringify(CROSSFIT_GAMES_POINTS, null, 2));
         setDnfPoints(1);
         setDnsPoints(0);
@@ -127,10 +130,11 @@ export default function Scoring() {
     setSaving(true);
     try {
       const pointsTable = JSON.parse(pointsTableText);
-      
+
       const configData = {
         preset_type: presetType,
         points_table: pointsTable,
+        ranking_method: rankingMethod,
         dnf_points: dnfPoints,
         dns_points: dnsPoints,
         updated_at: new Date().toISOString(),
@@ -138,7 +142,7 @@ export default function Scoring() {
 
       // Aplicar para todas as categorias do campeonato
       const categoryIds = categories.map(c => c.id);
-      
+
       // Buscar configs existentes
       const { data: existingConfigs } = await supabase
         .from("scoring_configs")
@@ -150,14 +154,14 @@ export default function Scoring() {
       // Atualizar ou criar config para cada categoria
       const promises = categoryIds.map(async (categoryId) => {
         const existingId = existingMap.get(categoryId);
-        
+
         if (existingId) {
           // Atualizar existente
           const { error } = await supabase
             .from("scoring_configs")
             .update(configData)
             .eq("id", existingId);
-          
+
           if (error) throw error;
         } else {
           // Criar novo
@@ -168,7 +172,7 @@ export default function Scoring() {
               ...configData,
               created_at: new Date().toISOString(),
             });
-          
+
           if (error) throw error;
         }
       });
@@ -217,7 +221,6 @@ export default function Scoring() {
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="mb-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-bold">Configuração de Pontuação</h1>
         </div>
         <p className="text-muted-foreground">Configure o sistema de pontuação para todas as categorias do campeonato</p>
@@ -235,18 +238,35 @@ export default function Scoring() {
               </p>
             </div>
 
-            <div>
-              <Label htmlFor="preset">Preset de Pontuação</Label>
-              <Select value={presetType} onValueChange={handlePresetChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="crossfit-games">CrossFit Games</SelectItem>
-                  <SelectItem value="simple-order">Ordem Simples</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="rankingMethod">Critério de Pontuação (Empates)</Label>
+                <Select value={rankingMethod} onValueChange={setRankingMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="simple">Critério Simples (1º, 1º, 2º...)</SelectItem>
+                    <SelectItem value="standard">Critério da Crossfit (1º, 1º, 3º...)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Simples: não pula posições. Crossfit: pula posições após empates.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="preset">Preset de Pontuação</Label>
+                <Select value={presetType} onValueChange={handlePresetChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="crossfit-games">Crossfit</SelectItem>
+                    <SelectItem value="simple-order">Ordem Simples</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>

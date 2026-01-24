@@ -197,20 +197,26 @@ export default function AthleteDashboard() {
                             <Card key={reg.id} className="group overflow-hidden border bg-card shadow-sm hover:shadow-md transition-all duration-300">
                                 {/* Banner Area */}
                                 <div className="relative h-32 w-full bg-muted">
-                                    <img
-                                        src={
+                                    {/* Helper to get banner URL safely */}
+                                    {(() => {
+                                        const bannerUrl =
                                             // @ts-ignore
                                             reg.championships?.link_pages?.[0]?.banner_url ||
                                             // @ts-ignore
-                                            reg.championships?.link_pages?.banner_url ||
-                                            "/banner-placeholder.jpg"
+                                            reg.championships?.link_pages?.banner_url;
+
+                                        if (bannerUrl) {
+                                            return (
+                                                <img
+                                                    src={bannerUrl}
+                                                    alt={reg.championships?.name}
+                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                />
+                                            );
                                         }
-                                        alt={reg.championships?.name}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        onError={(e) => {
-                                            e.currentTarget.src = "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=2070&auto=format&fit=crop"; // Fallback nicely
-                                        }}
-                                    />
+                                        return null;
+                                    })()}
+
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                                     <div className="absolute top-3 right-3">
                                         <Badge variant={getStatusColor(reg.payment_status)} className="shadow-sm border-0">

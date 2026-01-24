@@ -66,6 +66,7 @@ export interface ScoringConfig {
   categoryId: string;
   presetType: ScoringPresetType;
   pointsTable: { [position: number]: number }; // {1: 100, 2: 97, ...}
+  rankingMethod?: 'simple' | 'standard'; // 'simple' = 1,1,2; 'standard' = 1,1,3
   dnfPoints: number;
   dnsPoints: number;
   createdAt: string;

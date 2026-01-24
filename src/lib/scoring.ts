@@ -29,7 +29,7 @@ export const generateDefaultPoints = (maxParticipants: number): { [position: num
 // Função auxiliar para converter tempo MM:SS ou minutos:segundos para segundos
 const parseTimeToSeconds = (timeStr: string): number => {
   if (!timeStr) return 0;
-  
+
   // Formato MM:SS (ex: 5:30 = 5 minutos e 30 segundos)
   const match = timeStr.match(/^(\d+):(\d{2})$/);
   if (match) {
@@ -37,11 +37,11 @@ const parseTimeToSeconds = (timeStr: string): number => {
     const seconds = parseInt(match[2], 10);
     return minutes * 60 + seconds;
   }
-  
+
   // Tentar como número direto (segundos)
   const num = parseFloat(timeStr);
   if (!isNaN(num)) return num;
-  
+
   return 0;
 };
 
@@ -52,9 +52,9 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
   if (a.status !== 'dns' && b.status === 'dns') return -1;
   if (a.status === 'dnf' && b.status !== 'dnf') return 1;
   if (a.status !== 'dnf' && b.status === 'dnf') return -1;
-  
+
   if (!a.result || !b.result) return 0;
-  
+
   // Para For Time: converter tempo para segundos e comparar (menor é melhor)
   if (wodType === 'for-time' || wodType === 'tempo') {
     const aSeconds = parseTimeToSeconds(a.result);
@@ -68,7 +68,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
     }
     return 0;
   }
-  
+
   // Para AMRAP: maior rounds/reps é melhor
   if (wodType === 'amrap' || wodType === 'emom') {
     const aValue = parseFloat(a.result);
@@ -82,7 +82,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
     }
     return 0;
   }
-  
+
   // Para Tonelagem e Carga Máxima: maior peso é melhor
   if (wodType === 'tonelagem' || wodType === 'carga-maxima' || wodType === 'carga') {
     const aValue = parseFloat(a.result);
@@ -96,7 +96,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
     }
     return 0;
   }
-  
+
   // Para reps (legado): maior é melhor
   if (wodType === 'reps') {
     const aValue = parseFloat(a.result);
@@ -107,7 +107,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
       return parseFloat(a.tiebreakValue) - parseFloat(b.tiebreakValue);
     }
   }
-  
+
   return 0;
 };
 
@@ -119,28 +119,34 @@ export const calculateWODPoints = (
 ): WODResult[] => {
   // Ordenar resultados
   const sorted = [...results].sort((a, b) => compareResults(a, b, wodType));
-  
+
   // Atribuir posições e pontos com suporte a empates
   // Se dois resultados têm o mesmo valor, ficam na mesma posição
   // Mas próxima posição diferente é sequencial (não pula números)
   let currentPosition = 1;
-  
+
   return sorted.map((result, index) => {
     // Verificar se é empate usando a função compareResults
     // Se compareResults retorna 0, os resultados são iguais
-    const isTie = index > 0 && 
-                   result.status === 'completed' && 
-                   sorted[index - 1].status === 'completed' &&
-                   compareResults(result, sorted[index - 1], wodType) === 0;
-    
-    // Se não é empate, incrementar posição
-    if (!isTie && index > 0) {
-      currentPosition++;
+    const isTie = index > 0 &&
+      result.status === 'completed' &&
+      sorted[index - 1].status === 'completed' &&
+      compareResults(result, sorted[index - 1], wodType) === 0;
+
+    // Se não é empate, atualizar posição
+    if (!isTie) {
+      if (config.rankingMethod === 'standard') {
+        // Método Standard (Crossfit/Olímpico): 1, 1, 3 (pula posições)
+        currentPosition = index + 1;
+      } else {
+        // Método Simple (Sequencial): 1, 1, 2 (não pula posições) - Comportamento padrão anterior
+        if (index > 0) currentPosition++;
+      }
     }
-    
+
     let position = currentPosition;
     let points = 0;
-    
+
     if (result.status === 'dns') {
       points = config.dnsPoints || 0;
       position = results.length;
@@ -156,7 +162,7 @@ export const calculateWODPoints = (
         points = Math.max(1, 100 - (position - 1) * 3);
       }
     }
-    
+
     return {
       ...result,
       position,
@@ -167,30 +173,34 @@ export const calculateWODPoints = (
 
 // Função auxiliar para comparar dois atletas com desempate completo
 // Compara sequencialmente: pontos, 1º lugares, 2º lugares, 3º lugares, 4º lugares, etc.
+// Função auxiliar para comparar dois atletas com desempate completo
 export const compareLeaderboardEntries = (
   a: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null },
-  b: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null }
+  b: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null },
+  sortDirection: 'asc' | 'desc' = 'asc' // asc = menor melhor (Simple), desc = maior melhor (CrossFit)
 ): number => {
   // Se um tem 0 e outro não, quem tem 0 vai para o final
   if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
   if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
-  
+
   // Se ambos têm 0 pontos (sem resultados), ordenar por order_index
   if (a.totalPoints === 0 && b.totalPoints === 0) {
-    if (a.orderIndex !== null && a.orderIndex !== undefined && 
-        b.orderIndex !== null && b.orderIndex !== undefined) {
+    if (a.orderIndex !== null && a.orderIndex !== undefined &&
+      b.orderIndex !== null && b.orderIndex !== undefined) {
       return a.orderIndex - b.orderIndex;
     }
     if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
     if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
     return 0;
   }
-  
-  // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
+
+  // 1. Pontos
   if (a.totalPoints !== b.totalPoints) {
-    return a.totalPoints - b.totalPoints;
+    return sortDirection === 'asc'
+      ? a.totalPoints - b.totalPoints
+      : b.totalPoints - a.totalPoints;
   }
-  
+
   // 2. Desempate por número de colocações (1º, 2º, 3º, 4º, etc.)
   // Encontrar a maior posição possível entre todos os resultados
   const aPositions = a.wodResults.map(r => r.position || 0).filter(p => p > 0);
@@ -200,30 +210,29 @@ export const compareLeaderboardEntries = (
     ...(bPositions.length > 0 ? bPositions : [0]),
     0
   );
-  
+
   // Comparar sequencialmente cada posição (1º, 2º, 3º, 4º, ...)
   for (let position = 1; position <= maxPosition; position++) {
     const aCount = a.wodResults.filter(r => r.position === position).length;
     const bCount = b.wodResults.filter(r => r.position === position).length;
-    
+
     if (aCount !== bCount) {
       // Maior quantidade dessa posição é melhor
       return bCount - aCount;
     }
   }
-  
+
   // 3. Se ainda empatar, usar order_index como desempate final
-  if (a.orderIndex !== null && a.orderIndex !== undefined && 
-      b.orderIndex !== null && b.orderIndex !== undefined) {
+  if (a.orderIndex !== null && a.orderIndex !== undefined &&
+    b.orderIndex !== null && b.orderIndex !== undefined) {
     return a.orderIndex - b.orderIndex;
   }
-  
+
   // Se apenas um tem order_index, ele vem primeiro
   if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
   if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
-  
-  // Fallback: comparar por ID dos participantes (garantir ordem determinística)
-  // Isso garante que nunca haverá empate absoluto
+
+  // Fallback: comparar por ID dos participantes
   const aId = (a as any).participantId || (a as any).registrationId || '';
   const bId = (b as any).participantId || (b as any).registrationId || '';
   return aId.localeCompare(bId);
@@ -234,11 +243,16 @@ export const calculateLeaderboard = (
   allResults: WODResult[],
   categoryId: string,
   participantNames: Map<string, string>,
-  presetType?: string
+  presetType: string = 'crossfit-games'
 ): LeaderboardEntry[] => {
+  // Determine sort direction based on preset
+  // CrossFit Games = Higher points win (DESC)
+  // Simple Order = Lower points win (ASC)
+  const sortDirection = presetType === 'simple-order' ? 'asc' : 'desc';
+
   // Agrupar resultados por participante
   const participantMap = new Map<string, WODResult[]>();
-  
+
   allResults
     .filter(r => r.categoryId === categoryId)
     .forEach(result => {
@@ -251,19 +265,19 @@ export const calculateLeaderboard = (
         participantMap.get(participantId)!.push(result);
       }
     });
-  
+
   // Criar entradas do leaderboard
   const entries: LeaderboardEntry[] = [];
-  
+
   participantMap.forEach((wodResults, participantId) => {
     const totalPoints = wodResults.reduce((sum, r) => sum + (r.points || 0), 0);
     const firstPlaces = wodResults.filter(r => r.position === 1).length;
     const secondPlaces = wodResults.filter(r => r.position === 2).length;
     const thirdPlaces = wodResults.filter(r => r.position === 3).length;
-    const lastWodPosition = wodResults.length > 0 
-      ? wodResults[wodResults.length - 1].position 
+    const lastWodPosition = wodResults.length > 0
+      ? wodResults[wodResults.length - 1].position
       : undefined;
-    
+
     entries.push({
       participantId,
       participantName: participantNames.get(participantId) || 'Desconhecido',
@@ -274,19 +288,19 @@ export const calculateLeaderboard = (
       secondPlaces,
       thirdPlaces,
       lastWodPosition,
-      wodResults: wodResults.sort((a, b) => 
+      wodResults: wodResults.sort((a, b) =>
         a.createdAt.localeCompare(b.createdAt)
       ),
     });
   });
-  
+
   // Ordenar usando a função de comparação completa
-  entries.sort((a, b) => compareLeaderboardEntries(a, b));
-  
+  entries.sort((a, b) => compareLeaderboardEntries(a, b, sortDirection));
+
   // Atribuir posições finais (sem empates - cada um tem posição única)
   entries.forEach((entry, index) => {
     entry.position = index + 1;
   });
-  
+
   return entries;
 };

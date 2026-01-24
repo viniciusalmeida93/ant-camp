@@ -6,29 +6,39 @@ export const generateHeats = (
   athletesPerHeat: number,
   categoryId: string,
   wodId: string,
-  participantNames: Map<string, string>
+  participantNames: Map<string, string>,
+  // sortDirection determines "Better" logic.
+  // 'desc' (default/CrossFit): Higher points = Better. We sort ASC [Low -> High] to put Best (High) in Last Heat.
+  // 'asc' (Simple): Lower points = Better. We sort DESC [High -> Low] to put Best (Low) in Last Heat.
+  sortDirection: 'asc' | 'desc' = 'desc'
 ): Heat[] => {
   const heats: Heat[] = [];
-  
+
   // Se não há ranking (primeiro WOD), ordem alfabética
   let orderedParticipants = [...leaderboard];
-  
+
   if (leaderboard.length === 0 || leaderboard.every(e => e.totalPoints === 0)) {
     // Primeiro WOD - ordem alfabética ou aleatória
     orderedParticipants.sort((a, b) => a.participantName.localeCompare(b.participantName));
   } else {
-    // WODs seguintes - ordenar por pontuação (menores primeiro, líderes por último)
-    orderedParticipants.sort((a, b) => a.totalPoints - b.totalPoints);
+    // WODs seguintes - ordenar "Pior para Melhor" para que os Melhores fiquem na última bateria
+    if (sortDirection === 'desc') {
+      // High Points = Best. Sort Ascending (Low -> High)
+      orderedParticipants.sort((a, b) => a.totalPoints - b.totalPoints);
+    } else {
+      // Low Points = Best. Sort Descending (High -> Low)
+      orderedParticipants.sort((a, b) => b.totalPoints - a.totalPoints);
+    }
   }
-  
+
   const totalHeats = Math.ceil(orderedParticipants.length / athletesPerHeat);
-  
+
   // Distribuir atletas nas baterias
   for (let i = 0; i < totalHeats; i++) {
     const startIndex = i * athletesPerHeat;
     const endIndex = Math.min(startIndex + athletesPerHeat, orderedParticipants.length);
     const heatParticipants = orderedParticipants.slice(startIndex, endIndex);
-    
+
     heats.push({
       id: crypto.randomUUID(),
       categoryId,
@@ -44,7 +54,7 @@ export const generateHeats = (
       updatedAt: new Date().toISOString(),
     });
   }
-  
+
   return heats;
 };
 
@@ -57,7 +67,7 @@ export const generateHeatsForNewAthletes = (
   participantNames: Map<string, string>
 ): Heat[] => {
   const heats: Heat[] = [];
-  
+
   const participants = registrations
     .filter(r => r.categoryId === categoryId)
     .map(r => {
@@ -70,14 +80,14 @@ export const generateHeatsForNewAthletes = (
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
-  
+
   const totalHeats = Math.ceil(participants.length / athletesPerHeat);
-  
+
   for (let i = 0; i < totalHeats; i++) {
     const startIndex = i * athletesPerHeat;
     const endIndex = Math.min(startIndex + athletesPerHeat, participants.length);
     const heatParticipants = participants.slice(startIndex, endIndex);
-    
+
     heats.push({
       id: crypto.randomUUID(),
       categoryId,
@@ -88,14 +98,14 @@ export const generateHeatsForNewAthletes = (
       updatedAt: new Date().toISOString(),
     });
   }
-  
+
   return heats;
 };
 
 // Exportar para CSV
 export const exportHeatsToCSV = (heats: Heat[], categoryName: string, wodName: string): string => {
   let csv = 'Bateria,Horário,Atleta/Time,Posição,Pontos\n';
-  
+
   heats.forEach(heat => {
     const time = heat.scheduledTime || '-';
     heat.participants.forEach(p => {
@@ -104,7 +114,7 @@ export const exportHeatsToCSV = (heats: Heat[], categoryName: string, wodName: s
       csv += `${heat.heatNumber},${time},${p.name},${position},${points}\n`;
     });
   });
-  
+
   return csv;
 };
 
@@ -113,11 +123,11 @@ export const downloadCSV = (content: string, filename: string) => {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  
+
   link.setAttribute('href', url);
   link.setAttribute('download', filename);
   link.style.visibility = 'hidden';
-  
+
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -20,6 +20,7 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [cpf, setCpf] = useState("");
   const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -137,7 +138,8 @@ export default function Auth() {
           data: {
             full_name: fullName,
             cpf: cpf,
-            phone: phone
+            phone: phone,
+            birth_date: birthDate
           }
         }
       });
@@ -154,6 +156,7 @@ export default function Auth() {
             full_name: fullName,
             cpf: cpf,
             phone: phone,
+            birth_date: birthDate,
           })
           .eq('id', data.user.id);
 
@@ -325,6 +328,17 @@ export default function Auth() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-birthdate">Data de Nascimento</Label>
+                  <Input
+                    id="signup-birthdate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">

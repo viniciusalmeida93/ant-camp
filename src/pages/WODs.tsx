@@ -38,7 +38,7 @@ type CategoryVariationForm = {
 };
 
 // Componente SortableWODItem para drag and drop
-function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => void; onDelete: () => void }) {
+function SortableWODItem({ wod, onEdit, onDelete, categoryId, variations }: { wod: any; onEdit: () => void; onDelete: () => void; categoryId?: string; variations?: Record<string, CategoryVariationForm> }) {
   const {
     attributes,
     listeners,
@@ -66,6 +66,22 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
     return typeMap[type] || type;
   };
 
+  // Logic to override display if category is selected and variation exists
+  let displayName = wod.name;
+  let displayDescription = wod.description;
+  let displayNotes = wod.notes;
+  let displayDuration = wod.estimated_duration_minutes;
+
+  // Override data if variation exists
+  if (categoryId && variations && variations[wod.id]) {
+    const v = variations[wod.id];
+    // Only override if value exists and is not empty
+    if (v.display_name) displayName = v.display_name;
+    if (v.description) displayDescription = v.description;
+    if (v.notes) displayNotes = v.notes;
+    if (v.estimated_duration_minutes) displayDuration = v.estimated_duration_minutes;
+  }
+
   return (
     <div ref={setNodeRef} style={style}>
       <div className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all">
@@ -84,22 +100,25 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className="font-semibold">{wod.name}</h3>
+            <h3 className="font-semibold text-lg">{displayName}</h3>
             <Badge variant="outline" className="text-xs">
               {getTypeDisplay(wod.type)}
             </Badge>
-            {wod.estimated_duration_minutes && (
+            {displayDuration && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                Time Cap: {wod.estimated_duration_minutes} min
+                Time Cap: {displayDuration} min
               </span>
             )}
           </div>
-          <div className="p-2 rounded bg-muted/50 mb-2">
-            <pre className="text-sm whitespace-pre-wrap font-mono">{wod.description}</pre>
+          <div className="p-3 rounded-md bg-muted/30 mb-2 border border-border/50">
+            <pre className="text-sm whitespace-pre-wrap font-mono text-foreground/90 leading-relaxed font-sans">{displayDescription}</pre>
           </div>
-          {wod.notes && (
-            <p className="text-xs text-muted-foreground">{wod.notes}</p>
+          {displayNotes && (
+            <div className="flex items-start gap-2 mt-2 text-xs text-muted-foreground bg-yellow-500/5 p-2 rounded border border-yellow-500/10">
+              <span className="font-semibold text-yellow-600/80 uppercase tracking-wider text-[10px] mt-0.5">Obs:</span>
+              <p>{displayNotes}</p>
+            </div>
           )}
         </div>
 
@@ -108,7 +127,7 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
             size="icon"
             variant="ghost"
             onClick={onEdit}
-            title="Editar WOD"
+            title="Editar Evento"
             className="h-8 w-8"
           >
             <Edit className="w-4 h-4" />
@@ -117,7 +136,7 @@ function SortableWODItem({ wod, onEdit, onDelete }: { wod: any; onEdit: () => vo
             size="icon"
             variant="ghost"
             onClick={onDelete}
-            title="Excluir WOD"
+            title="Excluir Evento"
             className="h-8 w-8 text-destructive hover:text-destructive"
           >
             <Trash2 className="w-4 h-4" />
@@ -134,6 +153,11 @@ export default function WODs() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [wods, setWODs] = useState<any[]>([]);
+  const [filteredWods, setFilteredWods] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [variationsMap, setVariationsMap] = useState<Record<string, any>>({}); // Map wodId -> variationData
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingWOD, setEditingWOD] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
@@ -345,13 +369,7 @@ export default function WODs() {
 
   const loadWODs = async () => {
     try {
-      if (!selectedChampionship) {
-        toast.error("Selecione um campeonato primeiro");
-        navigate("/app");
-        return;
-      }
-
-      console.log("Loading WODs for championship:", selectedChampionship.id, selectedChampionship.name);
+      console.log("Loading Events (WODs) for championship:", selectedChampionship.id, selectedChampionship.name);
 
       // Load WODs
       const { data: wodsData, error: wodsError } = await supabase
@@ -362,15 +380,71 @@ export default function WODs() {
 
       if (wodsError) throw wodsError;
 
-      console.log("WODs loaded:", wodsData);
+      console.log("Events loaded:", wodsData);
       setWODs(wodsData || []);
+      setFilteredWods(wodsData || []);
     } catch (error: any) {
-      console.error("Error loading WODs:", error);
+      console.error("Error loading events:", error);
       // Silenciar erro - não mostrar toast ao usuário
     } finally {
       setLoading(false);
     }
   };
+
+  // Effect to filter WODs
+  useEffect(() => {
+    let result = wods;
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(w =>
+        w.name.toLowerCase().includes(term) ||
+        (w.type && w.type.toLowerCase().includes(term))
+      );
+    }
+
+    setFilteredWods(result);
+  }, [wods, searchTerm, selectedCategoryFilter]);
+
+  // Load variations when category filter changes
+  useEffect(() => {
+    const loadCategoryVariationsForList = async () => {
+      if (selectedCategoryFilter === 'all' || !selectedCategoryFilter) {
+        setVariationsMap({});
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("wod_category_variations")
+          .select("*")
+          .eq("category_id", selectedCategoryFilter)
+          .in("wod_id", wods.map(w => w.id));
+
+        if (error) {
+          if (!error.message.includes('wod_category_variations')) {
+            console.error("Error loading variations for filter:", error);
+          }
+          return;
+        }
+
+        const map: Record<string, any> = {};
+        if (data) {
+          data.forEach((v: any) => {
+            map[v.wod_id] = v;
+          });
+        }
+        setVariationsMap(map);
+      } catch (err) {
+        console.error("Error fetching variations:", err);
+      }
+    };
+
+    if (wods.length > 0) {
+      loadCategoryVariationsForList();
+    }
+  }, [selectedCategoryFilter, wods]);
 
   const loadCategories = async () => {
     if (!selectedChampionship) return;
@@ -732,7 +806,7 @@ export default function WODs() {
           } catch (variationError: any) {
             // Se for erro de tabela ausente, apenas logar
             if (isMissingVariationTable(variationError)) {
-              console.warn('Tabela wod_category_variations ausente; prosseguindo sem variações específicas.');
+              console.warn('Tabela wod_category_variations ausente durante remoção; prosseguindo sem variações específicas.');
             } else {
               // Para outros erros, lançar para ser capturado pelo catch externo
               throw variationError;
@@ -845,339 +919,371 @@ export default function WODs() {
   }
 
   return (
-    <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
+    <div className="w-full mx-auto px-4 py-8 max-w-[98%]">
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
-          <h1 className="text-4xl font-bold mb-2">WODs</h1>
+          <h1 className="text-4xl font-bold mb-2">Eventos</h1>
           <p className="text-muted-foreground">
-            Gerencie os workouts do campeonato
-            {selectedChampionship && (
-              <span className="ml-2 text-primary font-semibold">
-                - {selectedChampionship.name}
-              </span>
-            )}
+            Gerencie os eventos do campeonato - <span className="font-semibold text-primary">{selectedChampionship.name}</span>
           </p>
         </div>
-
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingWOD(null);
-            setWodType('for-time');
-            setCategoryVariations(createEmptyVariations());
-            setVariationCategoriesWithData([]);
-            setApplyToAllCategories(false);
-          }
-        }}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingWOD ? 'Editar' : 'Criar'} WOD</DialogTitle>
-            </DialogHeader>
-            <form ref={formRef} onSubmit={(e) => { e.preventDefault(); }} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nome do WOD *</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  defaultValue={editingWOD?.name}
-                  placeholder="Ex: Fran"
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="type">Tipo de WOD *</Label>
-                <Select
-                  value={wodType}
-                  onValueChange={setWodType}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="for-time">For Time</SelectItem>
-                    <SelectItem value="amrap">AMRAP</SelectItem>
-                    <SelectItem value="emom">EMOM</SelectItem>
-                    <SelectItem value="tonelagem">Tonelagem</SelectItem>
-                    <SelectItem value="carga-maxima">Carga Máxima</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descrição do Workout *</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={editingWOD?.description}
-                  placeholder="21-15-9&#10;Thrusters (95/65 lb)&#10;Pull-ups"
-                  rows={5}
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="timeCap">Time Cap da Prova *</Label>
-                <Input
-                  id="timeCap"
-                  name="timeCap"
-                  type="text"
-                  defaultValue={editingWOD?.time_cap || ''}
-                  placeholder="Ex: 6:00 (6 minutos)"
-                  required
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Formato: MM:SS (minutos:segundos) - Exemplo: 10:00 = 10 minutos
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="notes">Notas e Padrões de Movimento</Label>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  defaultValue={editingWOD?.notes}
-                  placeholder="Padrões de movimento, escalas, regras especiais..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="pt-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Label className="font-semibold">Variações por Categoria</Label>
-                  {variationsLoading && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Carregando variações
-                    </span>
-                  )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={applyToAllCategories ? 'default' : 'destructive'}
-                    className="ml-auto flex items-center gap-1"
-                    onClick={() => {
-                      if (!applyToAllCategories && formRef.current) {
-                        // Quando ativando, copiar TODOS os dados padrão para todas as categorias
-                        // Ler valores diretamente dos elementos do formulário para garantir valores reais
-                        const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
-                        const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
-
-                        // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
-                        // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
-                        const descriptionValue = descriptionInput?.value ?? '';
-                        const notesValue = notesInput?.value ?? '';
-
-                        console.log('Copiando valores para todas as categorias:', {
-                          description: descriptionValue,
-                          notes: notesValue
-                        });
-
-                        setCategoryVariations(prev => {
-                          const updated: Record<string, CategoryVariationForm> = {};
-                          categories.forEach(cat => {
-                            const current = prev[cat.id] || emptyVariation();
-                            // Copiar os valores reais dos campos do formulário
-                            // Garantir que sejam strings reais (mesmo que vazias) para poder editar
-                            updated[cat.id] = {
-                              displayName: current.displayName || '',
-                              description: descriptionValue, // Valor real copiado do campo (sempre string)
-                              notes: notesValue, // Valor real copiado do campo (sempre string)
-                              estimatedDuration: '', // Será calculado automaticamente
-                            };
-                          });
-                          return updated;
-                        });
-
-                        // Marcar todas as categorias como tendo dados (para que sejam salvas)
-                        const allCategoryIds = categories.map(cat => cat.id);
-                        setVariationCategoriesWithData(prev => {
-                          const combined = new Set([...prev, ...allCategoryIds]);
-                          return Array.from(combined);
-                        });
-                      }
-                      setApplyToAllCategories(prev => !prev);
-                    }}
-                  >
-                    <CopyPlus className="w-3 h-3" />
-                    {applyToAllCategories ? 'Aplicar em todas as categorias (ativado)' : 'Adicionar WOD a todas as categorias'}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Personalize detalhes do WOD para cada categoria. Campos em branco usam as informações padrão acima.
-                  {applyToAllCategories && (
-                    <span className="block text-[11px] text-primary mt-1">
-                      Este WOD será aplicado automaticamente a todas as categorias.
-                    </span>
-                  )}
-                </p>
-
-                {categories.length === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-4">
-                    Cadastre categorias para configurar variações específicas.
-                  </p>
-                ) : (
-                  <Accordion type="multiple" className="mt-4 space-y-2">
-                    {categories.map(category => {
-                      // Garantir que sempre temos uma variação válida do estado
-                      const variation = categoryVariations[category.id] || emptyVariation();
-                      const hasCustomData = hasVariationData(variation);
-
-                      return (
-                        <AccordionItem key={category.id} value={category.id} className="border rounded-lg px-4">
-                          <AccordionTrigger className="py-3 text-left">
-                            <div className="flex flex-col text-left">
-                              <span className="font-medium">{category.name}</span>
-                              {hasCustomData && (
-                                <span className="text-xs text-muted-foreground">Variação personalizada aplicada</span>
-                              )}
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="pb-4 pt-2 space-y-4">
-                            <div>
-                              <Label className="text-sm">Nome exibido</Label>
-                              <Input
-                                value={variation.displayName ?? ''}
-                                onChange={(event) => updateVariationField(category.id, 'displayName', event.target.value)}
-                                placeholder={`Nome opcional para ${category.name}`}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-sm">Descrição personalizada</Label>
-                              <Textarea
-                                value={variation.description ?? ''}
-                                onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
-                                placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
-                                rows={4}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-sm">Time Cap (min)</Label>
-                              <Input
-                                type="text"
-                                min="1"
-                                value={variation.estimatedDuration ?? ''}
-                                onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
-                                placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-sm">Notas específicas</Label>
-                              <Textarea
-                                value={variation.notes ?? ''}
-                                onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
-                                placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
-                                rows={3}
-                              />
-                            </div>
-                            {hasCustomData && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => resetCategoryVariation(category.id)}
-                                className="text-xs"
-                              >
-                                Limpar variação desta categoria
-                              </Button>
-                            )}
-                          </AccordionContent>
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
-                )}
-              </div>
-
-              <div className="flex gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleSubmit(false)}
-                  className="flex-1"
-                  disabled={saving}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    'Salvar WOD'
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleSubmit(true)}
-                  className="flex-1"
-                  disabled={saving}
-                >
-                  <Globe className="w-4 h-4 mr-2" />
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Publicando...
-                    </>
-                  ) : (
-                    'Publicar WOD'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={handleOpenCreate} className="gap-2 shadow-lg hover:shadow-xl transition-all">
+          <Plus className="w-4 h-4" />
+          Novo Evento
+        </Button>
       </div>
 
-      {wods.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Nenhum WOD criado ainda para o campeonato "{selectedChampionship?.name}".</p>
-          <p className="text-sm text-muted-foreground mt-2">Clique no botão flutuante no canto inferior direito para criar um novo WOD.</p>
-          <p className="text-xs text-muted-foreground mt-4">
-            Campeonato ID: {selectedChampionship?.id}
-          </p>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Input
+            placeholder="Buscar eventos..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 text-foreground"
+          />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          </div>
         </div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleWodDragEnd}
-        >
-          <SortableContext
-            items={wods.map(w => w.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-3">
-              {wods.map((wod) => (
-                <SortableWODItem
-                  key={wod.id}
-                  wod={wod}
-                  onEdit={() => handleOpenEdit(wod)}
-                  onDelete={() => handleDelete(wod.id)}
-                />
+        <div className="w-full sm:w-[250px]">
+          <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filtrar por Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as Categorias</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setEditingWOD(null);
+          setWodType('for-time');
+          setCategoryVariations(createEmptyVariations());
+          setVariationCategoriesWithData([]);
+          setApplyToAllCategories(false);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingWOD ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
+          </DialogHeader>
+          <form ref={formRef} onSubmit={(e) => { e.preventDefault(); }} className="space-y-4">
+            <div>
+              <Label htmlFor="name">Nome do Evento *</Label>
+              <Input
+                id="name"
+                name="name"
+                defaultValue={editingWOD?.name}
+                placeholder="Ex: Evento 1"
+                required
+              />
             </div>
-          </SortableContext>
-        </DndContext>
-      )}
+
+            <div>
+              <Label htmlFor="type">Tipo de WOD *</Label>
+              <Select
+                value={wodType}
+                onValueChange={setWodType}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="for-time">For Time</SelectItem>
+                  <SelectItem value="amrap">AMRAP</SelectItem>
+                  <SelectItem value="emom">EMOM</SelectItem>
+                  <SelectItem value="tonelagem">Tonelagem</SelectItem>
+                  <SelectItem value="carga-maxima">Carga Máxima</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="description">Descrição do Workout *</Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={editingWOD?.description}
+                placeholder="21-15-9&#10;Thrusters (95/65 lb)&#10;Pull-ups"
+                rows={5}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="timeCap">Time Cap da Prova *</Label>
+              <Input
+                id="timeCap"
+                name="timeCap"
+                type="text"
+                defaultValue={editingWOD?.time_cap || ''}
+                placeholder="Ex: 6:00 (6 minutos)"
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Formato: MM:SS (minutos:segundos) - Exemplo: 10:00 = 10 minutos
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="notes">Notas e Padrões de Movimento</Label>
+              <Textarea
+                id="notes"
+                name="notes"
+                defaultValue={editingWOD?.notes}
+                placeholder="Padrões de movimento, escalas, regras especiais..."
+                rows={3}
+              />
+            </div>
+
+            <div className="pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label className="font-semibold">Variações por Categoria</Label>
+                {variationsLoading && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Carregando variações
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={applyToAllCategories ? 'default' : 'destructive'}
+                  className="ml-auto flex items-center gap-1"
+                  onClick={() => {
+                    if (!applyToAllCategories && formRef.current) {
+                      // Quando ativando, copiar TODOS os dados padrão para todas as categorias
+                      // Ler valores diretamente dos elementos do formulário para garantir valores reais
+                      const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
+                      const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
+
+                      // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
+                      // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
+                      const descriptionValue = descriptionInput?.value ?? '';
+                      const notesValue = notesInput?.value ?? '';
+
+                      console.log('Copiando valores para todas as categorias:', {
+                        description: descriptionValue,
+                        notes: notesValue
+                      });
+
+                      setCategoryVariations(prev => {
+                        const updated: Record<string, CategoryVariationForm> = {};
+                        categories.forEach(cat => {
+                          const current = prev[cat.id] || emptyVariation();
+                          // Copiar os valores reais dos campos do formulário
+                          // Garantir que sejam strings reais (mesmo que vazias) para poder editar
+                          updated[cat.id] = {
+                            displayName: current.displayName || '',
+                            description: descriptionValue, // Valor real copiado do campo (sempre string)
+                            notes: notesValue, // Valor real copiado do campo (sempre string)
+                            estimatedDuration: '', // Será calculado automaticamente
+                          };
+                        });
+                        return updated;
+                      });
+
+                      // Marcar todas as categorias como tendo dados (para que sejam salvas)
+                      const allCategoryIds = categories.map(cat => cat.id);
+                      setVariationCategoriesWithData(prev => {
+                        const combined = new Set([...prev, ...allCategoryIds]);
+                        return Array.from(combined);
+                      });
+                    }
+                    setApplyToAllCategories(prev => !prev);
+                  }}
+                >
+                  <CopyPlus className="w-3 h-3" />
+                  {applyToAllCategories ? 'Aplicar em todas as categorias (ativado)' : 'Adicionar WOD a todas as categorias'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Personalize detalhes do WOD para cada categoria. Campos em branco usam as informações padrão acima.
+                {applyToAllCategories && (
+                  <span className="block text-[11px] text-primary mt-1">
+                    Este WOD será aplicado automaticamente a todas as categorias.
+                  </span>
+                )}
+              </p>
+
+              {categories.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-4">
+                  Cadastre categorias para configurar variações específicas.
+                </p>
+              ) : (
+                <Accordion type="multiple" className="mt-4 space-y-2">
+                  {categories.map(category => {
+                    // Garantir que sempre temos uma variação válida do estado
+                    const variation = categoryVariations[category.id] || emptyVariation();
+                    const hasCustomData = hasVariationData(variation);
+
+                    return (
+                      <AccordionItem key={category.id} value={category.id} className="border rounded-lg px-4">
+                        <AccordionTrigger className="py-3 text-left">
+                          <div className="flex flex-col text-left">
+                            <span className="font-medium">{category.name}</span>
+                            {hasCustomData && (
+                              <span className="text-xs text-muted-foreground">Variação personalizada aplicada</span>
+                            )}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-4 pt-2 space-y-4">
+                          <div>
+                            <Label className="text-sm">Nome exibido</Label>
+                            <Input
+                              value={variation.displayName ?? ''}
+                              onChange={(event) => updateVariationField(category.id, 'displayName', event.target.value)}
+                              placeholder={`Nome opcional para ${category.name}`}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Descrição personalizada</Label>
+                            <Textarea
+                              value={variation.description ?? ''}
+                              onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
+                              placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
+                              rows={4}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Time Cap (min)</Label>
+                            <Input
+                              type="text"
+                              min="1"
+                              value={variation.estimatedDuration ?? ''}
+                              onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
+                              placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Notas específicas</Label>
+                            <Textarea
+                              value={variation.notes ?? ''}
+                              onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
+                              placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
+                              rows={3}
+                            />
+                          </div>
+                          {hasCustomData && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => resetCategoryVariation(category.id)}
+                              className="text-xs"
+                            >
+                              Limpar variação desta categoria
+                            </Button>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              )}
+            </div>
+
+            <div className="flex gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleSubmit(false)}
+                className="flex-1"
+                disabled={saving}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Evento'
+                )}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleSubmit(true)}
+                className="flex-1"
+                disabled={saving}
+              >
+                <Globe className="w-4 h-4 mr-2" />
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Publicando...
+                  </>
+                ) : (
+                  'Publicar Evento'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+
+      {
+        wods.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Nenhum evento criado ainda para o campeonato "{selectedChampionship?.name}".</p>
+            <p className="text-sm text-muted-foreground mt-2">Clique no botão flutuante no canto inferior direito para criar um novo evento.</p>
+            <p className="text-xs text-muted-foreground mt-4">
+              Campeonato ID: {selectedChampionship?.id}
+            </p>
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleWodDragEnd}
+          >
+            <SortableContext
+              items={filteredWods.map(w => w.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">
+                {filteredWods.map((wod) => (
+                  <SortableWODItem
+                    key={wod.id}
+                    wod={wod}
+                    categoryId={selectedCategoryFilter !== 'all' ? selectedCategoryFilter : undefined}
+                    variations={variationsMap}
+                    onEdit={() => handleOpenEdit(wod)}
+                    onDelete={() => handleDelete(wod.id)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )
+      }
 
       {/* Floating Action Button */}
       <button
         onClick={() => navigate('/wods/new')}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
-        aria-label="Criar novo WOD"
+        aria-label="Criar novo Evento"
       >
         <Plus className="w-6 h-6" />
       </button>
-    </div>
+    </div >
   );
 }

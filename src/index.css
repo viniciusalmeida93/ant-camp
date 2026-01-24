@@ -38,6 +38,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* GLOBAL: Red calendar icon for all date inputs */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  /* Filter to generate ~#D71C1D (Red) from black/dark gray default icon */
+  filter: invert(19%) sepia(88%) saturate(5437%) hue-rotate(356deg) brightness(96%) contrast(116%) !important;
+  cursor: pointer;
+  opacity: 1;
+}
+
 /* Garantir que o valor seja sempre exibido em formato 24h */
 input[type="time"]::before {
   content: '';

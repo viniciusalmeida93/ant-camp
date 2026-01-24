@@ -52,21 +52,27 @@ export default function SuperAdminFees() {
     };
 
     const handleSaveFeeConfig = async () => {
+        if (!confirm("Isso vai atualizar a taxa global e recalcular inscrições pendentes em todos os campeonatos que seguem a regra global. Deseja continuar?")) {
+            return;
+        }
+
         setSavingFee(true);
         try {
-            const { error } = await supabase
-                .from('platform_settings')
-                .upsert({
-                    key: 'platform_fee_config',
-                    value: JSON.stringify(feeConfig),
-                    description: 'Configuração global da taxa da plataforma'
-                }, { onConflict: 'key' });
+            const { data, error } = await supabase.rpc('update_global_platform_fee', {
+                new_fee_config: feeConfig
+            });
 
             if (error) throw error;
-            toast.success("Taxa da plataforma atualizada com sucesso!");
+
+            const result = data as any;
+            if (result && result.success) {
+                toast.success(`Taxa atualizada! ${result.updated_registrations} inscrições pendentes foram recalculadas.`);
+            } else {
+                toast.success("Taxa atualizada com sucesso!");
+            }
         } catch (error: any) {
             console.error("Error saving fee config:", error);
-            toast.error("Erro ao salvar taxa");
+            toast.error(`Erro ao salvar taxa: ${error.message || 'Erro desconhecido'} ${error.details || ''}`);
         } finally {
             setSavingFee(false);
         }
@@ -129,39 +135,29 @@ export default function SuperAdminFees() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
-                                    <label className="text-sm font-medium mb-1 block">Tipo de Taxa</label>
-                                    <select
-                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        value={feeConfig.type}
-                                        onChange={(e) => setFeeConfig({ ...feeConfig, type: e.target.value as 'percentage' | 'fixed' })}
-                                    >
-                                        <option value="percentage">Porcentagem (%)</option>
-                                        <option value="fixed">Valor Fixo (R$)</option>
-                                    </select>
+                                    <label className="text-sm font-medium mb-1 block">Valor da Taxa (R$)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            value={feeConfig.value / 100}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                setFeeConfig({
+                                                    type: 'fixed',
+                                                    value: Math.round(val * 100)
+                                                });
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Taxa de {formatCurrency(feeConfig.value)} aplicada a cada inscrição individual ou por time.
+                                    </p>
                                 </div>
-                                <label className="text-sm font-medium mb-1 block">
-                                    {feeConfig.type === 'percentage' ? 'Porcentagem (%)' : 'Valor (R$)'}
-                                </label>
-                                <input
-                                    type="number"
-                                    step={feeConfig.type === 'percentage' ? "0.1" : "0.01"}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={feeConfig.type === 'percentage' ? feeConfig.value : feeConfig.value / 100}
-                                    onChange={(e) => {
-                                        const val = parseFloat(e.target.value);
-                                        setFeeConfig({
-                                            ...feeConfig,
-                                            value: feeConfig.type === 'percentage' ? val : Math.round(val * 100)
-                                        });
-                                    }}
-                                />
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {feeConfig.type === 'fixed'
-                                        ? `Taxa de R$ ${(feeConfig.value / 100).toFixed(2)} por inscrição`
-                                        : `${feeConfig.value}% do valor da inscrição`}
-                                </p>
                             </div>
                             <Button onClick={handleSaveFeeConfig} disabled={savingFee} className="w-full">
                                 {savingFee ? (

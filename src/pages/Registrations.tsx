@@ -8,6 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
@@ -36,14 +44,20 @@ function SortableRegistrationItem({
   onDelete,
   onPreviewEmail,
   onSendEmail,
+  onSendCartRecovery,
+  onUpdatePaymentStatus,
   isExpanded,
-  onToggleExpand
+  onToggleExpand,
+  onSendPasswordRecovery
 }: {
   reg: any;
   onEdit: () => void;
   onDelete: () => void;
   onPreviewEmail: () => void;
   onSendEmail: () => void;
+  onSendCartRecovery: () => void;
+  onSendPasswordRecovery: () => void;
+  onUpdatePaymentStatus: (status: string) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
 }) {
@@ -85,42 +99,40 @@ function SortableRegistrationItem({
             <p className="font-semibold truncate">{reg.team_name || reg.athlete_name}</p>
           </div>
 
-          {/* Info Simplificada - Apenas Categoria e Data */}
-          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold">{reg.category?.name}</span>
-            </div>
-            <div className="text-xs">
-              Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-              })}
-            </div>
-          </div>
+          {/* Info Line & Dropdown */}
+          <Collapsible open={isExpanded} onOpenChange={onToggleExpand}>
+            <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <span className="font-bold uppercase tracking-wide text-foreground/80">{reg.category?.name}</span>
 
-          {/* Dropdown de Integrantes - Sempre disponível para ver detalhes */}
-          <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="mt-3">
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between text-xs h-8"
-              >
-                <span className="flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Ver integrantes{hasMembers ? ` (${reg.team_members.length})` : ''}
-                </span>
-                {isExpanded ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </Button>
-            </CollapsibleTrigger>
+              <div className="flex items-center gap-1">
+                <span>Inscrito em {new Date(reg.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                })}</span>
+              </div>
+
+              <CollapsibleTrigger asChild>
+                <button
+                  className="flex items-center gap-1 hover:text-foreground transition-colors ml-1 font-medium select-none"
+                  title={isExpanded ? "Ocultar integrantes" : "Ver integrantes"}
+                >
+                  <span className="flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    Ver integrantes{hasMembers ? ` (${reg.team_members.length})` : ''}
+                  </span>
+                  {isExpanded ? (
+                    <ChevronUp className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+            </div>
+
             <CollapsibleContent className="mt-2">
               <div className="bg-muted/50 rounded-sm p-3 space-y-2">
                 {/* Integrantes do Time */}
@@ -136,8 +148,8 @@ function SortableRegistrationItem({
                       {member.birthDate && (
                         <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
                       )}
-                      {member.shirtSize && <div>👕 Tamanho: {member.shirtSize}</div>}
-                      {member.box && <div>🏋️ Box: {member.box}</div>}
+                      {member.shirtSize && <div>Tamanho: {member.shirtSize}</div>}
+                      {member.box && <div>Box: {member.box}</div>}
                     </div>
                   </div>
                 ))}
@@ -152,7 +164,26 @@ function SortableRegistrationItem({
         </div>
 
         {/* Botões de Ação */}
-        <div className="flex gap-1 shrink-0 justify-end sm:justify-start">
+        <div className="flex gap-1 shrink-0 justify-end sm:justify-start flex-wrap">
+          {/* Payment Status Dropdown */}
+          <div className="flex items-center gap-2 mr-2">
+            <Select value={reg.payment_status} onValueChange={onUpdatePaymentStatus}>
+              <SelectTrigger className={`h-8 w-[130px] text-xs ${reg.payment_status === 'approved' ? 'bg-green-500/10 text-green-700 border-green-200' :
+                reg.payment_status === 'processing' ? 'bg-orange-500/10 text-orange-700 border-orange-200' :
+                  reg.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-700 border-red-200' :
+                    'bg-yellow-500/10 text-yellow-700 border-yellow-200'
+                }`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending" className="text-yellow-700">Pendente</SelectItem>
+                <SelectItem value="processing" className="text-orange-700">Processando</SelectItem>
+                <SelectItem value="approved" className="text-green-700">Aprovado</SelectItem>
+                <SelectItem value="cancelled" className="text-red-700">Cancelar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button
             size="icon"
             variant="ghost"
@@ -162,15 +193,32 @@ function SortableRegistrationItem({
           >
             <Eye className="w-4 h-4 text-purple-600" />
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onSendEmail}
-            title="✉️ Enviar email"
-            className="h-8 w-8"
-          >
-            <Mail className="w-4 h-4 text-blue-600" />
-          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="✉️ Enviar email"
+                className="h-8 w-8"
+              >
+                <Mail className="w-4 h-4 text-blue-600" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Enviar Email</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onSendEmail} className="cursor-pointer">
+                Confirmação de Inscrição
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSendCartRecovery} className="cursor-pointer">
+                Recuperação de Carrinho
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSendPasswordRecovery} className="cursor-pointer">
+                Recuperação de Senha
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             size="icon"
             variant="ghost"
@@ -191,7 +239,7 @@ function SortableRegistrationItem({
           </Button>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 
@@ -480,7 +528,7 @@ export default function Registrations() {
       setCategories(cats || []);
 
       // Load registrations ordenadas por order_index ou created_at (fallback)
-      // Apenas mostrar inscrições pagas (payment_status = 'approved')
+      // Mostrar TODAS as inscrições (não apenas aprovadas) para permitir gerenciamento de pagamentos
       const { data: regs, error: regsError } = await supabase
         .from("registrations")
         .select(`
@@ -488,7 +536,6 @@ export default function Registrations() {
           category:categories(*)
         `)
         .eq("championship_id", selectedChampionship.id)
-        .eq("payment_status", "approved") // Apenas inscrições pagas
         .order("order_index", { ascending: true, nullsLast: false }) // Ordenar por order_index primeiro
         .order("created_at", { ascending: true }); // Fallback para created_at se order_index for NULL
 
@@ -790,6 +837,74 @@ export default function Registrations() {
     } catch (error: any) {
       console.error("Error sending email:", error);
       toast.error("Erro ao enviar email: " + error.message, { id: toastId });
+    }
+  };
+
+  const handleSendCartRecovery = async (reg: any) => {
+    if (!confirm(`Enviar email de recuperação de carrinho para ${reg.team_name || reg.athlete_name}?\n\nEmail: ${reg.athlete_email}`)) {
+      return;
+    }
+
+    const toastId = toast.loading("Enviando email de recuperação...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-cart-recovery', {
+        body: { registrationId: reg.id }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Email de recuperação enviado com sucesso!`, { id: toastId });
+    } catch (error: any) {
+      console.error("Error sending cart recovery email:", error);
+      toast.error("Erro ao enviar email: " + error.message, { id: toastId });
+    }
+  };
+
+  const handleSendPasswordRecovery = async (reg: any) => {
+    if (!confirm(`Enviar email de recuperação de senha para ${reg.team_name || reg.athlete_name}?`)) {
+      return;
+    }
+
+    const toastId = toast.loading("Gerando link e enviando email...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-password-recovery', {
+        body: { registrationId: reg.id }
+      });
+
+      if (error) {
+        // Handle specific error case where user is not found in auth
+        if (error.message?.includes("User not found")) {
+          throw new Error("Usuário não encontrado no sistema de autenticação.");
+        }
+        throw error;
+      }
+
+      toast.success(`Email de recuperação de senha enviado!`, { id: toastId });
+    } catch (error: any) {
+      console.error("Error sending password recovery email:", error);
+      toast.error("Erro ao enviar: " + (error.message || "Erro desconhecido"), { id: toastId });
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (reg: any, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from("registrations")
+        .update({
+          payment_status: newStatus,
+          paid_at: newStatus === 'approved' ? new Date().toISOString() : null
+        })
+        .eq("id", reg.id);
+
+      if (error) throw error;
+
+      toast.success(`Status atualizado para: ${newStatus}`);
+      await loadData();
+    } catch (error: any) {
+      console.error("Error updating payment status:", error);
+      toast.error("Erro ao atualizar status de pagamento");
     }
   };
 
@@ -1274,6 +1389,9 @@ export default function Registrations() {
                     onDelete={() => handleDelete(reg.id)}
                     onPreviewEmail={() => handlePreviewEmail(reg)}
                     onSendEmail={() => handleSendEmail(reg)}
+                    onSendCartRecovery={() => handleSendCartRecovery(reg)}
+                    onSendPasswordRecovery={() => handleSendPasswordRecovery(reg)}
+                    onUpdatePaymentStatus={(status) => handleUpdatePaymentStatus(reg, status)}
                     isExpanded={expandedMembers.has(reg.id)}
                     onToggleExpand={() => toggleMembersExpanded(reg.id)}
                   />

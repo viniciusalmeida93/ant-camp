@@ -677,7 +677,8 @@ export default function Dashboard() {
         </div>
         <Button
           size="lg"
-          className="shadow-glow"
+          variant="outline"
+          className="shadow-glow border-primary text-primary hover:bg-primary/10"
           onClick={() => navigate("/dashboard")}
         >
           <Settings className="w-5 h-5 mr-2" />
@@ -734,6 +735,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-[200px] justify-start"
                     onClick={() => navigate(`/championships/${selectedChampionship.id}/links`)}
                   >
                     <QrCode className="w-4 h-4 mr-2" />
@@ -744,6 +746,7 @@ export default function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="w-[200px] justify-start"
                         onClick={() => {
                           setEditInfoData({
                             name: selectedChampionship.name || '',
@@ -918,6 +921,7 @@ export default function Dashboard() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="w-[200px] justify-start"
                         onClick={() => {
                           setRegulationText(selectedChampionship.regulation || "");
                         }}

@@ -44,7 +44,7 @@ export default function Heats() {
   const [wodResults, setWodResults] = useState<any[]>([]);
   const [heats, setHeats] = useState<any[]>([]);
   const [heatEntries, setHeatEntries] = useState<any[]>([]);
-  
+
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [athletesPerHeat, setAthletesPerHeat] = useState<number | ''>('');
@@ -55,7 +55,7 @@ export default function Heats() {
   const [editingTimeHeatId, setEditingTimeHeatId] = useState<string | null>(null);
   const [newScheduledTime, setNewScheduledTime] = useState<string>('');
   const [recalculatingTimes, setRecalculatingTimes] = useState(false);
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -125,31 +125,31 @@ export default function Heats() {
       const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
       const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
       if (wodA !== wodB) return wodA - wodB;
-      
+
       // Se há categoria selecionada, ordenar por ordem dessa categoria
       if (selectedCategory) {
         // Para baterias intercaladas, usar a ordem da categoria filtrada
         // Pegar todas as baterias do mesmo WOD que têm participantes da categoria filtrada
-        const sameWodHeats = heats.filter(h2 => 
+        const sameWodHeats = heats.filter(h2 =>
           h2.wod_id === a.wod_id && heatHasCategoryParticipants(h2.id, selectedCategory)
         ).sort((h1, h2) => h1.heat_number - h2.heat_number);
-        
+
         const indexA = sameWodHeats.findIndex(h2 => h2.id === a.id);
         const indexB = sameWodHeats.findIndex(h2 => h2.id === b.id);
-        
+
         if (indexA !== -1 && indexB !== -1) {
           return indexA - indexB;
         }
       }
-      
+
       // Fallback: ordenar por categoria original da bateria, depois número
       const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
       const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
       if (categoryA !== categoryB) return categoryA - categoryB;
-      
+
       return a.heat_number - b.heat_number;
     });
-      
+
     if (filteredHeats.length > 0 && heatEntries.length > 0) {
       const entriesMap = new Map<string, any[]>();
       filteredHeats.forEach(heat => {
@@ -162,7 +162,7 @@ export default function Heats() {
     } else {
       setAllHeatEntries(new Map());
     }
-    
+
     // Inicializar ordem das baterias (mantendo ordem original: WOD → Categoria → heat_number)
     if (filteredHeats.length > 0) {
       setEditingHeatsOrder([...filteredHeats]);
@@ -181,7 +181,7 @@ export default function Heats() {
 
   const loadData = async () => {
     if (!selectedChampionship) return;
-    
+
     setLoading(true);
     try {
       const [catsResult, wodsResult, regsResult] = await Promise.all([
@@ -213,7 +213,7 @@ export default function Heats() {
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory);
-      
+
       if (!resultsError) {
         setWodResults(resultsData || []);
       }
@@ -273,13 +273,13 @@ export default function Heats() {
 
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any>();
-    
+
     wodResults
       .filter(r => r.category_id === targetCategory)
       .forEach(result => {
         const regId = result.registration_id;
         if (!regId) return;
-        
+
         if (!participantMap.has(regId)) {
           participantMap.set(regId, {
             registrationId: regId,
@@ -287,7 +287,7 @@ export default function Heats() {
             results: [],
           });
         }
-        
+
         const participant = participantMap.get(regId)!;
         participant.totalPoints += result.points || 0;
         participant.results.push(result);
@@ -315,7 +315,7 @@ export default function Heats() {
   ) => {
     // Buscar registrações da categoria
     const categoryRegs = registrations.filter(r => r.category_id === categoryId);
-    
+
     if (categoryRegs.length === 0) {
       return { success: false, skipped: true, message: `Nenhuma inscrição na categoria` };
     }
@@ -328,11 +328,11 @@ export default function Heats() {
 
     const categoryWodResults = categoryWodResultsData || [];
     const participantMap = new Map<string, any>();
-    
+
     categoryWodResults.forEach(result => {
       const regId = result.registration_id;
       if (!regId) return;
-      
+
       if (!participantMap.has(regId)) {
         participantMap.set(regId, {
           registrationId: regId,
@@ -340,7 +340,7 @@ export default function Heats() {
           results: [],
         });
       }
-      
+
       const participant = participantMap.get(regId)!;
       participant.totalPoints += result.points || 0;
       participant.results.push(result);
@@ -358,9 +358,25 @@ export default function Heats() {
 
     const hasResults = leaderboard.length > 0 && leaderboard.some(l => l.totalPoints > 0);
 
-    // Ordenar participantes
+    // Ordenar participantes para distribuição nas baterias (Seeding: Pior -> Melhor)
+    // Precisamos saber o PRESET de pontuação para saber quem é "Melhor"
+    // CrossFit: Maior Pontos = Melhor. Ordem Seeding: Menor -> Maior (ASC)
+    // Simples: Menor Pontos = Melhor. Ordem Seeding: Maior -> Menor (DESC)
+
+    let sortDirection = 'asc'; // Padrão CrossFit (Ascending puts Best at end)
+
+    const { data: configData } = await supabase
+      .from("scoring_configs")
+      .select("preset_type")
+      .eq("category_id", categoryId)
+      .maybeSingle();
+
+    if (configData && configData.preset_type === 'simple-order') {
+      sortDirection = 'desc'; // Simples (Low=Best). Desc puts High(Worst) -> Low(Best) at end.
+    }
+
     let orderedParticipants: any[];
-    
+
     if (!hasResults) {
       orderedParticipants = categoryRegs
         .sort((a, b) => {
@@ -376,7 +392,7 @@ export default function Heats() {
         }));
     } else {
       const leaderboardMap = new Map(leaderboard.map(l => [l.registrationId, l]));
-      
+
       orderedParticipants = categoryRegs.map(reg => {
         const lbEntry = leaderboardMap.get(reg.id);
         return {
@@ -387,7 +403,9 @@ export default function Heats() {
         };
       }).sort((a, b) => {
         if (a.totalPoints !== b.totalPoints) {
-          return a.totalPoints - b.totalPoints;
+          return sortDirection === 'asc'
+            ? a.totalPoints - b.totalPoints
+            : b.totalPoints - a.totalPoints;
         }
         return 0;
       });
@@ -403,7 +421,7 @@ export default function Heats() {
 
     if (existingHeats.length > 0) {
       const heatIds = existingHeats.map(h => h.id);
-      
+
       await supabase
         .from("heat_entries")
         .delete()
@@ -418,7 +436,7 @@ export default function Heats() {
     // Criar novas baterias
     const newHeats: any[] = [];
     const baseHeatNumber = startHeatNumber !== undefined ? startHeatNumber : 1;
-    
+
     for (let i = 0; i < totalHeats; i++) {
       const startIndex = i * athletesPerHeatValue;
       const endIndex = Math.min(startIndex + athletesPerHeatValue, orderedParticipants.length);
@@ -482,7 +500,7 @@ export default function Heats() {
         // Iterar sobre todas as categorias para este WOD
         for (const category of categories) {
           const categoryAthletesPerHeat = category.athletes_per_heat || athletesPerHeatValue;
-          
+
           try {
             const result = await generateHeatsForCategoryAndWod(
               category.id,
@@ -529,7 +547,7 @@ export default function Heats() {
           if (allNewHeats && allNewHeats.length > 0) {
             // Agrupar baterias por dia do WOD
             const heatsByDay = new Map<number, any[]>();
-            
+
             for (const heat of allNewHeats) {
               const { data: dayWodData } = await supabase
                 .from("championship_day_wods")
@@ -539,7 +557,7 @@ export default function Heats() {
 
               let dayNumber = 1;
               let targetDay = daysData[0];
-              
+
               if (dayWodData && dayWodData.championship_days) {
                 dayNumber = (dayWodData.championship_days as any).day_number || 1;
                 targetDay = dayWodData.championship_days as any;
@@ -560,7 +578,7 @@ export default function Heats() {
               // Buscar última bateria do MESMO DIA com horário
               const targetDate = new Date(targetDay.date);
               const targetDateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD
-              
+
               const { data: allDayHeats } = await supabase
                 .from("heats")
                 .select("*, wods(*)")
@@ -576,13 +594,13 @@ export default function Heats() {
               });
 
               let currentTime: Date;
-              
+
               if (sameDayHeats.length > 0) {
                 // Pegar a última bateria do dia
                 const lastHeat = sameDayHeats[sameDayHeats.length - 1];
                 const lastHeatTime = new Date(lastHeat.scheduled_time);
                 const lastWodDuration = (lastHeat.wods as any)?.estimated_duration_minutes || 15;
-                
+
                 // Buscar variação de categoria se existir para a última bateria
                 const { data: lastVariationData } = await supabase
                   .from("wod_category_variations")
@@ -590,9 +608,9 @@ export default function Heats() {
                   .eq("wod_id", lastHeat.wod_id)
                   .eq("category_id", lastHeat.category_id)
                   .maybeSingle();
-                
+
                 const finalLastWodDuration = lastVariationData?.estimated_duration_minutes || lastWodDuration;
-                
+
                 currentTime = new Date(lastHeatTime.getTime() + (finalLastWodDuration * 60000) + (breakInterval * 60000));
               } else {
                 let startTimeStr = targetDay.start_time || "09:00";
@@ -600,16 +618,16 @@ export default function Heats() {
                   const parts = startTimeStr.split(':');
                   startTimeStr = `${parts[0]}:${parts[1]}`;
                 }
-                
+
                 const [hours, mins] = startTimeStr.split(':');
                 const [year, month, dayNum] = targetDay.date.split('-');
                 currentTime = new Date(
-                  parseInt(year), 
-                  parseInt(month) - 1, 
-                  parseInt(dayNum), 
-                  parseInt(hours), 
-                  parseInt(mins), 
-                  0, 
+                  parseInt(year),
+                  parseInt(month) - 1,
+                  parseInt(dayNum),
+                  parseInt(hours),
+                  parseInt(mins),
+                  0,
                   0
                 );
               }
@@ -619,20 +637,20 @@ export default function Heats() {
                 const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
                 const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
                 if (wodA !== wodB) return wodA - wodB;
-                
+
                 const catA = categories.find(c => c.id === a.category_id)?.order_index || 0;
                 const catB = categories.find(c => c.id === b.category_id)?.order_index || 0;
                 if (catA !== catB) return catA - catB;
-                
+
                 return a.heat_number - b.heat_number;
               });
 
               // Atualizar horários das baterias do dia
               let lastWodId: string | null = null;
-              
+
               for (const heat of sortedDayHeats) {
                 const wodDuration = (heat.wods as any)?.estimated_duration_minutes || 15;
-                
+
                 // Buscar variação de categoria se existir
                 const { data: variationData } = await supabase
                   .from("wod_category_variations")
@@ -656,7 +674,7 @@ export default function Heats() {
                 // Avançar tempo para próxima bateria
                 currentTime = new Date(currentTime.getTime() + (finalWodDuration * 60000));
                 currentTime = new Date(currentTime.getTime() + (breakInterval * 60000));
-                
+
                 lastWodId = heat.wod_id;
               }
             }
@@ -670,7 +688,7 @@ export default function Heats() {
 
       // Construir mensagem de sucesso
       let message = `${totalGenerated} baterias geradas com sucesso!`;
-      
+
       if (totalSkipped > 0) {
         message += ` ${totalSkipped} combinações foram puladas (sem inscrições).`;
         if (skipped.length <= 5) {
@@ -722,7 +740,7 @@ export default function Heats() {
       }
 
       const totalHeats = result.totalHeats || 0;
-      
+
       // Buscar as baterias recém-criadas para calcular horários
       const { data: newHeatsData } = await supabase
         .from("heats")
@@ -734,7 +752,7 @@ export default function Heats() {
       const newHeats = newHeatsData || [];
 
       toast.success(`${totalHeats} baterias geradas! Calculando horários...`);
-      
+
       // Calcular horários automaticamente para as baterias recém-criadas
       try {
         // Buscar configurações de dia e horários
@@ -796,22 +814,22 @@ export default function Heats() {
 
           // Determinar horário inicial
           let currentTime: Date;
-          
+
           if (sameDayHeats.length > 0) {
             // Se já existem baterias neste dia, começar após a última
             const lastHeat = sameDayHeats[sameDayHeats.length - 1];
             const lastHeatTime = new Date(lastHeat.scheduled_time);
             const lastWodDuration = lastHeat.wods?.estimated_duration_minutes || 15;
-            
+
             // Verificar se a última bateria é de um WOD diferente
             const lastHeatWodId = lastHeat.wod_id || lastHeat.wods?.id;
             const isDifferentWod = lastHeatWodId !== selectedWOD;
-            
+
             let timeToAdd = (lastWodDuration * 60000) + (breakInterval * 60000);
             if (isDifferentWod) {
               timeToAdd += (wodInterval * 60000);
             }
-            
+
             // Próximo horário = último horário + duração + intervalo (e intervalo entre provas se necessário)
             currentTime = new Date(lastHeatTime.getTime() + timeToAdd);
           } else {
@@ -821,16 +839,16 @@ export default function Heats() {
               const parts = startTimeStr.split(':');
               startTimeStr = `${parts[0]}:${parts[1]}`;
             }
-            
+
             const [hours, mins] = startTimeStr.split(':');
             const [year, month, dayNum] = targetDay.date.split('-');
             currentTime = new Date(
-              parseInt(year), 
-              parseInt(month) - 1, 
-              parseInt(dayNum), 
-              parseInt(hours), 
-              parseInt(mins), 
-              0, 
+              parseInt(year),
+              parseInt(month) - 1,
+              parseInt(dayNum),
+              parseInt(hours),
+              parseInt(mins),
+              0,
               0
             );
           }
@@ -855,7 +873,7 @@ export default function Heats() {
         console.error("Erro ao calcular horários:", scheduleError);
         toast.warning(`${totalHeats} baterias geradas, mas erro ao calcular horários. Calcule manualmente no Dashboard.`);
       }
-      
+
       await loadHeats();
     } catch (error: any) {
       console.error("Error generating heats:", error);
@@ -868,14 +886,14 @@ export default function Heats() {
   const handleTimeUpdate = async (heatId: string, time: string) => {
     try {
       const timeValue = time ? new Date(`2000-01-01T${time}`).toISOString() : null;
-      
+
       const { error } = await supabase
         .from("heats")
         .update({ scheduled_time: timeValue })
         .eq("id", heatId);
 
       if (error) throw error;
-      
+
       await loadHeats();
     } catch (error: any) {
       console.error("Error updating time:", error);
@@ -928,7 +946,7 @@ export default function Heats() {
 
     const [, activeHeatId, activeEntryId] = activeMatch;
     const activeEntry = allHeatEntries.get(activeHeatId)?.find(e => e.id === activeEntryId);
-    
+
     if (!activeEntry) {
       setActiveId(null);
       return;
@@ -948,7 +966,7 @@ export default function Heats() {
 
       // Encontrar índice de destino
       const overIndex = overHeatEntries.findIndex(e => e.id === overEntryId);
-      
+
       // Inserir na nova posição
       if (activeHeatId === overHeatId) {
         // Mesma bateria - reordenar
@@ -994,7 +1012,7 @@ export default function Heats() {
     // Salvar automaticamente
     try {
       setSavingEdits(true);
-      
+
       // Deletar todas as entries das baterias afetadas
       const affectedHeatIds = Array.from(newEntriesMap.keys());
       const { error: deleteError } = await supabase
@@ -1060,11 +1078,11 @@ export default function Heats() {
         const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
         const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
         if (wodA !== wodB) return wodA - wodB;
-        
+
         const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
         const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
         if (categoryA !== categoryB) return categoryA - categoryB;
-        
+
         return a.heat_number - b.heat_number;
       });
 
@@ -1092,11 +1110,11 @@ export default function Heats() {
         const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
         const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
         if (wodA !== wodB) return wodA - wodB;
-        
+
         const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
         const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
         if (categoryA !== categoryB) return categoryA - categoryB;
-        
+
         return a.heat_number - b.heat_number;
       });
 
@@ -1106,36 +1124,36 @@ export default function Heats() {
       for (let i = 0; i < sortedAllHeats.length; i++) {
         const currentHeat = sortedAllHeats[i];
         let currentEntries = [...(entriesByHeat.get(currentHeat.id) || [])];
-        
+
         // Buscar athletes_per_heat da categoria desta bateria
         const category = categories.find(c => c.id === currentHeat.category_id);
         const maxAthletes = currentHeat.athletes_per_heat || category?.athletes_per_heat || (typeof athletesPerHeat === 'number' ? athletesPerHeat : 10);
-        
+
         if (!maxAthletes || maxAthletes <= 0) {
           console.warn(`Bateria ${currentHeat.heat_number} (${category?.name}) não tem athletes_per_heat definido`);
           continue;
         }
 
         console.log(`Bateria ${currentHeat.heat_number} (${category?.name}) tem ${currentEntries.length}/${maxAthletes} atletas`);
-        
+
         if (currentEntries.length < maxAthletes) {
           // Esta bateria precisa de mais atletas
           let needed = maxAthletes - currentEntries.length;
           console.log(`Bateria ${currentHeat.heat_number} precisa de ${needed} atletas`);
-          
+
           // Procurar atletas nas próximas baterias (pode ser de qualquer categoria/WOD)
           for (let j = i + 1; j < sortedAllHeats.length && needed > 0; j++) {
             const nextHeat = sortedAllHeats[j];
             let nextEntries = [...(entriesByHeat.get(nextHeat.id) || [])];
             const nextCategory = categories.find(c => c.id === nextHeat.category_id);
-            
+
             console.log(`Verificando bateria ${nextHeat.heat_number} (${nextCategory?.name}) com ${nextEntries.length} atletas`);
-            
+
             if (nextEntries.length > 0) {
               // Pegar atletas da próxima bateria
               const toMove = nextEntries.splice(0, Math.min(needed, nextEntries.length));
               console.log(`Movendo ${toMove.length} atletas da bateria ${nextHeat.heat_number} (${nextCategory?.name}) para bateria ${currentHeat.heat_number} (${category?.name})`);
-              
+
               currentEntries.push(...toMove);
               entriesByHeat.set(currentHeat.id, currentEntries);
               entriesByHeat.set(nextHeat.id, nextEntries);
@@ -1154,7 +1172,7 @@ export default function Heats() {
 
       // Atualizar lane_numbers e salvar no banco
       const allEntriesToUpdate: any[] = [];
-      
+
       // Deletar todas as entries das baterias afetadas
       const affectedHeatIds = Array.from(entriesByHeat.keys());
       const { error: deleteError } = await supabase
@@ -1228,7 +1246,7 @@ export default function Heats() {
 
       // Criar novo horário base para a bateria sendo editada
       const [hours, minutes] = newScheduledTime.split(':');
-      
+
       // Criar nova data em horário LOCAL
       const year = oldHeatTime.getFullYear();
       const month = oldHeatTime.getMonth();
@@ -1237,7 +1255,7 @@ export default function Heats() {
 
       // Calcular a DIFERENÇA em milissegundos (pode ser positiva ou negativa)
       const timeDifference = newHeatTime.getTime() - oldHeatTime.getTime();
-      
+
       console.log(`Diferença de tempo: ${timeDifference / 60000} minutos`);
 
       // Atualizar a bateria sendo editada
@@ -1263,8 +1281,8 @@ export default function Heats() {
         if (h.id === editingTimeHeatId) return false; // Pular a própria bateria editada
         const heatTime = new Date(h.scheduled_time);
         // Pegar baterias do mesmo dia que vinham DEPOIS do horário ANTIGO
-        return heatTime.toDateString() === oldHeatTime.toDateString() && 
-               heatTime.getTime() > oldHeatTime.getTime();
+        return heatTime.toDateString() === oldHeatTime.toDateString() &&
+          heatTime.getTime() > oldHeatTime.getTime();
       }).sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
 
       if (subsequentHeats.length === 0) {
@@ -1277,7 +1295,7 @@ export default function Heats() {
 
       // Aplicar a MESMA DIFERENÇA em TODAS as baterias seguintes
       let updatedCount = 1; // Conta a bateria editada
-      
+
       for (const heat of subsequentHeats) {
         const oldTime = new Date(heat.scheduled_time);
         const newTime = new Date(oldTime.getTime() + timeDifference); // Aplica a diferença
@@ -1298,7 +1316,7 @@ export default function Heats() {
       const diffMinutes = Math.round(timeDifference / 60000);
       const diffSign = diffMinutes >= 0 ? '+' : '';
       toast.success(`Horários ajustados! ${updatedCount} bateria(s) ${diffSign}${diffMinutes} minutos.`);
-      
+
       // Recarregar dados
       await loadHeats();
       setEditingTimeHeatId(null);
@@ -1364,19 +1382,19 @@ export default function Heats() {
     const wodA = wods.find(w => w.id === a.wod_id)?.order_num || 0;
     const wodB = wods.find(w => w.id === b.wod_id)?.order_num || 0;
     if (wodA !== wodB) return wodA - wodB;
-    
+
     // Se há categoria selecionada, ordenar por heat_number para manter ordem sequencial global
     // Isso garante que baterias intercaladas apareçam na ordem correta dentro da categoria
     // (ex: se bateria 3 tem 1 atleta Scale Feminino, ela aparece como última bateria dessa categoria)
     if (selectedCategory) {
       return a.heat_number - b.heat_number;
     }
-    
+
     // Sem filtro de categoria: ordenar por categoria original, depois número
     const categoryA = categories.find(c => c.id === a.category_id)?.order_index || 0;
     const categoryB = categories.find(c => c.id === b.category_id)?.order_index || 0;
     if (categoryA !== categoryB) return categoryA - categoryB;
-    
+
     return a.heat_number - b.heat_number;
   });
 
@@ -1431,11 +1449,11 @@ export default function Heats() {
     const reg = registrations.find(r => r.id === entry.registration_id);
     const lbEntry = calculateLeaderboard(categoryId).find(l => l.registrationId === entry.registration_id);
     const participantName = reg?.team_name || reg?.athlete_name || 'Desconhecido';
-    
+
     // Buscar categoria do registro
     const participantCategory = reg?.category_id ? categories.find(c => c.id === reg.category_id) : null;
     const categoryName = participantCategory?.name || 'N/A';
-    
+
     const {
       attributes,
       listeners,
@@ -1565,32 +1583,32 @@ export default function Heats() {
             />
           </div>
 
-          <div className="flex gap-2 md:col-span-3">
-            <Button 
-              onClick={handleGenerateHeats} 
-              className="flex-1 shadow-glow h-12" 
+          <div className="flex flex-row gap-2 md:col-span-3 w-full">
+            <Button
+              onClick={handleGenerateAllHeats}
+              className="flex-1 shadow-glow h-12"
+              disabled={generating || savingEdits}
+              variant="destructive"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+              {generating ? 'Gerando...' : 'Gerar Baterias Geral'}
+            </Button>
+            <Button
+              onClick={handleGenerateHeats}
+              className="flex-1 shadow-glow h-12"
               disabled={generating || savingEdits}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
               {generating ? 'Gerando...' : 'Gerar Baterias'}
             </Button>
-            <Button 
-              onClick={handleGenerateAllHeats} 
-              className="flex-1 shadow-glow h-12" 
-              disabled={generating || savingEdits}
-              variant="destructive"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
-              {generating ? 'Gerando Todas...' : 'GERAR TODAS AS BATERIAS'}
-            </Button>
-            <Button 
-              onClick={handleIntercalateHeats} 
-              className="flex-1 shadow-glow h-12" 
+            <Button
+              onClick={handleIntercalateHeats}
+              className="flex-1 shadow-glow h-12"
               disabled={generating || savingEdits}
               variant="outline"
             >
               <Shuffle className={`w-4 h-4 mr-2 ${savingEdits ? 'animate-spin' : ''}`} />
-              {savingEdits ? 'Intercalando...' : 'Intercalar Baterias'}
+              {savingEdits ? 'Atualizando...' : 'Atualizar Baterias'}
             </Button>
           </div>
         </div>
@@ -1617,18 +1635,18 @@ export default function Heats() {
             }
           }}
         >
-          <SortableContext 
-            items={editingHeatsOrder.map(h => h.id)} 
+          <SortableContext
+            items={editingHeatsOrder.map(h => h.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
               {editingHeatsOrder.map(heat => {
                 const currentEntries = allHeatEntries.get(heat.id) || [];
-                const scheduledTime = heat.scheduled_time 
+                const scheduledTime = heat.scheduled_time
                   ? new Date(heat.scheduled_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
                   : '';
                 const allItemIds = currentEntries.map(e => `heat-${heat.id}-entry-${e.id}`);
-                
+
                 const categoryName = categories.find(c => c.id === heat.category_id)?.name || 'Categoria';
                 const wodName = wods.find(w => w.id === heat.wod_id)?.name || 'WOD';
 
@@ -1643,9 +1661,9 @@ export default function Heats() {
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3 flex-wrap">
                             {/* Ícone de arraste ao lado do badge */}
-                            <div 
-                              {...dragAttributes} 
-                              {...dragListeners} 
+                            <div
+                              {...dragAttributes}
+                              {...dragListeners}
                               className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded"
                               title="Arraste para reordenar"
                             >
@@ -1673,7 +1691,7 @@ export default function Heats() {
                               </Badge>
                             )}
                           </div>
-                          
+
                           <div className="flex items-center gap-2">
                             {scheduledTime ? (
                               <>
@@ -1704,42 +1722,42 @@ export default function Heats() {
                           </div>
                         </div>
 
-                      <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
-                        <HeatDropZone heatId={heat.id} isEmpty={currentEntries.length === 0}>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Raia</TableHead>
-                                <TableHead>Atleta/Time</TableHead>
-                                <TableHead>Categoria</TableHead>
-                                <TableHead>Posição Atual</TableHead>
-                                <TableHead>Pontos Totais</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {currentEntries.length === 0 ? (
+                        <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
+                          <HeatDropZone heatId={heat.id} isEmpty={currentEntries.length === 0}>
+                            <Table>
+                              <TableHeader>
                                 <TableRow>
-                                  <TableCell 
-                                    colSpan={5} 
-                                    className="text-center text-muted-foreground py-8"
-                                  >
-                                    Arraste participantes aqui
-                                  </TableCell>
+                                  <TableHead>Raia</TableHead>
+                                  <TableHead>Atleta/Time</TableHead>
+                                  <TableHead>Categoria</TableHead>
+                                  <TableHead>Posição Atual</TableHead>
+                                  <TableHead>Pontos Totais</TableHead>
                                 </TableRow>
-                              ) : (
-                                currentEntries.map(entry => (
-                                  <SortableParticipant
-                                    key={entry.id}
-                                    entry={entry}
-                                    heatId={heat.id}
-                                    categoryId={heat.category_id}
-                                  />
-                                ))
-                              )}
-                            </TableBody>
-                          </Table>
-                        </HeatDropZone>
-                      </SortableContext>
+                              </TableHeader>
+                              <TableBody>
+                                {currentEntries.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell
+                                      colSpan={5}
+                                      className="text-center text-muted-foreground py-8"
+                                    >
+                                      Arraste participantes aqui
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  currentEntries.map(entry => (
+                                    <SortableParticipant
+                                      key={entry.id}
+                                      entry={entry}
+                                      heatId={heat.id}
+                                      categoryId={heat.category_id}
+                                    />
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
+                          </HeatDropZone>
+                        </SortableContext>
                       </Card>
                     )}
                   </SortableHeat>
@@ -1754,7 +1772,7 @@ export default function Heats() {
         <Card className="p-12 text-center shadow-card">
           <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground mb-4">
-            {selectedCategory && selectedWOD 
+            {selectedCategory && selectedWOD
               ? "Nenhuma bateria gerada para este WOD ainda."
               : "Nenhuma bateria gerada ainda."
             }

@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "project": "AntCamp",
+    "date": "2026-01-21",
+    "prepared_by": "Equipe AntCamp"
+  },
+  "product_overview": "AntCamp é uma plataforma completa para gerenciamento de competições de CrossFit, destinada a organizadores, atletas e espectadores, oferecendo ferramentas para inscrições, gestão de campeonatos, pagamentos, geração de baterias, resultados e leaderboard em tempo real.",
+  "core_goals": [
+    "Permitir a criação e configuração rápida de campeonatos e suas categorias.",
+    "Facilitar o processo de inscrição pública com autenticação e checkout seguro.",
+    "Automatizar a gestão de pagamentos com integração Asaas e split payment.",
+    "Gerar e gerenciar baterias de atletas de forma automática e manual.",
+    "Disponibilizar resultados e leaderboard públicos atualizados em tempo real.",
+    "Prover dashboards personalizados para organizadores, atletas e super admins."
+  ],
+  "key_features": [
+    "Sistema completo de criação e configuração de campeonatos, incluindo categorias e WODs diversos.",
+    "Fluxo público de inscrições multi-step com autenticação, dados dos atletas e times, e aplicação de cupons.",
+    "Checkout integrado com Asaas para pagamentos via PIX, cartão de crédito (parcelado) e boleto.",
+    "Dashboard do organizador para gestão financeira, inscrições e estatísticas.",
+    "Mecanismo de geração automática e edição manual de baterias com visualização pública e modo TV.",
+    "Lançamento e publicação de resultados com múltiplos tipos de WOD e cálculo automático de pontuação.",
+    "Página de links personalizada para divulgação em redes sociais com banner e botões configuráveis.",
+    "Políticas de segurança incluindo autenticação Supabase, RLS e validação server-side."
+  ],
+  "user_flow_summary": [
+    "Atleta acessa página de inscrição pública via link personalizado.",
+    "Usuário faz login ou cria conta para acesso ao sistema.",
+    "Seleciona categoria, preenche dados de inscrição, e aplica cupom se disponível.",
+    "Realiza pagamento pelo método escolhido (PIX, cartão ou boleto) via checkout integrado.",
+    "Organizador aprova ou rejeita inscrições na dashboard, podendo editar dados.",
+    "Baterias são geradas automaticamente ou editadas manualmente pelo organizador.",
+    "Resultados são lançados pelo organizador, publicados e atualizam leaderboard público em tempo real.",
+    "Super Admin monitora faturamento e configura taxas globais na plataforma."
+  ],
+  "validation_criteria": [
+    "Verificação de idade compatível com a categoria selecionada.",
+    "Garantia de CPF único por campeonato para evitar duplicidade de inscrições.",
+    "Validação da disponibilidade de vagas na categoria antes de confirmar inscrição.",
+    "Validação e aplicação correta de cupons com limite de uso, validade e associação ao campeonato.",
+    "Confirmação da autorização de pagamento via webhook da Asaas.",
+    "Atualização em tempo real do leaderboard após publicação de resultados.",
+    "Restrições de acesso baseadas em roles (athlete, organizer, super_admin) implementadas via RLS.",
+    "Performance da aplicação com tempo de carregamento inicial abaixo de 3 segundos e suporte a 1000+ inscrições simultâneas."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "React",
+      "TypeScript",
+      "Vite",
+      "Tailwind CSS",
+      "Shadcn UI",
+      "Supabase Auth",
+      "Supabase Database",
+      "React Router DOM",
+      "TanStack Query"
+    ],
+    "features": [
+      {
+        "name": "Auth Integration",
+        "description": "Handles user authentication (login, signup, logout) using Supabase Auth.",
+        "files": [
+          "src/pages/Auth.tsx",
+          "src/pages/Logout.tsx",
+          "src/integrations/supabase/client.ts"
+        ]
+      },
+      {
+        "name": "Public Registration",
+        "description": "Public registration form for championships, including handling of multi-step wizard, auth check, and team member management.",
+        "files": [
+          "src/pages/PublicRegistration.tsx",
+          "src/components/layout/PublicHeader.tsx"
+        ]
+      },
+      {
+        "name": "Checkout Flow",
+        "description": "Checkout page for payment processing using Asaas (Pix/Credit Card). Includes coupon logic and registration validation.",
+        "files": [
+          "src/pages/Checkout.tsx",
+          "src/types/coupon.ts"
+        ]
+      },
+      {
+        "name": "Organizer Dashboard",
+        "description": "Dashboard for organizers to manage championships, categories, and view stats.",
+        "files": [
+          "src/pages/OrganizerDashboard.tsx",
+          "src/pages/Dashboard.tsx",
+          "src/components/layout/Sidebar.tsx"
+        ]
+      },
+      {
+        "name": "Athlete Dashboard",
+        "description": "Dashboard for athletes to view their registrations and status.",
+        "files": [
+          "src/pages/AthleteDashboard.tsx"
+        ]
+      },
+      {
+        "name": "Championship Management",
+        "description": "Pages for creating and editing championships and their settings.",
+        "files": [
+          "src/pages/ChampionshipSettings.tsx",
+          "src/pages/ChampionshipFinance.tsx",
+          "src/contexts/ChampionshipContext.tsx"
+        ]
+      }
+    ]
+  }
+}

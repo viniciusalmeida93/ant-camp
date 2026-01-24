@@ -24,6 +24,7 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
     const [loading, setLoading] = useState(false);
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
+    const [birthDate, setBirthDate] = useState("");
     const [cpf, setCpf] = useState("");
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -39,7 +40,7 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
             setLoading(true);
             const { data, error } = await supabase
                 .from("profiles")
-                .select("full_name, phone, cpf, avatar_url")
+                .select("full_name, phone, cpf, avatar_url, birth_date")
                 .eq("id", user.id)
                 .single();
 
@@ -50,6 +51,7 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                 setFullName(data.full_name || "");
                 setPhone(data.phone || "");
                 setCpf(data.cpf || "");
+                setBirthDate(data.birth_date || "");
                 setAvatarUrl(data.avatar_url);
             }
         } catch (error) {
@@ -61,6 +63,12 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!fullName || !phone || !cpf || !birthDate) {
+            toast.error("Por favor, preencha todos os campos obrigatórios.");
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -75,6 +83,7 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                     // However, if the user is editing, they are seeing current values. 
                     // Let's keep the existing CPF if present.
                     cpf: cpf,
+                    birth_date: birthDate,
                     avatar_url: avatarUrl,
                     email: user.email // Ensure email is kept/set
                 });
@@ -180,11 +189,14 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                                     <Input
                                         id="cpf"
                                         value={cpf}
-                                        disabled
-                                        className="bg-muted text-muted-foreground cursor-not-allowed"
-                                        title="O CPF não pode ser alterado."
+                                        onChange={(e) => setCpf(e.target.value)}
+                                        disabled={!!user?.user_metadata?.cpf || (!!cpf && cpf.length > 0)} // Disabled if exists
+                                        className={!!cpf ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}
+                                        title={!!cpf ? "O CPF não pode ser alterado." : "Digite seu CPF"}
+                                        placeholder="000.000.000-00"
+                                        required
                                     />
-                                    <span className="text-[10px] text-muted-foreground">CPF não pode ser alterado.</span>
+                                    {!!cpf && <span className="text-[10px] text-muted-foreground">CPF não pode ser alterado.</span>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="phone">Telefone</Label>
@@ -192,8 +204,21 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                                         id="phone"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
+                                        placeholder="(11) 99999-9999"
+                                        required
                                     />
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="birthDate">Data de Nascimento</Label>
+                                <Input
+                                    id="birthDate"
+                                    type="date"
+                                    value={birthDate}
+                                    onChange={(e) => setBirthDate(e.target.value)}
+                                    required
+                                />
                             </div>
 
                             <div className="space-y-2">

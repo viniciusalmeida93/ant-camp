@@ -17,40 +17,40 @@ import { compareResults, calculateWODPoints } from '@/lib/scoring';
 const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
   try {
     console.log('🔄 Atualizando order_index baseado no leaderboard para categoria:', categoryId);
-    
+
     // 1. Buscar TODOS os resultados publicados da categoria
     const { data: resultsData, error: resultsError } = await supabase
       .from("wod_results")
       .select("*")
       .eq("category_id", categoryId)
       .eq("is_published", true);
-    
+
     if (resultsError) throw resultsError;
-    
+
     // 2. Buscar todas as registrations aprovadas desta categoria
     const { data: regsData, error: regsError } = await supabase
       .from("registrations")
       .select("*")
       .eq("category_id", categoryId)
       .eq("status", "approved");
-    
+
     if (regsError) throw regsError;
-    
+
     if (!regsData || regsData.length === 0) {
       console.log('⚠️ Nenhum participante encontrado na categoria');
       return;
     }
-    
+
     // 3. Buscar WODs para ordenar resultados
     const { data: wodsData } = await supabase
       .from("wods")
       .select("*");
-    
+
     const wods = wodsData || [];
-    
+
     // 4. Calcular leaderboard (mesma lógica da página Leaderboard.tsx)
     const participantMap = new Map<string, any[]>();
-    
+
     (resultsData || []).forEach(result => {
       const regId = result.registration_id;
       if (!participantMap.has(regId)) {
@@ -58,39 +58,39 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
       }
       participantMap.get(regId)!.push(result);
     });
-    
+
     const entries: any[] = [];
     const processedRegIds = new Set<string>();
-    
+
     // Processar participantes com resultados
     participantMap.forEach((wodResults, registrationId) => {
       const reg = regsData.find(r => r.id === registrationId);
       if (!reg) return;
-      
+
       processedRegIds.add(registrationId);
-      
+
       const totalPoints = wodResults.reduce((sum, r) => sum + (r.points || 0), 0);
       const firstPlaces = wodResults.filter(r => r.position === 1).length;
       const secondPlaces = wodResults.filter(r => r.position === 2).length;
       const thirdPlaces = wodResults.filter(r => r.position === 3).length;
-      
+
       const sortedResults = [...wodResults].sort((a, b) => {
         const wodA = wods.find(w => w.id === a.wod_id);
         const wodB = wods.find(w => w.id === b.wod_id);
         const orderA = wodA?.order_num || 0;
         const orderB = wodB?.order_num || 0;
-        
+
         if (orderA !== orderB) {
           return orderA - orderB;
         }
-        
+
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
-      
-      const lastWodPosition = sortedResults.length > 0 
-        ? sortedResults[sortedResults.length - 1].position 
+
+      const lastWodPosition = sortedResults.length > 0
+        ? sortedResults[sortedResults.length - 1].position
         : undefined;
-      
+
       entries.push({
         registrationId,
         totalPoints,
@@ -101,7 +101,7 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
         orderIndex: reg.order_index,
       });
     });
-    
+
     // Adicionar participantes SEM resultados (zerados)
     regsData.forEach(reg => {
       if (!processedRegIds.has(reg.id)) {
@@ -116,71 +116,71 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
         });
       }
     });
-    
+
     // 5. Ordenar (mesma lógica do Leaderboard.tsx)
     entries.sort((a, b) => {
       // Se um tem 0 e outro não, quem tem 0 vai para o final
       if (a.totalPoints === 0 && b.totalPoints > 0) return 1;
       if (a.totalPoints > 0 && b.totalPoints === 0) return -1;
-      
+
       // Se ambos têm 0 pontos, manter order_index original
       if (a.totalPoints === 0 && b.totalPoints === 0) {
-        if (a.orderIndex !== null && a.orderIndex !== undefined && 
-            b.orderIndex !== null && b.orderIndex !== undefined) {
+        if (a.orderIndex !== null && a.orderIndex !== undefined &&
+          b.orderIndex !== null && b.orderIndex !== undefined) {
           return a.orderIndex - b.orderIndex;
         }
         if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
         if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
         return 0;
       }
-      
+
       // 1. Pontos (SEMPRE menor é melhor, desde que > 0)
       if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
-      
+
       // 2. Mais primeiros lugares
       if (b.firstPlaces !== a.firstPlaces) return b.firstPlaces - a.firstPlaces;
-      
+
       // 3. Mais segundos lugares
       if (b.secondPlaces !== a.secondPlaces) return b.secondPlaces - a.secondPlaces;
-      
+
       // 4. Mais terceiros lugares
       if (b.thirdPlaces !== a.thirdPlaces) return b.thirdPlaces - a.thirdPlaces;
-      
+
       // 5. Melhor posição no último WOD
       if (a.lastWodPosition !== undefined && b.lastWodPosition !== undefined) {
         return a.lastWodPosition - b.lastWodPosition;
       }
-      
+
       if (a.lastWodPosition !== undefined) return -1;
       if (b.lastWodPosition !== undefined) return 1;
-      
+
       // 6. order_index como desempate
-      if (a.orderIndex !== null && a.orderIndex !== undefined && 
-          b.orderIndex !== null && b.orderIndex !== undefined) {
+      if (a.orderIndex !== null && a.orderIndex !== undefined &&
+        b.orderIndex !== null && b.orderIndex !== undefined) {
         return a.orderIndex - b.orderIndex;
       }
-      
+
       if (a.orderIndex !== null && a.orderIndex !== undefined) return -1;
       if (b.orderIndex !== null && b.orderIndex !== undefined) return 1;
-      
+
       return 0;
     });
-    
+
     // 6. Atualizar order_index no banco baseado na nova ordem do leaderboard
     console.log('💾 Atualizando order_index de', entries.length, 'participantes...');
-    
+
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const newOrderIndex = i + 1; // 1º lugar = 1, 2º lugar = 2, etc.
-      
+
       await supabase
         .from("registrations")
         .update({ order_index: newOrderIndex })
         .eq("id", entry.registrationId);
     }
-    
+
     console.log('✅ order_index atualizado! Agora as baterias serão reorganizadas automaticamente.');
-    
+
   } catch (error) {
     console.error('❌ Erro ao atualizar order_index:', error);
     throw error;
@@ -198,7 +198,7 @@ export default function Results() {
   const [scoringConfigs, setScoringConfigs] = useState<any[]>([]);
   const [existingResults, setExistingResults] = useState<any[]>([]);
   const [wodVariations, setWodVariations] = useState<Record<string, Record<string, any>>>({});
-  
+
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [resultInputs, setResultInputs] = useState<Map<string, any>>(new Map());
@@ -231,7 +231,7 @@ export default function Results() {
 
   const loadData = async () => {
     if (!selectedChampionship) return;
-    
+
     setLoading(true);
     try {
       const [catsResult, wodsResult, regsResult, configsResult] = await Promise.all([
@@ -322,7 +322,7 @@ export default function Results() {
 
   const getParticipants = () => {
     if (!selectedCategory) return [];
-    
+
     const categoryRegs = registrations.filter(r => r.category_id === selectedCategory);
     return categoryRegs.map(reg => ({
       id: reg.id,
@@ -335,7 +335,7 @@ export default function Results() {
   const handleInputChange = (participantId: string, field: string, value: any) => {
     const current = resultInputs.get(participantId) || {};
     const updated = { ...current, [field]: value };
-    
+
     if (field === 'isDNF' && value) {
       updated.isDNS = false;
       updated.status = 'dnf';
@@ -345,7 +345,7 @@ export default function Results() {
     } else if ((field === 'isDNF' || field === 'isDNS') && !value) {
       updated.status = 'completed';
     }
-    
+
     setResultInputs(new Map(resultInputs.set(participantId, updated)));
   };
 
@@ -386,16 +386,16 @@ export default function Results() {
       // Criar novos resultados apenas para participantes com dados preenchidos
       const participants = getParticipants();
       const newResults: any[] = [];
-      
+
       participants.forEach(participant => {
         const input = resultInputs.get(participant.id);
         if (!input) return;
-        
+
         // Só adicionar se houver resultado, tiebreak ou status diferente de 'completed'
         const hasResult = input.result && input.result.trim() !== '';
         const hasTiebreak = input.tiebreakValue && input.tiebreakValue.trim() !== '';
         const hasStatus = input.status && input.status !== 'completed';
-        
+
         if (hasResult || hasTiebreak || hasStatus) {
           newResults.push({
             wod_id: selectedWOD,
@@ -412,7 +412,7 @@ export default function Results() {
       // Se não há resultados para inserir, apenas deletar os existentes e finalizar
       if (newResults.length === 0) {
         console.log('🗑️ Removendo todos os resultados para', selectedCategory, selectedWOD);
-        
+
         // Garantir que todos os resultados foram deletados
         if (existing && existing.length > 0) {
           const { error: finalDeleteError } = await supabase
@@ -420,23 +420,23 @@ export default function Results() {
             .delete()
             .eq("category_id", selectedCategory)
             .eq("wod_id", selectedWOD);
-          
+
           if (finalDeleteError) {
             console.error("❌ Erro ao deletar resultados:", finalDeleteError);
             throw finalDeleteError;
           }
           console.log('✅ Resultados deletados:', existing.length);
         }
-        
+
         toast.success("Todos os resultados foram removidos");
         setSaving(false);
         // Recarregar resultados para limpar a interface
         await loadExistingResults();
-        
+
         // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
         console.log('📢 Disparando evento para atualizar leaderboard...');
         window.dispatchEvent(new CustomEvent('wod_results_updated'));
-        
+
         // Também disparar novamente após um pequeno delay para garantir
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('wod_results_updated'));
@@ -481,7 +481,7 @@ export default function Results() {
         id: config.id,
         categoryId: config.category_id,
         presetType: config.preset_type as any,
-        pointsTable: (pointsTable && typeof pointsTable === 'object') 
+        pointsTable: (pointsTable && typeof pointsTable === 'object')
           ? (pointsTable as { [position: number]: number })
           : {},
         dnfPoints: config.dnf_points || 0,
@@ -516,10 +516,10 @@ export default function Results() {
           .eq("wod_id", selectedWOD);
 
         if (publishError) throw publishError;
-        
+
         // ATUALIZAR ORDER_INDEX AUTOMATICAMENTE BASEADO NO LEADERBOARD
         await updateOrderIndexFromLeaderboard(selectedCategory);
-        
+
         toast.success("Resultados salvos, pontuação calculada e publicados no leaderboard!");
       } else {
         // Garantir que resultados salvos sem publicar tenham is_published = false
@@ -532,13 +532,13 @@ export default function Results() {
         if (unpublishError) throw unpublishError;
         toast.success("Resultados salvos e pontuação calculada! (Não publicados ainda)");
       }
-      
+
       await loadExistingResults();
-      
+
       // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
       console.log('📢 Disparando evento para atualizar leaderboard após salvar...');
       window.dispatchEvent(new CustomEvent('wod_results_updated'));
-      
+
       // Também disparar novamente após um pequeno delay para garantir
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('wod_results_updated'));
@@ -580,7 +580,7 @@ export default function Results() {
   const displayTimeCapMinutes = selectedVariation?.estimated_duration_minutes || selectedWODData?.estimated_duration_minutes;
   const displayDescription = selectedVariation?.description || selectedWODData?.description;
   const displayNotes = selectedVariation?.notes || selectedWODData?.notes;
-  
+
   // Função para obter o label e placeholder baseado no tipo de WOD
   const getResultFieldInfo = (wodType: string | undefined) => {
     if (!wodType) {
@@ -590,7 +590,7 @@ export default function Results() {
         helpText: ''
       };
     }
-    
+
     switch (wodType) {
       case 'for-time':
       case 'tempo': // Compatibilidade com tipo antigo
@@ -633,7 +633,6 @@ export default function Results() {
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
       <div className="mb-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <Calculator className="w-8 h-8 text-primary" />
           <h1 className="text-4xl font-bold">Lançamento de Resultados</h1>
         </div>
         <p className="text-muted-foreground">Digite os resultados dos WODs por categoria</p>
@@ -664,11 +663,11 @@ export default function Results() {
               <SelectContent>
                 {wods.map(wod => {
                   const typeLabel = wod.type === 'for-time' || wod.type === 'tempo' ? 'For Time' :
-                                   wod.type === 'amrap' ? 'AMRAP' :
-                                   wod.type === 'emom' ? 'EMOM' :
-                                   wod.type === 'tonelagem' ? 'Tonelagem' :
-                                   wod.type === 'carga-maxima' ? 'Carga Máxima' :
-                                   wod.type || 'Não definido';
+                    wod.type === 'amrap' ? 'AMRAP' :
+                      wod.type === 'emom' ? 'EMOM' :
+                        wod.type === 'tonelagem' ? 'Tonelagem' :
+                          wod.type === 'carga-maxima' ? 'Carga Máxima' :
+                            wod.type || 'Não definido';
                   return (
                     <SelectItem key={wod.id} value={wod.id}>
                       {wod.name} ({typeLabel})
@@ -689,11 +688,11 @@ export default function Results() {
             </h3>
             <p className="text-sm text-muted-foreground">
               Tipo: {selectedWODData?.type === 'for-time' || selectedWODData?.type === 'tempo' ? 'For Time' :
-                     selectedWODData?.type === 'amrap' ? 'AMRAP' :
-                     selectedWODData?.type === 'emom' ? 'EMOM' :
-                     selectedWODData?.type === 'tonelagem' ? 'Tonelagem' :
-                     selectedWODData?.type === 'carga-maxima' ? 'Carga Máxima' :
-                     selectedWODData?.type || 'Não definido'}
+                selectedWODData?.type === 'amrap' ? 'AMRAP' :
+                  selectedWODData?.type === 'emom' ? 'EMOM' :
+                    selectedWODData?.type === 'tonelagem' ? 'Tonelagem' :
+                      selectedWODData?.type === 'carga-maxima' ? 'Carga Máxima' :
+                        selectedWODData?.type || 'Não definido'}
               {displayTimeCapMinutes && ` | Time Cap: ${displayTimeCapMinutes} min`}
             </p>
             {displayDescription && (
@@ -752,10 +751,10 @@ export default function Results() {
                           onChange={(e) => handleInputChange(participant.id, 'tiebreakValue', e.target.value)}
                           placeholder={
                             selectedWODData?.type === 'for-time' || selectedWODData?.type === 'tempo' ? 'Reps completados (opcional)' :
-                            selectedWODData?.type === 'amrap' ? 'Tempo restante (opcional)' :
-                            selectedWODData?.type === 'tonelagem' ? 'Tempo total (opcional)' :
-                            selectedWODData?.type === 'carga-maxima' ? 'Tentativas (opcional)' :
-                            'Opcional'
+                              selectedWODData?.type === 'amrap' ? 'Tempo restante (opcional)' :
+                                selectedWODData?.type === 'tonelagem' ? 'Tempo total (opcional)' :
+                                  selectedWODData?.type === 'carga-maxima' ? 'Tentativas (opcional)' :
+                                    'Opcional'
                           }
                           disabled={input.isDNF || input.isDNS}
                           className="w-40"
@@ -781,18 +780,18 @@ export default function Results() {
           </div>
 
           <div className="flex gap-3 mt-6">
-            <Button 
-              onClick={() => handleSave(false)} 
+            <Button
+              onClick={() => handleSave(false)}
               variant="outline"
-              className="flex-1 shadow-glow" 
+              className="flex-1 shadow-glow"
               disabled={saving}
             >
               <FileText className="w-4 h-4 mr-2" />
               {saving ? 'Salvando...' : 'Salvar Resultados'}
             </Button>
-            <Button 
-              onClick={() => handleSave(true)} 
-              className="flex-1 shadow-glow" 
+            <Button
+              onClick={() => handleSave(true)}
+              className="flex-1 shadow-glow"
               disabled={saving}
             >
               <Globe className="w-4 h-4 mr-2" />

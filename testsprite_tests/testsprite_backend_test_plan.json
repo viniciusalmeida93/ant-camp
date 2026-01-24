@@ -1,0 +1,42 @@
+[
+  {
+    "id": "TC001",
+    "title": "create payment for registration",
+    "description": "Test the /create-payment endpoint to ensure it correctly creates a payment for a championship registration using different payment methods (PIX, credit card, debit card), applies valid coupons, calculates platform fees, and handles payment splitting between organizer and platform."
+  },
+  {
+    "id": "TC002",
+    "title": "handle asaas webhook events",
+    "description": "Test the /asaas-webhook endpoint to verify it correctly processes webhook events from Asaas such as PAYMENT_RECEIVED, PAYMENT_CONFIRMED, PAYMENT_OVERDUE, PAYMENT_DELETED, and PAYMENT_REFUNDED, updates payment and registration statuses accordingly, and triggers confirmation emails on payment approval."
+  },
+  {
+    "id": "TC003",
+    "title": "check payment status from asaas",
+    "description": "Test the /check-payment-status endpoint to ensure it correctly queries the Asaas API for the current status of a payment by paymentId, updates the local database with the latest status, and returns accurate payment information."
+  },
+  {
+    "id": "TC004",
+    "title": "send registration confirmation email",
+    "description": "Test the /send-registration-email endpoint to verify it sends confirmation emails to athletes after successful registration, including championship details, registration info, and payment status, and handles email service errors gracefully."
+  },
+  {
+    "id": "TC005",
+    "title": "validate asaas credentials",
+    "description": "Test the /validate-asaas-account endpoint to ensure it validates Asaas API key and wallet ID for organizer integrations, returns correct validation results, and provides account information or error messages as appropriate."
+  },
+  {
+    "id": "TC006",
+    "title": "refresh pix qr code",
+    "description": "Test the /refresh-pix-qrcode endpoint to verify it refreshes the PIX QR code for a payment by fetching updated data from Asaas, returns the new QR code, copy-paste code, and expiration date correctly."
+  },
+  {
+    "id": "TC007",
+    "title": "update global platform fee configuration",
+    "description": "Test the /rpc/update_global_platform_fee RPC endpoint to ensure it updates the global platform fee configuration correctly with given fee type and value, and triggers recalculation of fees for all pending registrations."
+  },
+  {
+    "id": "TC008",
+    "title": "increment coupon usage count",
+    "description": "Test the /rpc/increment_coupon_usage RPC endpoint to verify it atomically increments the usage count of a coupon by coupon_id and handles concurrent increments correctly."
+  }
+]

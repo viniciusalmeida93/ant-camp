@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign
+  Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign, Globe
 } from "lucide-react";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
@@ -149,8 +149,7 @@ export default function OrganizerDashboard() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
+    navigate("/logout");
   };
   // ... (rest of component, e.g. delete logic)
 
@@ -174,6 +173,23 @@ export default function OrganizerDashboard() {
     } catch (error: any) {
       console.error("Error deleting championship:", error);
       toast.error("Não foi possível excluir este campeonato");
+    }
+  };
+
+  const handleTogglePublish = async (championship: any) => {
+    try {
+      const { error } = await supabase
+        .from('championships')
+        .update({ is_published: !championship.is_published })
+        .eq('id', championship.id);
+
+      if (error) throw error;
+
+      toast.success(championship.is_published ? 'Campeonato despublicado' : 'Campeonato publicado');
+      loadDashboard();
+    } catch (error) {
+      console.error('Error toggling publish:', error);
+      toast.error('Erro ao alterar status do campeonato');
     }
   };
 
@@ -414,19 +430,28 @@ export default function OrganizerDashboard() {
                 {championships.map((championship) => (
                   <Card key={championship.id} className="shadow-card transition-all hover:bg-muted/5">
                     <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-xl font-bold">
                               {championship.name}
                             </h3>
-                            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                            <div className={`w-2 h-2 rounded-full ${championship.is_published ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {formatDateRange(championship)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTogglePublish(championship)}
+                            className={championship.is_published ? "text-green-600 border-green-600 hover:bg-green-50" : ""}
+                          >
+                            <Globe className="w-4 h-4 mr-2" />
+                            {championship.is_published ? 'Publicado' : 'Publicar'}
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

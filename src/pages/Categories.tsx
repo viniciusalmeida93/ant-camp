@@ -104,9 +104,12 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
             <span>Capacidade: {category.capacity === 999999 ? 'Ilimitada' : `${category.capacity} atletas`}</span>
-            {category.team_size && <span>• Tamanho do time: {category.team_size} pessoas</span>}
             <span className="font-semibold text-foreground">• {getCountText()} cadastrado(s)</span>
-            {category.gender_composition && <span>• {category.gender_composition}</span>}
+            <span>
+              • {category.min_age && category.max_age ? `${category.min_age} a ${category.max_age} anos` :
+                category.min_age ? `Mín. ${category.min_age} anos` :
+                  category.max_age ? `Máx. ${category.max_age} anos` : 'Idade Livre'}
+            </span>
             {displayPrice > 0 && (
               <span className="font-semibold text-foreground">
                 • {category.has_batches ? 'A partir de ' : ''} R$ {(displayPrice / 100).toFixed(2).replace('.', ',')}

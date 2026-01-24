@@ -8,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard, RefreshCcw } from "lucide-react";
+import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard, RefreshCcw, Ticket, X } from "lucide-react";
 import { getPixPayloadForDisplay } from "@/utils/pix";
 import { PublicHeader } from "@/components/layout/PublicHeader";
+import { cn } from "@/lib/utils";
+import { Coupon } from "@/types/coupon";
 
 export default function Checkout() {
   const { registrationId } = useParams();
@@ -33,10 +36,32 @@ export default function Checkout() {
     postalCode: "", // CEP do titular do cartão (obrigatório pelo Asaas)
     addressNumber: "", // Número do endereço
   });
-  const [hasAsaasIntegration, setHasAsaasIntegration] = useState(false);
-
-  const [isSandbox, setIsSandbox] = useState(false);
   const [pixCpf, setPixCpf] = useState("");
+  const [installments, setInstallments] = useState(1);
+  const [hasAsaasIntegration, setHasAsaasIntegration] = useState(false);
+  const [isSandbox, setIsSandbox] = useState(false);
+
+  // Asaas Fee Constants (User provided)
+  const PIX_FEE_CENTS = 199;
+  const ASAAS_FIXED_FEE_CENTS = 49;
+
+  const CREDIT_CARD_FEES = {
+    "1": 0.0299,
+    "2-6": 0.0349,
+    "7-12": 0.0399
+  };
+
+  const DEBIT_CARD_FEE_PERCENT = 0.0199; // Mantido apenas como constante interna se necessário futuramente, mas removido da UI
+
+  const [dynamicTotal, setDynamicTotal] = useState<number>(0);
+  const [processingFee, setProcessingFee] = useState<number>(0);
+  const [basePrice, setBasePrice] = useState<number>(0);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [discountCents, setDiscountCents] = useState(0);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
 
   useEffect(() => {
     loadRegistration();
@@ -45,6 +70,41 @@ export default function Checkout() {
       setPaymentMethod("credit_card");
     }
   }, [registrationId, searchParams]);
+
+  useEffect(() => {
+    if (registration) {
+      calculateFees();
+    }
+  }, [registration, paymentMethod, installments]);
+
+  const calculateFees = () => {
+    if (!registration) return;
+
+    // Base Calculation: (Subtotal - Discount) + Platform Fee
+    // Ensure discount doesn't exceed subtotal
+    const subtotalAfterDiscount = Math.max(0, basePrice - discountCents);
+    const targetNet = subtotalAfterDiscount + registration.platform_fee_cents;
+
+    let totalToCharge = 0;
+    let fee = 0;
+
+    if (paymentMethod === "pix") {
+      totalToCharge = targetNet + PIX_FEE_CENTS;
+      fee = PIX_FEE_CENTS;
+    } else if (paymentMethod === "credit_card") {
+      // For credit card, the fee depends on the number of installments
+      let feePercent = CREDIT_CARD_FEES["1"];
+      if (installments >= 2 && installments <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
+      if (installments >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
+
+      // Formula: Total = (Target + Fixed) / (1 - Percent)
+      totalToCharge = Math.ceil((targetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
+      fee = totalToCharge - targetNet;
+    }
+
+    setDynamicTotal(totalToCharge);
+    setProcessingFee(fee);
+  };
 
   const refreshPixQrCode = async (paymentId: string) => {
     try {
@@ -83,7 +143,39 @@ export default function Checkout() {
         .single();
 
       if (regError) throw regError;
-      setRegistration(reg);
+
+      // Encontrar o nome do lote se houver
+      let batchName = "";
+      if (reg.categories?.has_batches && reg.categories?.batches) {
+        const matchingBatch = reg.categories.batches.find((b: any) => b.price_cents === reg.subtotal_cents);
+        if (matchingBatch) {
+          batchName = matchingBatch.name;
+        }
+      }
+
+      setRegistration({ ...reg, batch_name: batchName });
+
+      // PRICE REFRESH LOGIC:
+      // Use category price if no active batch logic is complex, or use existing logic if simpler.
+      // Since user complained about "value not updating", we prioritize the latest Category Price.
+      // If batch exists, ideally we'd check batches. Simplified: use reg.subtotal_cents unless category price differs significantly and user wants update? 
+      // Actually, if reg is old, reg.subtotal_cents is old.
+      // Robust fix: Always use current category.price_cents unless batches are involved.
+      let currentBasePrice = reg.subtotal_cents;
+
+      if (reg.categories?.price_cents !== undefined) {
+        // If category has batches, it's safer to trust the registration snapshotted price 
+        // UNLESS we implement full batch logic here. 
+        // But user might have just changed the Category Price (without batches).
+        if (!reg.categories.has_batches) {
+          currentBasePrice = reg.categories.price_cents;
+        }
+      }
+
+      setBasePrice(currentBasePrice);
+
+      // We will calculate dynamic total in useEffect based on basePrice
+
 
       // Tentar obter o CPF da inscrição (pode estar na coluna athlete_cpf (legado) ou dentro de team_members[0].cpf)
       let registrationCpf = (reg as any).athlete_cpf; // Casting as any because type definition might be outdated
@@ -106,6 +198,7 @@ export default function Checkout() {
 
       // Verificar se o campeonato tem integração Asaas e se é sandbox
       if (reg.championships?.organizer_id) {
+        // @ts-ignore
         const { data: integration } = await supabase
           .from("organizer_asaas_integrations")
           .select("id, asaas_api_key")
@@ -190,6 +283,7 @@ export default function Checkout() {
         }
       }
 
+
       // Não precisa de autenticação - a inscrição pública não cria usuário
       // A Edge Function usa service_role_key e não precisa de JWT do usuário
 
@@ -225,7 +319,7 @@ export default function Checkout() {
         athleteName: registration.athlete_name,
         athleteEmail: registration.athlete_email,
         athleteCpf: cpfToUse,
-        priceCents: registration.total_cents,
+        priceCents: dynamicTotal, // Using the new calculated total
         paymentMethod,
       });
 
@@ -246,10 +340,11 @@ export default function Checkout() {
           athleteEmail: registration.athlete_email,
           athletePhone: registration.athlete_phone,
           athleteCpf: cpfToUse, // Mandando o CPF limpo e resolvido
-          athleteBirthDate: registration.athlete_birth_date,
+          athleteBirthDate: (registration as any).athlete_birth_date || (registration.team_members?.[0]?.birthDate),
           teamName: registration.team_name,
-          priceCents: registration.total_cents,
+          priceCents: dynamicTotal, // CRITICAL CHANGE: Sending the dynamic total
           paymentMethod: paymentMethod === "credit_card" ? "CREDIT_CARD" : "PIX",
+          installments: paymentMethod === "credit_card" ? installments : 1,
           cardData: paymentMethod === "credit_card" ? {
             holderName: cardData.holderName,
             number: cardData.number.replace(/\s/g, ""),
@@ -261,10 +356,10 @@ export default function Checkout() {
             name: cardData.holderName,
             email: registration.athlete_email,
             cpfCnpj: cpfToUse, // Usar o mesmo CPF validado
-            postalCode: cardData.postalCode.replace(/\D/g, ""),
             addressNumber: (cardData.addressNumber && cardData.addressNumber.trim()) || "S/N",
             phone: registration.athlete_phone || registration.athlete_phone // Fallback if mobilePhone exists
-          } : undefined
+          } : undefined,
+          couponCode: appliedCoupon ? appliedCoupon.code : undefined // Send coupon code to backend
         }),
       });
 
@@ -401,6 +496,82 @@ export default function Checkout() {
     }).format(cents / 100);
   };
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      toast.error("Digite o código do cupom");
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("code", couponCode.toUpperCase().trim())
+        .eq("championship_id", registration.championships.id) // Ensure coupon belongs to this championship
+        .eq("is_active", true)
+        .maybeSingle();
+
+      console.log("Coupon validation:", {
+        code: couponCode,
+        champId: registration.championships.id,
+        found: !!data,
+        error
+      });
+
+      if (error) throw error;
+
+      if (!data) {
+        toast.error("Cupom inválido ou não encontrado para este campeonato");
+        return;
+      }
+
+      if (appliedCoupon) {
+        toast.error("Você já possui um cupom aplicado. Remova-o para adicionar outro.");
+        return;
+      }
+
+      // Validate expiration
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        toast.error("Este cupom expirou");
+        return;
+      }
+
+      // Validate usage limit
+      if (data.max_uses !== null && data.used_count >= data.max_uses) {
+        toast.error("Este cupom atingiu o limite de uso");
+        return;
+      }
+
+      // Calculate discount
+      let discount = 0;
+      if (data.discount_type === "percentage") {
+        discount = Math.round(basePrice * (data.discount_value / 100));
+      } else {
+        discount = data.discount_value; // Fixed value in cents
+      }
+
+      // Cap discount at basePrice (cannot go negative)
+      discount = Math.min(discount, basePrice);
+
+      setAppliedCoupon(data);
+      setDiscountCents(discount);
+      toast.success("Cupom aplicado com sucesso!");
+    } catch (error) {
+      console.error("Error validating coupon:", error);
+      toast.error("Erro ao validar cupom");
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setDiscountCents(0);
+    toast.info("Cupom removido");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -425,554 +596,641 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex flex-col">
       <PublicHeader />
-      <div className="w-full mx-auto px-6 py-12 max-w-[98%] flex-1">
-        <Card className="mb-8">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-2xl">Checkout</CardTitle>
-                <CardDescription>
-                  {registration.championships.name} - {registration.categories.name}
-                </CardDescription>
-              </div>
-              <Badge variant={registration.payment_status === "approved" ? "default" : "secondary"}>
-                {registration.payment_status === "approved"
-                  ? "Pago"
-                  : hasManualPix
-                    ? "À confirmar"
-                    : "Pendente"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="px-3 sm:px-6">
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Atleta:</span>
-                  <p className="font-medium">{registration.athlete_name}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Email:</span>
-                  <p className="font-medium">{registration.athlete_email}</p>
-                </div>
-                {registration.team_name && (
-                  <div>
-                    <span className="text-muted-foreground">Time:</span>
-                    <p className="font-medium">{registration.team_name}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatPrice(registration.subtotal_cents)}</span>
-                </div>
-                {registration.platform_fee_cents > 0 && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Taxa de serviço</span>
-                    <span>{formatPrice(registration.platform_fee_cents)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-xl font-bold pt-2 border-t">
-                  <span>Total</span>
-                  <span>{formatPrice(registration.total_cents)}</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {registration.payment_status === "approved" ? (
-          <Card className="border-primary">
-            <CardContent className="pt-6 px-3 sm:px-6">
-              <div className="text-center space-y-4">
-                <CheckCircle2 className="w-16 h-16 text-primary mx-auto" />
-                <h3 className="text-2xl font-bold">Pagamento Confirmado!</h3>
-                <p className="text-muted-foreground">
-                  Sua inscrição foi confirmada. Você receberá um email com os detalhes.
-                </p>
-                <Button onClick={() => navigate(`/ public / ${registration.championships.slug}/leaderboard`)}>
-                  Ver Leaderboard
-                </Button >
-              </div >
-            </CardContent >
-          </Card >
-        ) : hasManualPix ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Pagamento via PIX</CardTitle>
-              <CardDescription>
-                Utilize o QR Code abaixo para concluir o pagamento diretamente com o organizador.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 px-3 sm:px-6">
-              {/* Manual Pix Content */}
-              <div className="flex flex-col items-center gap-4">
-                {pixImageUrl ? (
-                  <div className="bg-white p-4 rounded-lg border shadow-sm">
-                    <img src={pixImageUrl} alt="QR Code PIX" className="w-52 h-52" />
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground text-center">
-                    QR Code indisponível. Copie o código PIX abaixo.
-                  </div>
-                )}
-                <div className="w-full max-w-xl space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Caso prefira, copie o código “copia e cola”:
-                  </p>
-                  <div className="flex gap-2 items-center">
-                    <Input value={pixCopyPayload} readOnly className="font-mono text-xs" />
-                    <Button onClick={copyPixCode} variant="outline">
-                      {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                  {manualPixData.generatedFromKey && (
-                    <p className="text-xs text-muted-foreground">
-                      Chave informada pelo organizador: {rawPixPayload}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground space-y-2">
-                <div className="flex items-center gap-2 text-foreground font-medium">
-                  <QrCode className="w-4 h-4 text-primary" />
-                  Como prosseguir
-                </div>
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>Realize o pagamento via PIX utilizando o QR Code ou o código acima.</li>
-                  <li>Salve o comprovante. O organizador pode solicitá-lo para validação.</li>
-                  <li>
-                    Assim que o repasse for confirmado, sua inscrição constará como “Pago” no painel do
-                    organizador.
-                  </li>
-                </ol>
-              </div>
-              <Button onClick={() => navigate(`/links/${registration.championships.slug}`)}>
-                Voltar para a página do evento
-              </Button>
-            </CardContent>
-          </Card>
-        ) : !payment ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Escolha o Método de Pagamento</CardTitle>
-              <CardDescription>Selecione como deseja pagar sua inscrição</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 px-3 sm:px-6">
-              <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "pix" | "credit_card")} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                  <RadioGroupItem value="pix" id="pix" />
-                  <Label htmlFor="pix" className="flex-1 cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <QrCode className="w-5 h-5" />
-                      <div>
-                        <div className="font-medium">PIX</div>
-                        <div className="text-sm text-muted-foreground">Pagamento instantâneo</div>
-                      </div>
+      <div className="w-full mx-auto px-6 py-12 max-w-[1200px] flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* LEFT SIDE: Payment Method */}
+          <div className="lg:col-span-8 order-1 lg:order-1">
+            {registration.payment_status === "approved" ? (
+              <Card className="border-primary shadow-lg bg-card/50">
+                <CardContent className="pt-10 pb-10 px-6">
+                  <div className="text-center space-y-4">
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-2">
+                      <CheckCircle2 className="w-12 h-12 text-primary" />
                     </div>
-                  </Label>
-                </div>
-
-                <div className="flex items-center space-x-2 p-4 border rounded-lg">
-                  <RadioGroupItem value="credit_card" id="credit_card" />
-                  <Label htmlFor="credit_card" className="flex-1 cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5" />
-                      <div>
-                        <div className="font-medium">Cartão de Crédito</div>
-                        <div className="text-sm text-muted-foreground">Pagamento seguro via Asaas</div>
-                      </div>
-                    </div>
-                  </Label>
-                </div>
-              </RadioGroup>
-
-
-
-              {
-                paymentMethod === "pix" && (
-                  <Card className="border-2 mt-4 bg-muted/20">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <QrCode className="w-5 h-5" />
-                        Pagamento via PIX
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground">
-                      <p>Ao confirmar, um código QR (Copia e Cola) será gerado para você.</p>
-                      <p className="mt-1">O sistema identificará seu pagamento automaticamente em alguns segundos.</p>
-                    </CardContent>
-                  </Card>
-                )
-              }
-
-              {
-                paymentMethod === "credit_card" && (
-                  <Card className="border-2">
-                    <CardHeader>
-                      <CardTitle className="text-lg">Dados do Cartão</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4 px-3 sm:px-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="holderName">Nome no Cartão *</Label>
-                        <Input
-                          id="holderName"
-                          value={cardData.holderName}
-                          onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
-                          placeholder="NOME COMO ESTÁ NO CARTÃO"
-                          className="uppercase"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cardNumber">Número do Cartão *</Label>
-                        <Input
-                          id="cardNumber"
-                          value={cardData.number}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
-                            setCardData({ ...cardData, number: value });
-                          }}
-                          placeholder="0000 0000 0000 0000"
-                          maxLength={19}
-                        />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="expiryMonth">Mês *</Label>
-                          <Input
-                            id="expiryMonth"
-                            value={cardData.expiryMonth}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, "").slice(0, 2);
-                              if (value === "" || (parseInt(value) >= 1 && parseInt(value) <= 12)) {
-                                setCardData({ ...cardData, expiryMonth: value });
-                              }
-                            }}
-                            placeholder="MM"
-                            maxLength={2}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="expiryYear">Ano *</Label>
-                          <Input
-                            id="expiryYear"
-                            value={cardData.expiryYear}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                              setCardData({ ...cardData, expiryYear: value });
-                            }}
-                            placeholder="AAAA"
-                            maxLength={4}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cvv">CVV *</Label>
-                          <Input
-                            id="cvv"
-                            type="password"
-                            value={cardData.cvv}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                              setCardData({ ...cardData, cvv: value });
-                            }}
-                            placeholder="123"
-                            maxLength={4}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cpf">CPF do Portador do Cartão *</Label>
-                        <Input
-                          id="cpf"
-                          value={cardData.cpf}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "");
-                            // Formatar como CPF (11 dígitos)
-                            let formatted = value;
-                            if (value.length <= 11) {
-                              formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-                            }
-                            setCardData({ ...cardData, cpf: formatted });
-                          }}
-                          placeholder={registration?.athlete_cpf ? "Deixe em branco para usar CPF da inscrição" : "000.000.000-00"}
-                          maxLength={14}
-                        />
-                        {registration?.athlete_cpf && (
-                          <p className="text-xs text-muted-foreground">
-                            CPF da inscrição: {registration.athlete_cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2 col-span-1">
-                          <Label htmlFor="postalCode">CEP *</Label>
-                          <Input
-                            id="postalCode"
-                            value={cardData.postalCode}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, "").slice(0, 8);
-                              const formatted = value.replace(/(\d{5})(\d{3})/, "$1-$2");
-                              setCardData({ ...cardData, postalCode: formatted });
-                            }}
-                            placeholder="00000-000"
-                            maxLength={9}
-                          />
-                        </div>
-                        <div className="space-y-2 col-span-1">
-                          <Label htmlFor="addressNumber">Número</Label>
-                          <Input
-                            id="addressNumber"
-                            value={cardData.addressNumber}
-                            onChange={(e) => {
-                              setCardData({ ...cardData, addressNumber: e.target.value });
-                            }}
-                            placeholder="Deixe em branco se não tiver"
-                            maxLength={10}
-                          />
-                        </div>
-                      </div>
-                      <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-                        <Shield className="w-4 h-4 inline mr-2" />
-                        Seus dados são processados de forma segura pela Asaas. Não armazenamos informações do cartão.
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              }
-
-              <Button
-                onClick={handlePayment}
-                disabled={processing}
-                size="lg"
-                className="w-full"
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {paymentMethod === "credit_card" ? "Processando pagamento..." : "Gerando registro..."}
-                  </>
-                ) : (
-                  paymentMethod === "credit_card" ? "Pagar com Cartão" : "Gerar PIX"
-                )}
-              </Button>
-            </CardContent >
-          </Card >
-        ) : payment.payment_method === 'credit_card' ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Pagamento em Análise</CardTitle>
-              <CardDescription>
-                Seu pagamento com cartão de crédito está sendo processado ou ficou pendente.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6 px-3 sm:px-6 text-center">
-              <div className="bg-yellow-50 p-6 rounded-lg text-yellow-800 border border-yellow-200">
-                <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="font-medium">Status: {payment.status === 'pending' ? 'Pendente' : payment.status}</p>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                Se houve algum erro ou se você deseja tentar outro cartão ou forma de pagamento, clique abaixo.
-              </p>
-
-              <Button
-                onClick={() => setPayment(null)}
-                variant="outline"
-                className="w-full"
-              >
-                Tentar Novamente (Novo Pagamento)
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Pagamento via PIX</CardTitle>
-              <CardDescription>Escaneie o QR Code ou copie o código para pagar</CardDescription>
-              {isSandbox && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-sm text-yellow-800 font-medium">
-                    ⚠️ Ambiente SANDBOX detectado
-                  </p>
-                  <p className="text-xs text-yellow-700 mt-1">
-                    Os códigos PIX gerados no sandbox <strong>não funcionam</strong> em apps bancários reais.
-                    Eles são apenas para testes da API. Para pagamentos reais, configure uma API key de produção.
-                  </p>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-6 px-3 sm:px-6">
-              <div className="text-center space-y-4 py-6">
-                {(() => {
-                  // Debug: verificar o que temos no payment
-                  console.log("Payment state:", {
-                    hasPixQrCode: !!payment.pix_qr_code,
-                    pixQrCodeLength: payment.pix_qr_code?.length,
-                    hasPixCopyPaste: !!payment.pix_copy_paste,
-                    pixCopyPasteLength: payment.pix_copy_paste?.length,
-                    paymentKeys: Object.keys(payment || {}),
-                  });
-
-                  if (payment.pix_qr_code) {
-                    const qrCodeSrc = payment.pix_qr_code.startsWith('data:image')
-                      ? payment.pix_qr_code
-                      : `data:image/png;base64,${payment.pix_qr_code}`;
-
-                    return (
-                      <div className="bg-white p-4 rounded-lg inline-block border shadow-sm">
-                        <img
-                          src={qrCodeSrc}
-                          alt="QR Code PIX"
-                          className="w-60 h-60"
-                          onError={(e) => {
-                            console.error("Erro ao carregar QR Code:", e);
-                            console.error("QR Code source:", qrCodeSrc.substring(0, 100));
-                          }}
-                        />
-                      </div>
-                    );
-                  } else if (payment.pix_copy_paste) {
-                    // Limpar espaços do código PIX antes de gerar QR Code
-                    const cleanPixCode = payment.pix_copy_paste.replace(/\s+/g, '');
-                    return (
-                      <div className="bg-white p-4 rounded-lg inline-block border shadow-sm">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(cleanPixCode)}`}
-                          alt="QR Code PIX"
-                          className="w-60 h-60"
-                          onError={(e) => {
-                            console.error("Erro ao gerar QR Code do payload:", e);
-                          }}
-                        />
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="text-sm text-muted-foreground text-center py-8">
-                        QR Code não disponível. Use o código copia e cola abaixo.
-                      </div>
-                    );
-                  }
-                })()}
-
-                {payment.pix_copy_paste && (
-                  <div className="space-y-2 max-w-2xl mx-auto">
-                    <p className="text-sm text-muted-foreground">
-                      Ou copie o código PIX "copia e cola":
+                    <h3 className="text-3xl font-bold">Inscrição Confirmada!</h3>
+                    <p className="text-muted-foreground max-w-md mx-auto">
+                      Tudo certo! Recebemos seu pagamento e sua vaga está garantida no {registration.championships.name}.
                     </p>
-                    <div className="flex gap-2">
-                      <Input
-                        value={payment.pix_copy_paste.replace(/\s+/g, '')}
-                        readOnly
-                        className="font-mono text-xs break-all"
-                        onFocus={(e) => {
-                          e.target.select();
-                        }}
-                        onClick={(e) => {
-                          // Selecionar todo o texto ao clicar também
-                          (e.target as HTMLInputElement).select();
-                        }}
-                      />
-                      <Button onClick={copyPixCode} variant="outline" className="shrink-0">
-                        {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <div className="pt-4">
+                      <Button onClick={() => navigate(`/links/${registration.championships.slug}`)} size="lg" className="px-8">
+                        Voltar para o Evento
                       </Button>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-green-600 font-medium">
-                        ✅ Código sem espaços - pronto para copiar e colar
+                  </div >
+                </CardContent >
+              </Card >
+            ) : hasManualPix ? (
+              <Card className="shadow-md border-border bg-card/50">
+                <CardHeader>
+                  <CardTitle>Pagamento via PIX</CardTitle>
+                  <CardDescription>
+                    Utilize o QR Code abaixo para concluir o pagamento diretamente com o organizador.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6 px-3 sm:px-6">
+                  {/* Manual Pix Content */}
+                  <div className="flex flex-col items-center gap-4">
+                    {pixImageUrl ? (
+                      <div className="bg-white p-4 rounded-lg border shadow-sm">
+                        <img src={pixImageUrl} alt="QR Code PIX" className="w-52 h-52" />
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground text-center">
+                        QR Code indisponível. Copie o código PIX abaixo.
+                      </div>
+                    )}
+                    <div className="w-full max-w-xl space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Caso prefira, copie o código “copia e cola”:
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Tamanho: {payment.pix_copy_paste.replace(/\s+/g, '').length} caracteres
-                      </p>
+                      <div className="flex gap-2 items-center">
+                        <Input value={pixCopyPayload} readOnly className="font-mono text-xs bg-muted/20" />
+                        <Button onClick={copyPixCode} variant="outline">
+                          {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                      {manualPixData.generatedFromKey && (
+                        <p className="text-xs text-muted-foreground">
+                          Chave informada pelo organizador: {rawPixPayload}
+                        </p>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {/* Botão para atualizar QR Code se necessário */}
-                {payment.id && payment.payment_method === "pix" && (
-                  <div className="text-center pt-4">
-                    <Button
-                      onClick={async () => {
-                        if (payment.id) {
-                          toast.loading("Atualizando QR Code...");
-                          const refreshed = await refreshPixQrCode(payment.id);
-                          if (refreshed) {
-                            await loadRegistration();
-                          } else {
-                            toast.error("Não foi possível atualizar o QR Code. Verifique se o pagamento ainda está válido.");
-                          }
-                        }
-                      }}
-                      variant="outline"
-                      className="mt-2"
-                    >
-                      <QrCode className="w-4 h-4 mr-2" />
-                      Atualizar QR Code
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Se o código PIX não funcionar, clique aqui para atualizar
-                    </p>
+                  <div className="p-4 bg-muted/30 rounded-lg text-sm text-muted-foreground space-y-2 border border-border">
+                    <div className="flex items-center gap-2 text-foreground font-medium">
+                      <QrCode className="w-4 h-4 text-primary" />
+                      Como prosseguir
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Realize o pagamento via PIX utilizando o QR Code ou o código acima.</li>
+                      <li>Salve o comprovante. O organizador pode solicitá-lo para validação.</li>
+                      <li>
+                        Assim que o repasse for confirmado, sua inscrição constará como “Pago”.
+                      </li>
+                    </ol>
                   </div>
-                )}
-                <div className="flex flex-col gap-2 mt-4">
-                  <Button
-                    onClick={() => setPayment(null)}
-                    variant="ghost"
-                    className="w-full text-muted-foreground"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Escolher outra forma de pagamento (Cartão)
+                  <Button onClick={() => navigate(`/links/${registration.championships.slug}`)} className="w-full" variant="outline">
+                    Voltar para o evento
                   </Button>
-                </div>
+                </CardContent>
+              </Card>
+            ) : !payment ? (
+              <Card className="shadow-md border-border bg-card/50">
+                <CardHeader className="border-b border-border bg-muted/5">
+                  <CardTitle>Forma de Pagamento</CardTitle>
+                  <CardDescription>Escolha como deseja concluir sua inscrição</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8 pt-6 px-6">
+                  <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as any)} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Label
+                      htmlFor="pix"
+                      className={cn(
+                        "flex items-center space-x-2 p-4 border rounded-xl cursor-pointer transition-all hover:bg-muted/30",
+                        paymentMethod === "pix" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background/50"
+                      )}
+                    >
+                      <RadioGroupItem value="pix" id="pix" className="sr-only" />
+                      <div className="flex items-center gap-3 w-full">
+                        <div className={cn("p-2 rounded-lg", paymentMethod === "pix" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                          <QrCode className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-base">PIX</div>
+                          <div className="text-xs text-muted-foreground">Confirmação instantânea</div>
+                        </div>
+                        {paymentMethod === "pix" && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                      </div>
+                    </Label>
 
-                {!payment.pix_qr_code && !payment.pix_copy_paste && payment.id && (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      QR Code PIX não disponível. Clique no botão abaixo para atualizar.
+                    <Label
+                      htmlFor="credit_card"
+                      className={cn(
+                        "flex items-center space-x-2 p-4 border rounded-xl cursor-pointer transition-all hover:bg-muted/30",
+                        paymentMethod === "credit_card" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background/50"
+                      )}
+                    >
+                      <RadioGroupItem value="credit_card" id="credit_card" className="sr-only" />
+                      <div className="flex items-center gap-3 w-full">
+                        <div className={cn("p-2 rounded-lg", paymentMethod === "credit_card" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                          <CreditCard className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-base">Crédito</div>
+                          <div className="text-xs text-muted-foreground">Parcele em até 12x</div>
+                        </div>
+                        {paymentMethod === "credit_card" && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                      </div>
+                    </Label>
+                  </RadioGroup>
+
+                  {paymentMethod === "pix" && (
+                    <div className="bg-primary/5 border border-primary/10 rounded-xl p-6 flex gap-4 items-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                        <QrCode className="w-6 h-6 text-primary" />
+                      </div>
+                      <div className="text-sm">
+                        <p className="font-bold text-primary mb-1 text-base">Pagamento via PIX</p>
+                        <p className="text-muted-foreground leading-relaxed">
+                          Ao clicar em "Gerar PIX", um código copia e cola será criado. A confirmação é automática após o pagamento.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentMethod === "credit_card" && (
+                    <Card className="border-border shadow-sm overflow-hidden bg-card/30">
+                      <CardHeader className="bg-muted/10 py-4 border-b border-border">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-primary" />
+                          Detalhes do Cartão
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6 pt-6 px-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="holderName">Nome no Cartão *</Label>
+                            <Input
+                              id="holderName"
+                              value={cardData.holderName}
+                              onChange={(e) => setCardData({ ...cardData, holderName: e.target.value })}
+                              placeholder="COMO ESTÁ NO CARTÃO"
+                              className="uppercase bg-muted/20"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="cardNumber">Número do Cartão *</Label>
+                            <Input
+                              id="cardNumber"
+                              value={cardData.number}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+                                setCardData({ ...cardData, number: value });
+                              }}
+                              placeholder="0000 0000 0000 0000"
+                              maxLength={19}
+                              className="bg-muted/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="installments">Parcelamento *</Label>
+                            <Select
+                              value={String(installments)}
+                              onValueChange={(v) => setInstallments(parseInt(v))}
+                            >
+                              <SelectTrigger id="installments" className="h-11 bg-muted/20 border-border">
+                                <SelectValue placeholder="Selecione as parcelas" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => {
+                                  const targetNet = (registration?.subtotal_cents || 0) + (registration?.platform_fee_cents || 0);
+                                  let feePercent = CREDIT_CARD_FEES["1"];
+                                  if (i >= 2 && i <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
+                                  if (i >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
+
+                                  const totalForI = Math.ceil((targetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
+                                  const perInstallment = totalForI / i;
+
+                                  return (
+                                    <SelectItem key={i} value={String(i)}>
+                                      {i}x de {formatPrice(perInstallment)} (Total: {formatPrice(totalForI)})
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="expiryMonth">Mês *</Label>
+                              <Input
+                                id="expiryMonth"
+                                value={cardData.expiryMonth}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "").slice(0, 2);
+                                  if (value === "" || (parseInt(value) >= 1 && parseInt(value) <= 12)) {
+                                    setCardData({ ...cardData, expiryMonth: value });
+                                  }
+                                }}
+                                placeholder="MM"
+                                maxLength={2}
+                                className="bg-muted/20"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="expiryYear">Ano *</Label>
+                              <Input
+                                id="expiryYear"
+                                value={cardData.expiryYear}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                  setCardData({ ...cardData, expiryYear: value });
+                                }}
+                                placeholder="AAAA"
+                                maxLength={4}
+                                className="bg-muted/20"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="cvv">CVV *</Label>
+                              <Input
+                                id="cvv"
+                                type="password"
+                                value={cardData.cvv}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                  setCardData({ ...cardData, cvv: value });
+                                }}
+                                placeholder="123"
+                                maxLength={4}
+                                className="bg-muted/20"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="cpf">CPF do Titular *</Label>
+                            <Input
+                              id="cpf"
+                              value={cardData.cpf}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, "");
+                                let formatted = value;
+                                if (value.length <= 11) {
+                                  formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+                                }
+                                setCardData({ ...cardData, cpf: formatted });
+                              }}
+                              placeholder="000.000.000-00"
+                              maxLength={14}
+                              className="bg-muted/20"
+                            />
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-2 col-span-2">
+                              <Label htmlFor="postalCode">CEP *</Label>
+                              <Input
+                                id="postalCode"
+                                value={cardData.postalCode}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "").slice(0, 8);
+                                  const formatted = value.replace(/(\d{5})(\d{3})/, "$1-$2");
+                                  setCardData({ ...cardData, postalCode: formatted });
+                                }}
+                                placeholder="00000-000"
+                                maxLength={9}
+                                className="bg-muted/20"
+                              />
+                            </div>
+                            <div className="space-y-2 col-span-1">
+                              <Label htmlFor="addressNumber">Nº</Label>
+                              <Input
+                                id="addressNumber"
+                                value={cardData.addressNumber}
+                                onChange={(e) => setCardData({ ...cardData, addressNumber: e.target.value })}
+                                placeholder="123"
+                                maxLength={10}
+                                className="bg-muted/20"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Button
+                    onClick={handlePayment}
+                    disabled={processing}
+                    size="lg"
+                    className="w-full h-14 text-lg font-bold shadow-lg"
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      paymentMethod === "credit_card" ? "Pagar com Cartão" : "Confirmar e Gerar PIX"
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : payment.payment_method === 'credit_card' ? (
+              <Card className="shadow-md border-border bg-card/50">
+                <CardHeader>
+                  <CardTitle>Pagamento em Processamento</CardTitle>
+                  <CardDescription>
+                    Seu pagamento está sendo analisado pelo Asaas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6 px-6 text-center py-10">
+                  <div className="bg-yellow-500/10 p-8 rounded-2xl text-yellow-500 border border-yellow-500/20 inline-block mx-auto mb-4">
+                    <RefreshCcw className="w-12 h-12 mx-auto mb-3 animate-spin duration-[3s]" />
+                    <p className="font-bold text-lg">Status: {payment.status === 'pending' ? 'Pendente' : payment.status}</p>
+                    <p className="text-sm mt-1 opacity-80">Isso pode levar alguns instantes.</p>
+                  </div>
+
+                  <div className="max-w-md mx-auto space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Se você deseja tentar com outro cartão ou forma de pagamento, clique no botão abaixo.
                     </p>
+                    <Button
+                      onClick={() => setPayment(null)}
+                      variant="outline"
+                      className="w-full h-12 border-border"
+                    >
+                      Tentar com outra forma de pagamento
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="shadow-lg border-border bg-card/50">
+                <CardHeader className="bg-muted/5 border-b border-border">
+                  <CardTitle className="flex items-center gap-2">
+                    <QrCode className="w-5 h-5 text-primary" />
+                    Pagamento PIX
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-8 pt-8 px-6">
+                  <div className="flex flex-col items-center gap-6">
+                    {(() => {
+                      if (payment.pix_qr_code) {
+                        const qrCodeSrc = payment.pix_qr_code.startsWith('data:image')
+                          ? payment.pix_qr_code
+                          : `data:image/png;base64,${payment.pix_qr_code}`;
+
+                        return (
+                          <div className="bg-white p-6 rounded-2xl border-2 border-primary/10 shadow-sm relative group">
+                            <img
+                              src={qrCodeSrc}
+                              alt="QR Code PIX"
+                              className="w-64 h-64"
+                            />
+                            <div className="absolute inset-0 bg-white/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <p className="text-xs font-bold text-primary uppercase tracking-widest">Escaneie no app do Banco</p>
+                            </div>
+                          </div>
+                        );
+                      } else if (payment.pix_copy_paste) {
+                        const cleanPixCode = payment.pix_copy_paste.replace(/\s+/g, '');
+                        return (
+                          <div className="bg-white p-6 rounded-2xl border-2 border-primary/10 shadow-sm">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(cleanPixCode)}`}
+                              alt="QR Code PIX"
+                              className="w-64 h-64"
+                            />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {payment.pix_copy_paste && (
+                      <div className="w-full max-w-md space-y-3">
+                        <Label className="text-sm text-muted-foreground text-center block">
+                          Ou utilize o código Copia e Cola:
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={payment.pix_copy_paste.replace(/\s+/g, '')}
+                            readOnly
+                            className="font-mono text-xs h-12 bg-muted/20 border-border focus-visible:ring-primary"
+                          />
+                          <Button onClick={copyPixCode} variant="outline" className="h-12 px-6 shrink-0 border-border">
+                            {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          Código gerado em {new Date().toLocaleTimeString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Button
                       onClick={async () => {
                         if (payment.id) {
+                          toast.loading("Sincronizando...");
                           const refreshed = await refreshPixQrCode(payment.id);
-                          if (!refreshed) {
-                            toast.error("Não foi possível atualizar o QR Code. Tente criar um novo pagamento.");
-                          }
+                          if (refreshed) await loadRegistration();
+                          toast.dismiss();
                         }
                       }}
                       variant="outline"
+                      className="h-12 border-border"
                     >
+                      <RefreshCcw className="w-4 h-4 mr-2" />
                       Atualizar QR Code
                     </Button>
+                    <Button
+                      onClick={() => setPayment(null)}
+                      variant="ghost"
+                      className="h-12"
+                    >
+                      Mudar para Cartão
+                    </Button>
                   </div>
-                )}
 
-                {(payment.pix_qr_code || payment.pix_copy_paste) && (
-                  <Badge variant="secondary" className="mt-4">
-                    <QrCode className="w-3 h-3 mr-1" />
-                    Pagamento identificado automaticamente após confirmação
+                  <div className="p-4 bg-muted/20 rounded-xl border border-dashed border-border">
+                    <div className="flex items-center gap-3 mb-2">
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      <span className="font-bold text-sm">Próximos Passos</span>
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1 ml-8 list-disc">
+                      <li>Use o app do seu banco para ler o QR Code ou cole o código acima.</li>
+                      <li>A confirmação será processada pelo sistema automaticamente.</li>
+                      <li>Você será redirecionado assim que o pagamento for detectado.</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* RIGHT SIDE: Order Summary */}
+          <div className="lg:col-span-4 lg:sticky lg:top-24 order-2 lg:order-2">
+            <Card className="shadow-md border-border bg-card/50">
+              <CardHeader className="bg-muted/10 pb-4 border-b border-border">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl">Resumo do Pedido</CardTitle>
+                    <CardDescription>
+                      {registration.championships.name}
+                    </CardDescription>
+                  </div>
+                  <Badge variant={registration.payment_status === "approved" ? "default" : "secondary"} className="uppercase text-[10px]">
+                    {registration.payment_status === "approved"
+                      ? "Pago"
+                      : hasManualPix
+                        ? "À confirmar"
+                        : "Pendente"}
                   </Badge>
-                )}
-              </div>
-
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium mb-1">Pagamento direto ao organizador</p>
-                    <p className="text-muted-foreground">
-                      O pagamento é feito diretamente para o organizador do evento via PIX. Após o pagamento, o organizador confirmará sua inscrição.
-                    </p>
-                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )
-        }
-      </div >
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-6">
+                  <div className="space-y-4 text-sm">
+                    {registration.categories?.has_batches && registration.batch_name && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Lote</span>
+                        <p className="font-medium text-base leading-tight">
+                          {registration.batch_name}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Atleta</span>
+                      <p className="font-medium text-base leading-tight">{registration.athlete_name}</p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Categoria</span>
+                      <p className="font-medium leading-tight">{registration.categories?.name}</p>
+                    </div>
+                    {registration.team_name && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Equipe</span>
+                        <p className="font-medium leading-tight">{registration.team_name}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-border pt-4 space-y-3">
+                    {/* 1. Base Price (Subtotal) */}
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground font-medium">Valor Inscrição:</span>
+                      <span className="font-semibold text-foreground">{formatPrice(basePrice)}</span>
+                    </div>
+
+                    {/* 2. Service Fee (Platform + Asaas Cost + Interest) */}
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground font-medium">Taxa de Serviço:</span>
+                      <span className="font-semibold text-foreground">
+                        {formatPrice(dynamicTotal - Math.max(0, basePrice - discountCents))}
+                      </span>
+                    </div>
+
+                    {/* Gross Total (Removed interest line as requested) */}
+                  </div>
+
+                  {discountCents > 0 && (
+                    <div className="flex justify-between items-center text-sm text-green-600">
+                      <span className="font-medium flex items-center gap-1"><Ticket className="w-3 h-3" /> Desconto do Cupom:</span>
+                      <span className="font-bold">
+                        - {(() => {
+                          // Calculate Gross Total again to find the difference
+                          const grossTargetNet = basePrice + registration.platform_fee_cents;
+                          let grossTotal = 0;
+                          if (paymentMethod === "pix") {
+                            grossTotal = grossTargetNet + PIX_FEE_CENTS;
+                          } else {
+                            let feePercent = CREDIT_CARD_FEES["1"];
+                            if (installments >= 2 && installments <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
+                            if (installments >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
+                            grossTotal = Math.ceil((grossTargetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
+                          }
+                          return formatPrice(grossTotal - dynamicTotal);
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground font-medium">Forma de pagamento:</span>
+                    <div className="text-right">
+                      {paymentMethod === 'pix' ? (
+                        <span className="font-bold text-foreground">PIX</span>
+                      ) : (
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-blue-400">{installments}x de {formatPrice(dynamicTotal / installments)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xl font-bold pt-4 border-t border-primary/20">
+                    <span className="text-foreground">Total a Pagar:</span>
+                    <span className="text-green-500">{formatPrice(dynamicTotal || registration.total_cents)}</span>
+                  </div>
+
+                  <div className="pt-6 space-y-3">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Cupom de desconto</Label>
+                    {appliedCoupon ? (
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-green-600 text-sm flex items-center gap-2">
+                            <Ticket className="w-4 h-4" />
+                            {appliedCoupon.code}
+                          </p>
+                          <p className="text-xs text-green-700/80 mt-0.5">
+                            Desconto de {formatPrice(discountCents)} aplicado
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={removeCoupon}
+                          className="h-8 w-8 p-0 text-green-700 hover:text-green-800 hover:bg-green-500/20"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-0">
+                        <Input
+                          placeholder="Digite seu cupom"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleApplyCoupon();
+                            }
+                          }}
+                          className="rounded-r-none border-r-0 h-10 bg-muted/20 focus-visible:ring-0 focus-visible:ring-offset-0 border-border"
+                        />
+                        <Button
+                          onClick={() => setCouponCode("")}
+                          variant="outline"
+                          className="rounded-none border-x-0 border-border px-3 h-10 hover:bg-muted/50 transition-colors"
+                          disabled={!couponCode}
+                        >
+                          <X className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          onClick={handleApplyCoupon}
+                          disabled={isValidatingCoupon || !couponCode}
+                          className="rounded-l-none h-10 bg-[#D71C1D] hover:bg-[#b51718] text-white flex gap-2 font-bold shadow-sm transition-all active:scale-95"
+                        >
+                          {isValidatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
+                          Aplicar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="mt-6 p-4 bg-muted/20 rounded-lg border border-border flex items-center gap-3">
+              <Shield className="w-5 h-5 text-primary shrink-0" />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Pagamento seguro processado via **Asaas**. Seus dados estão protegidos por criptografia de ponta a ponta.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div >
   );
 }

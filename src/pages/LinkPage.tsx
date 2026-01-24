@@ -94,8 +94,8 @@ export default function LinkPage() {
     else if (button.url) window.open(button.url, "_blank"); // External links usually still new tab? Let's keep existing behavior for custom URLs unless user specified ALL. User said "buttons... do not open in new tab". Custom URLs might be Instagram etc. Best to keep external in new tab? User said "buttons DO NOT open in new tab...". I will force external to new tab (_blank), but internal to navigate. 
   };
 
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  if (!championship) return <div className="min-h-screen bg-background text-center pt-20 text-muted-foreground">Campeonato não encontrado.</div>;
+  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-primary" /></div>;
+  if (!championship) return <div data-testid="not-found-message" className="min-h-screen bg-background text-center pt-20 text-muted-foreground">Campeonato não encontrado.</div>;
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col items-center">
@@ -124,24 +124,24 @@ export default function LinkPage() {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <Calendar className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Data</span>
+                <Calendar className="w-3 h-3" />
+                <span className="text-[10px] font-medium">Data</span>
               </div>
-              <span className="font-medium text-foreground text-xs">{new Date(championship.date).toLocaleDateString('pt-BR')}</span>
+              <span className="font-medium text-foreground text-[10px]">{new Date(championship.date).toLocaleDateString('pt-BR')}</span>
             </div>
             <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <MapPin className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Local</span>
+                <MapPin className="w-3 h-3" />
+                <span className="text-[10px] font-medium">Local</span>
               </div>
-              <span className="font-medium text-foreground text-right max-w-[60%] truncate uppercase text-xs">{championship.location}</span>
+              <span className="font-medium text-foreground text-right max-w-[60%] truncate uppercase text-[10px]">{championship.location}</span>
             </div>
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <User className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Organizador</span>
+                <User className="w-3 h-3" />
+                <span className="text-[10px] font-medium">Organizador</span>
               </div>
-              <span className="font-medium text-foreground text-xs">{organizerName}</span>
+              <span className="font-medium text-foreground text-[10px]">{organizerName}</span>
             </div>
           </CardContent>
         </Card>
@@ -153,7 +153,7 @@ export default function LinkPage() {
             key={b.id}
             variant="outline"
             onClick={() => handleButtonClick(b)}
-            className="w-full h-12 text-base font-semibold border-none hover:opacity-90 transition-all justify-between px-6 group shadow-md"
+            className="w-full h-12 text-sm font-semibold border-none hover:opacity-90 transition-all justify-between px-4 group shadow-md rounded"
             style={{
               backgroundColor: linkPage?.theme_color || undefined,
               color: linkPage?.theme_color ? '#ffffff' : undefined, // Assuming white text for colored buttons
@@ -176,7 +176,7 @@ export default function LinkPage() {
           <Button
             variant="outline"
             onClick={() => setIsRegulationOpen(true)}
-            className="w-full h-12 text-base font-semibold border-none hover:opacity-90 transition-all justify-between px-6 group shadow-md"
+            className="w-full h-12 text-sm font-semibold border-none hover:opacity-90 transition-all justify-between px-4 group shadow-md rounded"
             style={{
               backgroundColor: linkPage?.theme_color || undefined,
               color: linkPage?.theme_color ? '#ffffff' : undefined,
@@ -204,7 +204,7 @@ export default function LinkPage() {
 
 
       <div className="mt-8 text-center">
-        <p className="text-xs text-muted-foreground uppercase tracking-widest opacity-50">Powered by AntCamp</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-widest opacity-50">Desenvolvido por AntCamp</p>
       </div>
 
     </div >
