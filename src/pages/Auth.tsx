@@ -51,20 +51,29 @@ export default function Auth() {
   }, [navigate]);
 
   const checkRoleAndRedirect = async (userId: string) => {
-    // Check super_admin
-    const { data: roles } = await supabase
+    // 1. Check user_roles table for any role
+    const { data: roles, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", userId)
-      .eq("role", "super_admin")
-      .maybeSingle();
+      .eq("user_id", userId);
 
-    if (roles) {
+    if (roleError) {
+      console.error("Error checking roles:", roleError);
+    }
+
+    // Prioritize super_admin
+    if (roles?.some(r => r.role === 'super_admin')) {
       navigate("/super-admin");
       return;
     }
 
-    // Check organizer
+    // Check for organizer role
+    if (roles?.some(r => r.role === 'organizer')) {
+      navigate("/dashboard");
+      return;
+    }
+
+    // Fallback/Legacy check: if they have a championship but no role yet (should be rare after migration)
     const { count } = await supabase
       .from("championships")
       .select("id", { count: "exact", head: true })
@@ -73,6 +82,7 @@ export default function Auth() {
     if (count && count > 0) {
       navigate("/dashboard");
     } else {
+      // Default to athlete dashboard
       navigate("/athlete-dashboard");
     }
   };

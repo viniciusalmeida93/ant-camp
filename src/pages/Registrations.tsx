@@ -1080,13 +1080,13 @@ export default function Registrations() {
 
   return (
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-      <div className="flex items-center justify-between mb-8 animate-fade-in">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">Inscrições</h1>
-          <p className="text-muted-foreground">Gerencie as inscrições do campeonato</p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-in">
+        <div className="min-w-0 w-full sm:w-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2 truncate">Inscrições</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Gerencie as inscrições do campeonato</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <input
             type="file"
             accept=".csv"
@@ -1094,14 +1094,14 @@ export default function Registrations() {
             id="csvImportInput"
             onChange={handleImportCSV}
           />
-          <Button variant="outline" size="sm" onClick={downloadTemplate}>
+          <Button variant="outline" size="sm" onClick={downloadTemplate} className="flex-1 sm:flex-initial text-[10px] sm:text-xs">
             📥 Modelo CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => document.getElementById('csvImportInput')?.click()}>
+          <Button variant="outline" size="sm" onClick={() => document.getElementById('csvImportInput')?.click()} className="flex-1 sm:flex-initial text-[10px] sm:text-xs">
             📤 Importar CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={downloadCSV}>
-            📄 Exportar (Backup)
+          <Button variant="outline" size="sm" onClick={downloadCSV} className="flex-1 sm:flex-initial text-[10px] sm:text-xs">
+            📄 Backup
           </Button>
         </div>
 

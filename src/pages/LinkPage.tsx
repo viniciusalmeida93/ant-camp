@@ -27,6 +27,7 @@ export default function LinkPage() {
   const loadPageData = async () => {
     try {
       const { data: page, error: pageError } = await supabase
+        // @ts-ignore
         .from("link_pages")
         .select("*")
         .eq("slug", slug)
@@ -54,6 +55,7 @@ export default function LinkPage() {
       }
 
       const { data: linkButtons } = await supabase
+        // @ts-ignore
         .from("link_buttons")
         .select("*")
         .eq("link_page_id", page.id)
@@ -91,7 +93,7 @@ export default function LinkPage() {
     else if (button.button_type === "wods") navigate(`/${champSlug}/wods`);
     else if (button.button_type === "regulation") setIsRegulationOpen(true);
     else if (button.button_type === "registration") navigate(`/inscricao/${champSlug}`);
-    else if (button.url) window.open(button.url, "_blank"); // External links usually still new tab? Let's keep existing behavior for custom URLs unless user specified ALL. User said "buttons... do not open in new tab". Custom URLs might be Instagram etc. Best to keep external in new tab? User said "buttons DO NOT open in new tab...". I will force external to new tab (_blank), but internal to navigate. 
+    else if (button.url) window.location.href = button.url;
   };
 
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 data-testid="loading-spinner" className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -172,6 +174,16 @@ export default function LinkPage() {
             Or just rely on the Organizer to add it? User said "Dashboard... vamos adicionar".
             Let's add a default "Regulamento" button if text exists.
         */}
+        {championship?.regulation_url && (
+          <Button
+            variant="outline"
+            onClick={() => window.open(championship.regulation_url, "_blank")}
+            className="w-full h-12 text-sm font-semibold border-none hover:opacity-90 transition-all justify-between px-4 group shadow-md rounded bg-primary text-white"
+          >
+            Baixar Regulamento (PDF)
+          </Button>
+        )}
+
         {championship?.regulation && !buttons.find(b => b.button_type === 'regulation' || b.label.toLowerCase().includes('regras') || b.label.toLowerCase().includes('regulamento')) && (
           <Button
             variant="outline"
@@ -183,7 +195,7 @@ export default function LinkPage() {
               boxShadow: linkPage?.theme_color ? `0 4px 6px -1px ${linkPage.theme_color}40` : undefined
             }}
           >
-            Regulamento
+            {championship?.regulation_url ? "Regulamento (Texto)" : "Regulamento"}
           </Button>
         )}
 

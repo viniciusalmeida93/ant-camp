@@ -21,6 +21,7 @@ import {
 import {
   Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign, Globe
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
 import { ProfileDialog } from "@/components/ProfileDialog";
@@ -106,8 +107,8 @@ export default function OrganizerDashboard() {
         const { data: regs } = await supabase
           .from("registrations")
           .select("id, team_members, category_id, subtotal_cents, payment_status")
-          .in("championship_id", champIds)
-          .eq("payment_status", "approved");
+          .in("championship_id", champIds);
+        // O filtro por payment_status = approved será feito via código abaixo para manter stats precisos
 
         // Contar atletas (considerando times)
         if (regs) {
@@ -131,7 +132,9 @@ export default function OrganizerDashboard() {
           }
 
           // Receita total (apenas pagamentos aprovados)
-          totalRevenue = regs.reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
+          totalRevenue = regs
+            .filter(r => r.payment_status === 'approved')
+            .reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
         }
       }
 
@@ -346,9 +349,9 @@ export default function OrganizerDashboard() {
       {/* Header */}
       <div className="border-b bg-[#0f172a] text-white">
         <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setProfileOpen(true)}>
-              <div className="relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-opacity w-full sm:w-auto overflow-hidden" onClick={() => setProfileOpen(true)}>
+              <div className="relative shrink-0">
                 <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-primary/20 bg-muted/10 flex items-center justify-center">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -360,14 +363,14 @@ export default function OrganizerDashboard() {
                   <Pencil className="w-3 h-3 text-black" />
                 </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold">Área do Organizador</h1>
-                <p className="text-sm text-gray-400">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold truncate">Área do Organizador</h1>
+                <p className="text-sm text-gray-400 truncate">
                   Bem-vindo, {user?.email}
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto justify-start sm:justify-end">
               <Button
                 variant="ghost"
                 size="sm"
@@ -428,40 +431,44 @@ export default function OrganizerDashboard() {
             ) : (
               <div className="space-y-4">
                 {championships.map((championship) => (
-                  <Card key={championship.id} className="shadow-card transition-all hover:bg-muted/5">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
+                  <Card key={championship.id} className="shadow-card transition-all hover:bg-muted/5 overflow-hidden">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-xl font-bold">
+                          <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                            <h3 className="text-lg sm:text-xl font-bold truncate">
                               {championship.name}
                             </h3>
-                            <div className={`w-2 h-2 rounded-full ${championship.is_published ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${championship.is_published ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                             {formatDateRange(championship)}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-1 xs:grid-cols-3 sm:flex items-center gap-2 sm:gap-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleTogglePublish(championship)}
-                            className={championship.is_published ? "text-green-600 border-green-600 hover:bg-green-50" : ""}
+                            className={cn(
+                              "text-xs h-9 sm:h-10 transition-colors",
+                              championship.is_published ? "text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700" : ""
+                            )}
                           >
-                            <Globe className="w-4 h-4 mr-2" />
+                            <Globe className="w-4 h-4 mr-1.5 sm:mr-2" />
                             {championship.is_published ? 'Publicado' : 'Publicar'}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            className="text-xs h-9 sm:h-10"
                             onClick={() => {
                               setSelectedChampionship(championship);
                               navigate("/app");
                             }}
                           >
-                            <Settings className="w-4 h-4 mr-2" />
-                            Configurações
+                            <Settings className="w-4 h-4 mr-1.5 sm:mr-2" />
+                            Configurar
                           </Button>
                           <Button
                             variant="outline"
@@ -470,9 +477,9 @@ export default function OrganizerDashboard() {
                               setChampionshipToDelete(championship);
                               setDeleteDialogOpen(true);
                             }}
-                            className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+                            className="text-xs h-9 sm:h-10 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
                           >
-                            <Trash2 className="w-4 h-4 mr-2" />
+                            <Trash2 className="w-4 h-4 mr-1.5 sm:mr-2" />
                             Excluir
                           </Button>
                         </div>

@@ -48,10 +48,15 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                 // Se não achar perfil, tenta usar metadados do user auth se tiver
                 setFullName(user.user_metadata?.full_name || "");
             } else if (data) {
+                // @ts-ignore
                 setFullName(data.full_name || "");
+                // @ts-ignore
                 setPhone(data.phone || "");
+                // @ts-ignore
                 setCpf(data.cpf || "");
+                // @ts-ignore
                 setBirthDate(data.birth_date || "");
+                // @ts-ignore
                 setAvatarUrl(data.avatar_url);
             }
         } catch (error) {
@@ -61,6 +66,9 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
         }
     }
 
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -69,32 +77,51 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
             return;
         }
 
+        // Validação de senha se preenchido
+        if (newPassword) {
+            if (newPassword.length < 6) {
+                toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                toast.error("As senhas não coincidem.");
+                return;
+            }
+        }
+
         setLoading(true);
 
         try {
-            const { error } = await supabase
+            // 1. Atualizar Perfil
+            const { error: profileError } = await supabase
                 .from("profiles")
                 .upsert({
                     id: user.id,
                     full_name: fullName,
                     phone: phone,
-                    // CPF matches the existing one or null if new; we don't change it if it exists usually, 
-                    // but upsert overwrites. We need to be careful with immutable CPF.
-                    // However, if the user is editing, they are seeing current values. 
-                    // Let's keep the existing CPF if present.
                     cpf: cpf,
                     birth_date: birthDate,
                     avatar_url: avatarUrl,
-                    email: user.email // Ensure email is kept/set
+                    email: user.email
                 });
 
-            if (error) throw error;
+            if (profileError) throw profileError;
+
+            // 2. Atualizar Senha se informado
+            if (newPassword) {
+                const { error: authError } = await supabase.auth.updateUser({
+                    password: newPassword
+                });
+                if (authError) throw authError;
+            }
 
             toast.success("Perfil atualizado com sucesso!");
+            setNewPassword("");
+            setConfirmPassword("");
             onProfileUpdate();
             onOpenChange(false);
         } catch (error: any) {
-            toast.error("Erro ao atualizar perfil: " + (error.message || error.error_description || "Erro desconhecido"));
+            toast.error("Erro ao atualizar: " + (error.message || "Erro desconhecido"));
             console.error(error);
         } finally {
             setLoading(false);
@@ -228,6 +255,32 @@ export function ProfileDialog({ open, onOpenChange, user, onProfileUpdate }: Pro
                                     disabled
                                     className="bg-muted"
                                 />
+                            </div>
+
+                            <div className="pt-4 border-t border-border mt-4">
+                                <h4 className="text-sm font-semibold mb-3">Alterar Senha (Opcional)</h4>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="newPassword">Nova Senha</Label>
+                                        <Input
+                                            id="newPassword"
+                                            type="password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="Mínimo 6 caracteres"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                                        <Input
+                                            id="confirmPassword"
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="Repita a nova senha"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

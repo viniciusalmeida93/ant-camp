@@ -814,17 +814,29 @@ export default function PublicRegistration() {
                             placeholder="dd/mm/aaaa"
                           />
                         </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">Tamanho da Camisa</Label>
-                          <Select value={member.shirtSize} onValueChange={v => updateMember(idx, 'shirtSize', v)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Camisa" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {['PP', 'P', 'M', 'G', 'GG', 'XG'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {selectedCategory?.has_kits && selectedCategory?.kits_active && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-1 block">Tamanho da Camiseta (Kit)</Label>
+                            <Select value={member.shirtSize} onValueChange={v => updateMember(idx, 'shirtSize', v)}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tamanho" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {selectedCategory.kits_config && selectedCategory.kits_config.length > 0 ? (
+                                  selectedCategory.kits_config.map((k: any) => (
+                                    <SelectItem key={k.size} value={k.size} disabled={k.total !== null && (k.sold || 0) >= k.total}>
+                                      {k.size} {k.total !== null && (k.sold || 0) >= k.total ? '(Esgotado)' : ''}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG', 'XXXG'].map(s => (
+                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1">
@@ -911,7 +923,7 @@ export default function PublicRegistration() {
               {championship.description || "Sem descrição disponível."}
             </CardContent>
           </Card>
-          <div className="flex justify-start mt-4">
+          <div className="flex flex-wrap gap-2 mt-4">
             <Button
               variant="outline"
               size="sm"
@@ -919,8 +931,19 @@ export default function PublicRegistration() {
               onClick={() => setIsRegulationOpen(true)}
             >
               <FileText className="w-3.5 h-3.5" />
-              Ver Regulamento
+              {championship.regulation_url ? "Ver Regulamento (Texto)" : "Ver Regulamento"}
             </Button>
+            {championship.regulation_url && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs text-white hover:text-white gap-2 h-8 px-3 rounded-full bg-primary border-primary hover:bg-primary/90 transition-colors"
+                onClick={() => window.open(championship.regulation_url, "_blank")}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Baixar Regulamento (PDF)
+              </Button>
+            )}
           </div>
         </div>
 

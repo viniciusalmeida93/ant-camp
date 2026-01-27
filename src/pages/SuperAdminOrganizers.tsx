@@ -4,7 +4,18 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserPlus, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface OrganizerStats {
     organizer_id: string;
@@ -19,6 +30,13 @@ interface OrganizerStats {
 export default function SuperAdminOrganizers() {
     const [loading, setLoading] = useState(true);
     const [organizers, setOrganizers] = useState<OrganizerStats[]>([]);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [creatingOrganizer, setCreatingOrganizer] = useState(false);
+
+    // Form states
+    const [newOrgName, setNewOrgName] = useState("");
+    const [newOrgEmail, setNewOrgEmail] = useState("");
+    const [newOrgPassword, setNewOrgPassword] = useState("");
 
     useEffect(() => {
         loadData();
@@ -27,7 +45,8 @@ export default function SuperAdminOrganizers() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const { data: organizerData, error: orgError } = await supabase.rpc("get_organizer_stats");
+            // @ts-ignore - RPC might not be in types yet
+            const { data: organizerData, error: orgError } = await supabase.rpc("get_organizer_stats" as any);
 
             if (orgError) {
                 console.error("Error calling RPC:", orgError);
@@ -36,10 +55,43 @@ export default function SuperAdminOrganizers() {
             }
 
             if (organizerData) {
-                setOrganizers(organizerData as OrganizerStats[]);
+                setOrganizers(organizerData as any as OrganizerStats[]);
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCreateOrganizer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newOrgName || !newOrgEmail || !newOrgPassword) {
+            toast.error("Preencha todos os campos");
+            return;
+        }
+
+        setCreatingOrganizer(true);
+        try {
+            const { data, error } = await supabase.functions.invoke("invite-organizer", {
+                body: {
+                    email: newOrgEmail,
+                    fullName: newOrgName,
+                    password: newOrgPassword
+                }
+            });
+
+            if (error) throw error;
+
+            toast.success("Organizador criado e e-mail enviado com sucesso!");
+            setIsCreateModalOpen(false);
+            setNewOrgName("");
+            setNewOrgEmail("");
+            setNewOrgPassword("");
+            loadData();
+        } catch (error: any) {
+            console.error("Error creating organizer:", error);
+            toast.error("Erro ao criar organizador: " + (error.message || "Erro desconhecido"));
+        } finally {
+            setCreatingOrganizer(false);
         }
     };
 
@@ -60,11 +112,91 @@ export default function SuperAdminOrganizers() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold">Organizadores</h1>
-                <p className="text-sm text-muted-foreground">
-                    Lista de todos os organizadores cadastrados na plataforma e seus desempenhos.
-                </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold">Organizadores</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Lista de todos os organizadores cadastrados na plataforma e seus desempenhos.
+                    </p>
+                </div>
+
+                <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                    <DialogTrigger asChild>
+                        <Button className="bg-[#D71C1D] hover:bg-[#b01617] text-white">
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Novo Organizador
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Cadastrar Novo Organizador</DialogTitle>
+                            <DialogDescription>
+                                O novo organizador receberá um e-mail com as credenciais de acesso.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreateOrganizer} className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="name">Nome Completo</Label>
+                                <Input
+                                    id="name"
+                                    value={newOrgName}
+                                    onChange={(e) => setNewOrgName(e.target.value)}
+                                    placeholder="Ex: João Silva"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={newOrgEmail}
+                                    onChange={(e) => setNewOrgEmail(e.target.value)}
+                                    placeholder="organizador@email.com"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Senha Inicial</Label>
+                                <Input
+                                    id="password"
+                                    type="text"
+                                    value={newOrgPassword}
+                                    onChange={(e) => setNewOrgPassword(e.target.value)}
+                                    placeholder="Defina uma senha segura"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setIsCreateModalOpen(false)}
+                                    disabled={creatingOrganizer}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    className="bg-[#D71C1D] hover:bg-[#b01617] text-white"
+                                    disabled={creatingOrganizer}
+                                >
+                                    {creatingOrganizer ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Criando...
+                                        </>
+                                    ) : (
+                                        "Criar e Notificar"
+                                    )}
+                                </Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
 
             <Card>
@@ -117,6 +249,87 @@ export default function SuperAdminOrganizers() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Floating Action Button */}
+            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                <DialogTrigger asChild>
+                    <Button
+                        className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-2xl bg-[#D71C1D] hover:bg-[#b01617] text-white p-0 flex items-center justify-center z-50 transition-transform hover:scale-110 active:scale-95"
+                        aria-label="Cadastrar Novo Organizador"
+                    >
+                        <Plus className="w-6 h-6" />
+                    </Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cadastrar Novo Organizador</DialogTitle>
+                        <DialogDescription>
+                            O novo organizador receberá um e-mail com as credenciais de acesso.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleCreateOrganizer} className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Nome Completo</Label>
+                            <Input
+                                id="name"
+                                value={newOrgName}
+                                onChange={(e) => setNewOrgName(e.target.value)}
+                                placeholder="Ex: João Silva"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                value={newOrgEmail}
+                                onChange={(e) => setNewOrgEmail(e.target.value)}
+                                placeholder="organizador@email.com"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="password">Senha Inicial</Label>
+                            <Input
+                                id="password"
+                                type="text"
+                                value={newOrgPassword}
+                                onChange={(e) => setNewOrgPassword(e.target.value)}
+                                placeholder="Defina uma senha segura"
+                                required
+                                minLength={6}
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setIsCreateModalOpen(false)}
+                                disabled={creatingOrganizer}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="bg-[#D71C1D] hover:bg-[#b01617] text-white"
+                                disabled={creatingOrganizer}
+                            >
+                                {creatingOrganizer ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Criando...
+                                    </>
+                                ) : (
+                                    "Criar e Notificar"
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

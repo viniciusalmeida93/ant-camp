@@ -110,10 +110,7 @@ export type Database = {
           gender: string
           gender_composition: string | null
           has_batches: boolean | null
-          has_kits: boolean | null
           id: string
-          kits_active: boolean | null
-          kits_config: Json | null
           max_age: number | null
           min_age: number | null
           name: string
@@ -134,10 +131,7 @@ export type Database = {
           gender: string
           gender_composition?: string | null
           has_batches?: boolean | null
-          has_kits?: boolean | null
           id?: string
-          kits_active?: boolean | null
-          kits_config?: Json | null
           max_age?: number | null
           min_age?: number | null
           name: string
@@ -158,10 +152,7 @@ export type Database = {
           gender?: string
           gender_composition?: string | null
           has_batches?: boolean | null
-          has_kits?: boolean | null
           id?: string
-          kits_active?: boolean | null
-          kits_config?: Json | null
           max_age?: number | null
           min_age?: number | null
           name?: string
@@ -298,7 +289,6 @@ export type Database = {
           platform_fee_configuration: Json | null
           registration_end_date: string | null
           regulation: string | null
-          regulation_url: string | null
           slug: string
           start_time: string | null
           total_days: number | null
@@ -329,7 +319,6 @@ export type Database = {
           platform_fee_configuration?: Json | null
           registration_end_date?: string | null
           regulation?: string | null
-          regulation_url?: string | null
           slug: string
           start_time?: string | null
           total_days?: number | null
@@ -360,7 +349,6 @@ export type Database = {
           platform_fee_configuration?: Json | null
           registration_end_date?: string | null
           regulation?: string | null
-          regulation_url?: string | null
           slug?: string
           start_time?: string | null
           total_days?: number | null
@@ -871,7 +859,6 @@ export type Database = {
           discount_cents: number | null
           expires_at: string | null
           id: string
-          kit_size: string | null
           order_index: number | null
           paid_at: string | null
           payment_id: string | null
@@ -901,7 +888,6 @@ export type Database = {
           discount_cents?: number | null
           expires_at?: string | null
           id?: string
-          kit_size?: string | null
           order_index?: number | null
           paid_at?: string | null
           payment_id?: string | null
@@ -931,7 +917,6 @@ export type Database = {
           discount_cents?: number | null
           expires_at?: string | null
           id?: string
-          kit_size?: string | null
           order_index?: number | null
           paid_at?: string | null
           payment_id?: string | null

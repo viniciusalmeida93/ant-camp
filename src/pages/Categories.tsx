@@ -75,64 +75,69 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          title="Arrastar para reorganizar"
-        >
-          <GripVertical className="w-5 h-5" />
-        </button>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all overflow-hidden">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            title="Arrastar para reorganizar"
+          >
+            <GripVertical className="w-5 h-5" />
+          </button>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h3 className="font-semibold">{category.name}</h3>
-            <div className="flex gap-2">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                {category.format}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                {category.gender}
-              </span>
-              {category.has_batches && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
-                  Lotes Ativos
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+              <h3 className="font-semibold text-base sm:text-lg truncate">{category.name}</h3>
+              <div className="flex flex-wrap gap-1">
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                  {category.format}
                 </span>
-              )}
+                <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                  {category.gender}
+                </span>
+                {category.has_batches && (
+                  <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
+                    Lotes
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-            <span>Capacidade: {category.capacity === 999999 ? 'Ilimitada' : `${category.capacity} atletas`}</span>
-            <span className="font-semibold text-foreground">• {getCountText()} cadastrado(s)</span>
-            <span>
-              • {category.min_age && category.max_age ? `${category.min_age} a ${category.max_age} anos` :
-                category.min_age ? `Mín. ${category.min_age} anos` :
-                  category.max_age ? `Máx. ${category.max_age} anos` : 'Idade Livre'}
+        </div>
+
+        <div className="flex-1 min-w-0 w-full sm:w-auto mt-1 sm:mt-0">
+          <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted-foreground flex-wrap">
+            <span className="whitespace-nowrap">Capacidade: {category.capacity === 999999 ? 'Ilimitada' : `${category.capacity}`}</span>
+            <span className="font-semibold text-foreground whitespace-nowrap">{getCountText()}</span>
+            <span className="whitespace-nowrap">
+              {category.min_age && category.max_age ? `${category.min_age}-${category.max_age} anos` :
+                category.min_age ? `+${category.min_age} anos` :
+                  category.max_age ? `-${category.max_age} anos` : 'Idade Livre'}
             </span>
             {displayPrice > 0 && (
-              <span className="font-semibold text-foreground">
-                • {category.has_batches ? 'A partir de ' : ''} R$ {(displayPrice / 100).toFixed(2).replace('.', ',')}
+              <span className="font-semibold text-foreground whitespace-nowrap">
+                {category.has_batches ? 'A partir ' : ''} R$ {(displayPrice / 100).toFixed(2).replace('.', ',')}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex gap-1 shrink-0">
+        <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end sm:justify-start pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50">
           <Button
-            size="icon"
-            variant="ghost"
+            size="sm"
+            variant="outline"
             onClick={onEdit}
-            title="Editar categoria"
-            className="h-8 w-8"
+            className="flex-1 sm:flex-initial h-8 px-2"
           >
-            <Edit className="w-4 h-4" />
+            <Edit className="w-4 h-4 mr-1.5" />
+            <span className="sm:hidden lg:inline text-xs">Editar</span>
           </Button>
           <Button
             size="icon"
             variant="ghost"
             onClick={onDuplicate}
-            title="Duplicar categoria"
+            title="Duplicar"
             className="h-8 w-8"
           >
             <Copy className="w-4 h-4" />
@@ -141,10 +146,10 @@ function SortableCategoryItem({ category, registrations, onEdit, onDuplicate, on
             size="icon"
             variant="ghost"
             onClick={onDelete}
-            title="Excluir categoria"
-            className="h-8 w-8"
+            title="Excluir"
+            className="h-8 w-8 text-destructive"
           >
-            <Trash2 className="w-4 h-4 text-destructive" />
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       </div>

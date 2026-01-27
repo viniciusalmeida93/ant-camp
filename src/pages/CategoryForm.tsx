@@ -43,6 +43,13 @@ export default function CategoryForm() {
     const [hasBatches, setHasBatches] = useState(false);
     const [batches, setBatches] = useState<{ name: string, quantity: string, price: string, end_date: string }[]>([]);
 
+    // Kits State
+    const [hasKits, setHasKits] = useState(false);
+    const [kitsActive, setKitsActive] = useState(true);
+    const [kitsConfig, setKitsConfig] = useState<{ size: string, total: string }[]>([]);
+
+    const availableSizes = ["PP", "P", "M", "G", "GG", "XG", "XXG", "XXXG"];
+
     useEffect(() => {
         if (id) {
             loadCategory();
@@ -95,6 +102,15 @@ export default function CategoryForm() {
                     end_date: b.end_date || ''
                 })));
             }
+
+            setHasKits(data.has_kits || false);
+            setKitsActive(data.kits_active !== false); // Default to true
+            if (data.kits_config && Array.isArray(data.kits_config)) {
+                setKitsConfig(data.kits_config.map((k: any) => ({
+                    size: k.size,
+                    total: k.total ? String(k.total) : ''
+                })));
+            }
         } catch (error) {
             console.error('Error loading category:', error);
             toast.error('Erro ao carregar categoria');
@@ -135,6 +151,19 @@ export default function CategoryForm() {
         // @ts-ignore
         newConfig[index][field] = value;
         setTeamConfig(newConfig);
+    };
+
+    const handleToggleSize = (size: string) => {
+        const isSelected = kitsConfig.some(k => k.size === size);
+        if (isSelected) {
+            setKitsConfig(kitsConfig.filter(k => k.size !== size));
+        } else {
+            setKitsConfig([...kitsConfig, { size, total: '' }]);
+        }
+    };
+
+    const handleKitInventoryChange = (size: string, value: string) => {
+        setKitsConfig(kitsConfig.map(k => k.size === size ? { ...k, total: value } : k));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -205,7 +234,13 @@ export default function CategoryForm() {
                 price_cents: price_cents,
                 athletes_per_heat: athletes_per_heat,
                 has_batches: hasBatches,
-                batches: processedBatches
+                batches: processedBatches,
+                has_kits: hasKits,
+                kits_active: kitsActive,
+                kits_config: hasKits ? kitsConfig.map(k => ({
+                    size: k.size,
+                    total: k.total ? parseInt(k.total) : null
+                })) : []
             };
 
             if (id) {
@@ -540,6 +575,84 @@ export default function CategoryForm() {
                                 ? "O preço é determinado pelo lote ativo no momento da inscrição."
                                 : "Preço total da inscrição para esta categoria (não por atleta). Ex: Trio = R$ 300,00, Dupla = R$ 200,00, Individual = R$ 100,00"}
                         </p>
+                    </div>
+
+                    {/* Kits Section */}
+                    <div className="space-y-4 border rounded-lg p-6 bg-primary/5 border-primary/20">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label className="text-base">Kits do Evento</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Ative se esta categoria oferecer kit (ex: camiseta) aos atletas
+                                </p>
+                            </div>
+                            <Switch
+                                checked={hasKits}
+                                onCheckedChange={setHasKits}
+                            />
+                        </div>
+
+                        {hasKits && (
+                            <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-sm font-medium">Permitir escolha de kit</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Desative para encerrar a escolha de kits sem afetar os já realizados
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={kitsActive}
+                                        onCheckedChange={setKitsActive}
+                                    />
+                                </div>
+
+                                <div className="space-y-3">
+                                    <Label className="text-sm">Tamanhos Disponíveis</Label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableSizes.map(size => {
+                                            const isSelected = kitsConfig.some(k => k.size === size);
+                                            return (
+                                                <Button
+                                                    key={size}
+                                                    type="button"
+                                                    variant={isSelected ? "default" : "outline"}
+                                                    size="sm"
+                                                    className={`h-10 min-w-12 transition-all ${isSelected ? 'bg-primary border-primary' : ''}`}
+                                                    onClick={() => handleToggleSize(size)}
+                                                >
+                                                    {size}
+                                                </Button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {kitsConfig.length > 0 && (
+                                    <div className="space-y-3 pt-2">
+                                        <Label className="text-sm">Controle de Estoque por Tamanho</Label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                            {kitsConfig.map(k => (
+                                                <div key={k.size} className="space-y-1.5 p-3 border rounded-md bg-background/50">
+                                                    <Label className="text-xs font-bold">{k.size}</Label>
+                                                    <Input
+                                                        type="number"
+                                                        value={k.total}
+                                                        onChange={(e) => handleKitInventoryChange(k.size, e.target.value)}
+                                                        placeholder="∞"
+                                                        className="h-8"
+                                                        min="0"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            * Deixe o campo vazio para estoque ilimitado
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div>

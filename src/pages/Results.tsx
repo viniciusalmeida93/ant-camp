@@ -32,7 +32,7 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
       .from("registrations")
       .select("*")
       .eq("category_id", categoryId)
-      .eq("status", "approved");
+      .neq("status", "cancelled"); // Incluir pendentes, excluir apenas canceladas
 
     if (regsError) throw regsError;
 
@@ -237,7 +237,7 @@ export default function Results() {
       const [catsResult, wodsResult, regsResult, configsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", selectedChampionship.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", selectedChampionship.id).order("order_num"),
-        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved"),
+        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).neq("status", "cancelled"),
         supabase.from("scoring_configs").select("*"),
       ]);
 

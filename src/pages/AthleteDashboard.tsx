@@ -14,10 +14,9 @@ export default function AthleteDashboard() {
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
     const [registrations, setRegistrations] = useState<any[]>([]);
-
-    // New States
     const [profileOpen, setProfileOpen] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [isOrganizer, setIsOrganizer] = useState(false);
 
     useEffect(() => {
         checkAuth();
@@ -32,6 +31,28 @@ export default function AthleteDashboard() {
         setUser(session.user);
         loadProfileStats(session.user.id);
         loadRegistrations(session.user);
+        checkOrganizerRole(session.user.id);
+    };
+
+    const checkOrganizerRole = async (userId: string) => {
+        const { data: roles } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userId);
+
+        if (roles?.some(r => r.role === 'organizer' || r.role === 'super_admin')) {
+            setIsOrganizer(true);
+        } else {
+            // Fallback para organizadores legados
+            const { count } = await supabase
+                .from("championships")
+                .select("id", { count: "exact", head: true })
+                .eq("organizer_id", userId);
+
+            if (count && count > 0) {
+                setIsOrganizer(true);
+            }
+        }
     };
 
     const loadProfileStats = async (userId: string) => {
@@ -68,7 +89,6 @@ export default function AthleteDashboard() {
 
             const { data, error } = await query.or(`user_id.eq.${currentUser.id},athlete_email.eq.${currentUser.email}`);
 
-            if (error) throw error;
             if (error) throw error;
 
             // Deduplicate by ID
@@ -133,9 +153,9 @@ export default function AthleteDashboard() {
             {/* Header */}
             <div className="border-b bg-[#0f172a] text-white">
                 <div className="w-full mx-auto px-6 py-4 max-w-[98%]">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setProfileOpen(true)}>
-                            <div className="relative">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-opacity w-full sm:w-auto overflow-hidden" onClick={() => setProfileOpen(true)}>
+                            <div className="relative shrink-0">
                                 <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-primary/20 bg-muted/10 flex items-center justify-center">
                                     {avatarUrl ? (
                                         <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -147,22 +167,24 @@ export default function AthleteDashboard() {
                                     <Pencil className="w-3 h-3 text-black" />
                                 </div>
                             </div>
-                            <div>
-                                <h1 className="text-xl font-bold">Área do Atleta</h1>
-                                <p className="text-sm text-gray-400">
+                            <div className="min-w-0">
+                                <h1 className="text-xl font-bold truncate">Área do Atleta</h1>
+                                <p className="text-sm text-gray-400 truncate">
                                     Bem-vindo, {user?.email}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-white hover:text-white hover:bg-white/10"
-                                onClick={() => navigate("/dashboard")}
-                            >
-                                <span className="hidden md:inline">Área do Organizador</span>
-                            </Button>
+                        <div className="flex gap-2 w-full sm:w-auto justify-start sm:justify-end">
+                            {isOrganizer && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-white hover:text-white hover:bg-white/10"
+                                    onClick={() => navigate("/dashboard")}
+                                >
+                                    <span className="hidden md:inline">Área do Organizador</span>
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 size="sm"

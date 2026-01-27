@@ -1,7 +1,9 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { path: '/app', label: 'Dashboard', icon: Trophy },
@@ -18,7 +20,59 @@ const navItems = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRoles = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id);
+
+        if (data) {
+          setRoles(data.map(r => r.role));
+        }
+
+        // Fallback para organizadores legados (dono de algum campeonato)
+        const { count } = await supabase
+          .from('championships')
+          .select('id', { count: 'exact', head: true })
+          .eq('organizer_id', session.user.id);
+
+        if (count && count > 0 && !roles.includes('organizer')) {
+          setRoles(prev => [...prev, 'organizer']);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchRoles();
+  }, []);
+
+  const isSuperAdmin = roles.includes('super_admin');
+  const isOrganizer = roles.includes('organizer') || isSuperAdmin;
+
+  const filteredNavItems = navItems.filter(item => {
+    // Todos podem ver Leaderboard (se estiverem na aba app)
+    // Mas para simplicidade, se for atleta, ele cairá em /athlete-dashboard que não usa essa sidebar
+    // Mas se ele digitar /app, ele deve ver o dashboard dele
+    return isOrganizer;
+  });
+
+  // Se super admin, adicionar links extras (opcional, já que eles acessam via layout próprio, 
+  // mas é bom ter no menu geral se estiverem no dashboard)
+  const superAdminItems = isSuperAdmin ? [
+    { path: '/super-admin', label: 'Super Admin', icon: Settings },
+  ] : [];
+
+  const finalItems = [...filteredNavItems, ...superAdminItems];
+
+  if (loading) return null;
 
   return (
     <>
@@ -66,7 +120,7 @@ export const Sidebar = () => {
           {/* Navigation Items */}
           <nav className="flex-1 overflow-y-auto p-4">
             <div className="flex flex-col gap-1">
-              {navItems.map((item) => {
+              {finalItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path ||
                   (item.path !== '/app' && location.pathname.startsWith(item.path));
@@ -90,6 +144,7 @@ export const Sidebar = () => {
               })}
             </div>
           </nav>
+
         </div>
       </aside>
     </>

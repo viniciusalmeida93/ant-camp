@@ -20,6 +20,7 @@ export default function ChampionshipSettings() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showColumnError, setShowColumnError] = useState(false);
   const [championship, setChampionship] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -31,6 +32,7 @@ export default function ChampionshipSettings() {
     address: "",
     city: "",
     state: "",
+    regulation_url: "",
   });
 
   useEffect(() => {
@@ -66,8 +68,9 @@ export default function ChampionshipSettings() {
     try {
       setLoading(true);
       const { data, error } = await supabase
+        // @ts-ignore
         .from("championships")
-        .select("id, name, slug, location, date, registration_end_date, is_published, description, city, state, address")
+        .select("id, name, slug, location, date, registration_end_date, is_published, description, city, state, address, regulation_url")
         .eq("id", championshipId)
         .single();
 
@@ -84,6 +87,7 @@ export default function ChampionshipSettings() {
         address: data.address || "",
         city: data.city || "",
         state: data.state || "",
+        regulation_url: data.regulation_url || "",
       });
       // Atualiza o contexto também
       if (championshipId) {
@@ -110,6 +114,7 @@ export default function ChampionshipSettings() {
         address: formData.address || null,
         city: formData.city || null,
         state: formData.state || null,
+        regulation_url: formData.regulation_url || null,
       };
 
       // Construct location string
@@ -319,6 +324,18 @@ export default function ChampionshipSettings() {
                 rows={3}
                 placeholder="Descreva o campeonato..."
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="regulationUrl">Link do Regulamento (PDF)</Label>
+              <Input
+                id="regulationUrl"
+                value={formData.regulation_url}
+                onChange={(e) => setFormData({ ...formData, regulation_url: e.target.value })}
+                placeholder="https://exemplo.com/regulamento.pdf"
+              />
+              <p className="text-xs text-muted-foreground">
+                Se informado, um botão para baixar o PDF aparecerá na página pública do campeonato.
+              </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Button onClick={handleSave} disabled={saving} className="sm:w-auto">

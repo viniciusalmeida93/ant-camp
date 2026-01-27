@@ -1111,15 +1111,23 @@ export default function Checkout() {
                       <span className="font-semibold text-foreground">{formatPrice(basePrice)}</span>
                     </div>
 
-                    {/* 2. Service Fee (Platform + Asaas Cost + Interest) */}
+                    {/* 2. Service Fee (Platform + Asaas PIX Cost) - FIXED */}
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground font-medium">Taxa de Serviço:</span>
                       <span className="font-semibold text-foreground">
-                        {formatPrice(dynamicTotal - Math.max(0, basePrice - discountCents))}
+                        {formatPrice((registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)}
                       </span>
                     </div>
 
-                    {/* Gross Total (Removed interest line as requested) */}
+                    {/* 3. Credit Card Surcharge (Interest/Processing) */}
+                    {paymentMethod === 'credit_card' && (
+                      <div className="flex justify-between items-center text-sm animate-in fade-in slide-in-from-top-1 duration-300">
+                        <span className="text-muted-foreground font-medium">Acréscimo Cartão:</span>
+                        <span className="font-semibold text-foreground">
+                          {formatPrice(Math.max(0, dynamicTotal - (Math.max(0, basePrice - discountCents) + (registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)))}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {discountCents > 0 && (

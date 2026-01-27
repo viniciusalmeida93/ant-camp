@@ -41,6 +41,7 @@ export default function Dashboard() {
   });
   const [editRegulationOpen, setEditRegulationOpen] = useState(false);
   const [regulationText, setRegulationText] = useState("");
+  const [regulationUrl, setRegulationUrl] = useState("");
 
   const [formData, setFormData] = useState({
     name: '',
@@ -282,50 +283,68 @@ export default function Dashboard() {
   const updateDaysCount = async (newDays: number) => {
     if (!selectedChampionship) return;
 
-    const currentDays = championshipDays.length;
+    try {
+      setLoadingSchedule(true);
 
-    if (newDays > currentDays) {
-      const baseDate = new Date(selectedChampionship.date);
-      for (let i = currentDays + 1; i <= newDays; i++) {
-        const dayDate = new Date(baseDate);
-        dayDate.setDate(baseDate.getDate() + (i - 1));
+      // 1. Sempre pegar a contagem real do banco para evitar corridas
+      const { data: currentDaysData, error: fetchError } = await supabase
+        .from("championship_days")
+        .select("id, day_number")
+        .eq("championship_id", selectedChampionship.id)
+        .order("day_number", { ascending: true });
 
-        const { data, error } = await supabase
-          .from("championship_days")
-          .insert({
+      if (fetchError) throw fetchError;
+
+      const currentDays = currentDaysData || [];
+      const currentCount = currentDays.length;
+
+      if (newDays > currentCount) {
+        const baseDate = new Date(selectedChampionship.date);
+        const inserts = [];
+
+        for (let i = currentCount + 1; i <= newDays; i++) {
+          const dayDate = new Date(baseDate);
+          dayDate.setDate(baseDate.getDate() + (i - 1));
+
+          inserts.push({
             championship_id: selectedChampionship.id,
             day_number: i,
             date: dayDate.toISOString().split('T')[0],
-          })
-          .select()
-          .single();
-
-        if (!error && data) {
-          setChampionshipDays(prev => [...prev, data]);
-          setDayWods(prev => {
-            const next = new Map(prev);
-            next.set(data.day_number, []);
-            return next;
           });
         }
-      }
-    } else if (newDays < currentDays) {
-      const daysToRemove = championshipDays.slice(newDays);
-      for (const day of daysToRemove) {
-        await supabase
-          .from("championship_days")
-          .delete()
-          .eq("id", day.id);
-      }
-      setChampionshipDays(prev => prev.slice(0, newDays));
-      setDayWods(prev => {
-        const next = new Map(prev);
-        daysToRemove.forEach(day => next.delete(day.day_number));
-        return next;
-      });
-    }
 
-    await loadChampionshipDays();
+        if (inserts.length > 0) {
+          const { error: insertError } = await supabase
+            .from("championship_days")
+            .insert(inserts);
+
+          if (insertError) {
+            // Se falhar por unicidade (alguém inseriu entre o fetch e o insert), o erro será ignorado silenciosamente ou tratado
+            console.warn("Possível conflito de inserção em championship_days:", insertError);
+          }
+        }
+      } else if (newDays < currentCount) {
+        // Remover apenas os dias extras do final
+        const daysToRemove = currentDays.slice(newDays);
+        const idsToRemove = daysToRemove.map(d => d.id);
+
+        if (idsToRemove.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("championship_days")
+            .delete()
+            .in("id", idsToRemove);
+
+          if (deleteError) throw deleteError;
+        }
+      }
+
+      await loadChampionshipDays();
+    } catch (error: any) {
+      console.error("Error updating days count:", error);
+      toast.error("Erro ao atualizar número de dias");
+    } finally {
+      setLoadingSchedule(false);
+    }
   };
 
   const addWodToDay = async (dayId: string, wodId: string) => {
@@ -452,14 +471,27 @@ export default function Dashboard() {
 
       const { error } = await supabase
         .from('championships')
-        .update({ regulation: regulationText })
+        .update({
+          regulation: regulationText,
+          regulation_url: regulationUrl
+        })
         .eq('id', selectedChampionship.id);
 
       if (error) throw error;
 
       toast.success("Regulamento atualizado com sucesso!");
       setEditRegulationOpen(false);
-      loadDashboardData(); // Reload to update state
+
+      // Update local state
+      if (selectedChampionship) {
+        setSelectedChampionship({
+          ...selectedChampionship,
+          regulation: regulationText,
+          regulation_url: regulationUrl
+        });
+      }
+
+      await loadChampionships();
     } catch (error: any) {
       console.error("Erro ao salvar regulamento:", error);
       toast.error("Erro ao salvar regulamento");
@@ -924,6 +956,7 @@ export default function Dashboard() {
                         className="w-[200px] justify-start"
                         onClick={() => {
                           setRegulationText(selectedChampionship.regulation || "");
+                          setRegulationUrl(selectedChampionship.regulation_url || "");
                         }}
                       >
                         <FileText className="w-4 h-4 mr-2" />
@@ -937,13 +970,30 @@ export default function Dashboard() {
                           Insira o texto completo do regulamento do campeonato.
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="flex-1 py-4">
-                        <Textarea
-                          value={regulationText}
-                          onChange={(e) => setRegulationText(e.target.value)}
-                          className="h-full min-h-[300px] font-sans text-sm"
-                          placeholder="Cole o regulamento aqui..."
-                        />
+                      <div className="flex-1 py-4 space-y-4 overflow-y-auto">
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-url">Link do Regulamento (PDF)</Label>
+                          <Input
+                            id="reg-url"
+                            value={regulationUrl}
+                            onChange={(e) => setRegulationUrl(e.target.value)}
+                            placeholder="https://exemplo.com/regulamento.pdf"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Se informado, os atletas verão um botão de download para o PDF.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2 flex-1">
+                          <Label htmlFor="reg-text">Texto do Regulamento (Opcional)</Label>
+                          <Textarea
+                            id="reg-text"
+                            value={regulationText}
+                            onChange={(e) => setRegulationText(e.target.value)}
+                            className="min-h-[200px] font-sans text-sm"
+                            placeholder="Cole o regulamento aqui..."
+                          />
+                        </div>
                       </div>
                       <Button onClick={handleSaveRegulation} className="text-white">
                         Salvar Regulamento
@@ -1000,26 +1050,27 @@ export default function Dashboard() {
                       value={totalDaysInput}
                       onChange={(e) => {
                         const rawValue = e.target.value;
-                        if (rawValue === '') {
-                          setTotalDaysInput('');
+                        setTotalDaysInput(rawValue);
+                      }}
+                      onBlur={async () => {
+                        if (totalDaysInput === '') {
+                          const fallback = scheduleConfig.totalDays || 1;
+                          setTotalDaysInput(String(fallback));
                           return;
                         }
 
-                        const parsed = parseInt(rawValue, 10);
+                        const parsed = parseInt(totalDaysInput, 10);
                         if (Number.isNaN(parsed)) {
+                          setTotalDaysInput(String(scheduleConfig.totalDays || 1));
                           return;
                         }
 
                         const normalized = parsed < 1 ? 1 : parsed;
+                        if (normalized === scheduleConfig.totalDays) return;
+
                         setTotalDaysInput(String(normalized));
-                        setScheduleConfig({ ...scheduleConfig, totalDays: normalized });
-                        updateDaysCount(normalized);
-                      }}
-                      onBlur={() => {
-                        if (totalDaysInput === '') {
-                          const fallback = scheduleConfig.totalDays || 1;
-                          setTotalDaysInput(String(fallback));
-                        }
+                        setScheduleConfig(prev => ({ ...prev, totalDays: normalized }));
+                        await updateDaysCount(normalized);
                       }}
                     />
                   </div>

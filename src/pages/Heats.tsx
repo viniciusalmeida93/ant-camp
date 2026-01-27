@@ -187,7 +187,7 @@ export default function Heats() {
       const [catsResult, wodsResult, regsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", selectedChampionship.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", selectedChampionship.id).order("order_num"),
-        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved"),
+        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).neq("status", "cancelled"),
       ]);
 
       if (catsResult.error) throw catsResult.error;
