@@ -313,14 +313,15 @@ serve(async (req) => {
       // So the logic is: SPLIT FIXED VALUE = CATEGORY_PRICE (subtotal) to ORGANIZER.
       // The rest stays with Master (which covers fees + platform fee).
 
-      // Requirement: We need 'subtotal_cents' (Category Price).
-      const organizerFixedShare = registration.subtotal_cents || category.price_cents;
+      // Requirement: We need 'subtotal_cents' (Category Price) minus any discount
+      const basePrice = registration.subtotal_cents || category.price_cents;
+      const organizerFixedShare = Math.max(0, basePrice - discountCents);
+
+      console.log(`Split Calculation: Base=${basePrice}, Discount=${discountCents}, Final Share=${organizerFixedShare}`);
 
       splits.push({
         walletId: walletId,
-        fixedValue: organizerFixedShare / 100, // API expects value in REAIS for fixedValue? or Cents?
-        // Asaas API v3 usually takes numbers. 'value' in payment creation is float. 'fixedValue' is float.
-        // Convert cents to float.
+        fixedValue: organizerFixedShare / 100,
       });
 
     }
@@ -439,25 +440,12 @@ serve(async (req) => {
 
     // Increment Coupon Usage
     if (couponId) {
-      await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
-      // Fallback if RPC doesn't exist (using direct update with danger of race condition, but simple for now)
-      // Actually RPC is better. I'll check if RPC exists later, but for now I will try direct update assuming low concurrency
-      // Or just:
-      const { error: cntError } = await supabase
-        .from("coupons")
-        .update({ used_count: (await supabase.from("coupons").select("used_count").eq("id", couponId).single()).data.used_count + 1 })
-        .eq("id", couponId);
-      // Note: The above is racy. Postgres has `used_count = used_count + 1` syntax but via Supabase JS client it's not direct unless using rpc.
-      // But wait, the user doesn't have `increment_coupon_usage` RPC created yet probably.
-      // I will assume low concurrency for this MVP or I should have created the RPC.
-      // I'll create the RPC in the next step to be safe, but for now the Edge Function needs valid code.
-      // Better approach without RPC: Fetch, then Update. (Still racy but acceptable for MVP).
-      /*
-      const { data: cData } = await supabase.from('coupons').select('used_count').eq('id', couponId).single();
-      if (cData) {
-         await supabase.from('coupons').update({ used_count: cData.used_count + 1 }).eq('id', couponId);
+      try {
+        await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
+      } catch (err) {
+        console.error("Error calling increment_coupon_usage RPC:", err);
+        // Silently fail as payment was already created and saved
       }
-      */
     }
 
     return new Response(JSON.stringify({

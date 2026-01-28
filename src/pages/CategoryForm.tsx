@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import { CurrencyInput } from '@/components/CurrencyInput';
 
 export default function CategoryForm() {
     const navigate = useNavigate();
@@ -28,7 +29,7 @@ export default function CategoryForm() {
         minAge: '',
         maxAge: '',
         rules: '',
-        price: '',
+        price_cents: 0,
     });
 
     // Team Config State
@@ -41,7 +42,7 @@ export default function CategoryForm() {
 
     // Batches State
     const [hasBatches, setHasBatches] = useState(false);
-    const [batches, setBatches] = useState<{ name: string, quantity: string, price: string, end_date: string }[]>([]);
+    const [batches, setBatches] = useState<{ name: string, quantity: string, price_cents: number, end_date: string }[]>([]);
 
     // Kits State
     const [hasKits, setHasKits] = useState(false);
@@ -75,7 +76,7 @@ export default function CategoryForm() {
                 minAge: data.min_age ? String(data.min_age) : '',
                 maxAge: data.max_age ? String(data.max_age) : '',
                 rules: data.rules || '',
-                price: data.price_cents ? (data.price_cents / 100).toFixed(2).replace('.', ',') : '',
+                price_cents: data.price_cents || 0,
             });
 
             if (data.team_config && Array.isArray(data.team_config) && data.team_config.length > 0) {
@@ -98,7 +99,7 @@ export default function CategoryForm() {
                 setBatches(data.batches.map((b: any) => ({
                     name: b.name,
                     quantity: b.quantity ? String(b.quantity) : '',
-                    price: b.price_cents ? (b.price_cents / 100).toFixed(2).replace('.', ',') : '',
+                    price_cents: b.price_cents || 0,
                     end_date: b.end_date || ''
                 })));
             }
@@ -121,7 +122,7 @@ export default function CategoryForm() {
     };
 
     const handleAddBatch = () => {
-        setBatches([...batches, { name: '', quantity: '', price: '', end_date: '' }]);
+        setBatches([...batches, { name: '', quantity: '', price_cents: 0, end_date: '' }]);
     };
 
     const handleRemoveBatch = (index: number) => {
@@ -130,8 +131,9 @@ export default function CategoryForm() {
         setBatches(newBatches);
     };
 
-    const handleBatchChange = (index: number, field: 'name' | 'quantity' | 'price' | 'end_date', value: string) => {
+    const handleBatchChange = (index: number, field: string, value: any) => {
         const newBatches = [...batches];
+        // @ts-ignore
         newBatches[index][field] = value;
         setBatches(newBatches);
     };
@@ -180,9 +182,7 @@ export default function CategoryForm() {
                 ? parseInt(formData.capacity)
                 : 999999;
 
-            const price_cents = formData.price && formData.price.trim() !== ''
-                ? Math.round(parseFloat(formData.price.replace(',', '.')) * 100)
-                : 0;
+            const price_cents = formData.price_cents;
 
             const athletes_per_heat = 10; // Default or add field if needed
 
@@ -192,7 +192,7 @@ export default function CategoryForm() {
                 processedBatches = batches.map(b => ({
                     name: b.name,
                     quantity: b.quantity ? parseInt(b.quantity) : null,
-                    price_cents: b.price ? Math.round(parseFloat(b.price.replace(',', '.')) * 100) : 0,
+                    price_cents: b.price_cents,
                     end_date: b.end_date || null
                 })).filter(b => b.name.trim() !== '');
             }
@@ -524,9 +524,9 @@ export default function CategoryForm() {
                                         </div>
                                         <div className="col-span-3 md:col-span-2">
                                             <Label className="text-xs">Valor (R$)</Label>
-                                            <Input
-                                                value={batch.price}
-                                                onChange={(e) => handleBatchChange(index, 'price', e.target.value)}
+                                            <CurrencyInput
+                                                valueCents={batch.price_cents}
+                                                onChange={(cents) => handleBatchChange(index, 'price_cents', cents)}
                                                 placeholder="0,00"
                                                 className="mt-1"
                                             />
@@ -561,14 +561,13 @@ export default function CategoryForm() {
 
                     <div className={hasBatches ? "opacity-50 pointer-events-none" : ""}>
                         <Label htmlFor="price">Preço por Categoria (R$)</Label>
-                        <Input
+                        <CurrencyInput
                             id="price"
-                            inputMode="decimal"
                             readOnly={hasBatches}
-                            value={formData.price}
-                            onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                            valueCents={formData.price_cents}
+                            onChange={(cents) => setFormData({ ...formData, price_cents: cents })}
                             placeholder={hasBatches ? "Definido nos lotes" : "300,00"}
-                            className={hasBatches ? "bg-muted" : ""}
+                            className={hasBatches ? "bg-muted mt-1" : "mt-1"}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
                             {hasBatches

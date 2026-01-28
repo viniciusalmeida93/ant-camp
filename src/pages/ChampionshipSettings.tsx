@@ -20,7 +20,6 @@ export default function ChampionshipSettings() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showColumnError, setShowColumnError] = useState(false);
   const [championship, setChampionship] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -68,7 +67,6 @@ export default function ChampionshipSettings() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        // @ts-ignore
         .from("championships")
         .select("id, name, slug, location, date, registration_end_date, is_published, description, city, state, address, regulation_url")
         .eq("id", championshipId)
@@ -217,25 +215,6 @@ export default function ChampionshipSettings() {
       </div>
 
       <div className="w-full mx-auto px-6 py-6 max-w-[98%] space-y-6">
-        {showColumnError && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              <p className="font-semibold mb-2">⚠️ Coluna pix_payload não encontrada no banco de dados</p>
-              <p className="mb-3">Para corrigir, execute este SQL no Supabase Dashboard:</p>
-              <div className="bg-muted p-3 rounded-md mb-3">
-                <code className="text-xs break-all">
-                  ALTER TABLE public.championships ADD COLUMN IF NOT EXISTS pix_payload TEXT;
-                </code>
-              </div>
-              <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Acesse o <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Supabase Dashboard</a></li>
-                <li>Vá em <strong>SQL Editor</strong></li>
-                <li>Cole o comando SQL acima e clique em <strong>Run</strong></li>
-                <li>Recarregue esta página</li>
-              </ol>
-            </AlertDescription>
-          </Alert>
-        )}
         <Card>
           <CardHeader>
             <CardTitle>Informações Gerais</CardTitle>

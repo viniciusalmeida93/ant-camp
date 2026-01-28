@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Loader2, UserPlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
 import {
     Dialog,
     DialogContent,
@@ -95,12 +96,6 @@ export default function SuperAdminOrganizers() {
         }
     };
 
-    const formatCurrency = (cents: number) => {
-        return new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(cents / 100);
-    };
 
     if (loading) {
         return (

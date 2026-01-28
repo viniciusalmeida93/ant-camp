@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard, RefreshCcw, Ticket, X } from "lucide-react";
 import { getPixPayloadForDisplay } from "@/utils/pix";
 import { PublicHeader } from "@/components/layout/PublicHeader";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Coupon } from "@/types/coupon";
 
 export default function Checkout() {
@@ -75,7 +75,7 @@ export default function Checkout() {
     if (registration) {
       calculateFees();
     }
-  }, [registration, paymentMethod, installments]);
+  }, [registration, paymentMethod, installments, discountCents]);
 
   const calculateFees = () => {
     if (!registration) return;
@@ -489,12 +489,6 @@ export default function Checkout() {
     }
   };
 
-  const formatPrice = (cents: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(cents / 100);
-  };
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -796,7 +790,7 @@ export default function Checkout() {
 
                                   return (
                                     <SelectItem key={i} value={String(i)}>
-                                      {i}x de {formatPrice(perInstallment)} (Total: {formatPrice(totalForI)})
+                                      {i}x de {formatCurrency(perInstallment)} (Total: {formatCurrency(totalForI)})
                                     </SelectItem>
                                   );
                                 })}
@@ -1108,14 +1102,14 @@ export default function Checkout() {
                     {/* 1. Base Price (Subtotal) */}
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground font-medium">Valor Inscrição:</span>
-                      <span className="font-semibold text-foreground">{formatPrice(basePrice)}</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(basePrice)}</span>
                     </div>
 
                     {/* 2. Service Fee (Platform + Asaas PIX Cost) - FIXED */}
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground font-medium">Taxa de Serviço:</span>
                       <span className="font-semibold text-foreground">
-                        {formatPrice((registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)}
+                        {formatCurrency((registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)}
                       </span>
                     </div>
 
@@ -1124,7 +1118,7 @@ export default function Checkout() {
                       <div className="flex justify-between items-center text-sm animate-in fade-in slide-in-from-top-1 duration-300">
                         <span className="text-muted-foreground font-medium">Acréscimo Cartão:</span>
                         <span className="font-semibold text-foreground">
-                          {formatPrice(Math.max(0, dynamicTotal - (Math.max(0, basePrice - discountCents) + (registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)))}
+                          {formatCurrency(Math.max(0, dynamicTotal - (Math.max(0, basePrice - discountCents) + (registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)))}
                         </span>
                       </div>
                     )}
@@ -1146,7 +1140,7 @@ export default function Checkout() {
                             if (installments >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
                             grossTotal = Math.ceil((grossTargetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
                           }
-                          return formatPrice(grossTotal - dynamicTotal);
+                          return formatCurrency(grossTotal - dynamicTotal);
                         })()}
                       </span>
                     </div>
@@ -1159,7 +1153,7 @@ export default function Checkout() {
                         <span className="font-bold text-foreground">PIX</span>
                       ) : (
                         <div className="flex flex-col items-end">
-                          <span className="font-bold text-blue-400">{installments}x de {formatPrice(dynamicTotal / installments)}</span>
+                          <span className="font-bold text-blue-400">{installments}x de {formatCurrency(dynamicTotal / installments)}</span>
                         </div>
                       )}
                     </div>
@@ -1167,7 +1161,7 @@ export default function Checkout() {
 
                   <div className="flex justify-between items-center text-xl font-bold pt-4 border-t border-primary/20">
                     <span className="text-foreground">Total a Pagar:</span>
-                    <span className="text-green-500">{formatPrice(dynamicTotal || registration.total_cents)}</span>
+                    <span className="text-green-500">{formatCurrency(dynamicTotal || registration.total_cents)}</span>
                   </div>
 
                   <div className="pt-6 space-y-3">
@@ -1180,7 +1174,7 @@ export default function Checkout() {
                             {appliedCoupon.code}
                           </p>
                           <p className="text-xs text-green-700/80 mt-0.5">
-                            Desconto de {formatPrice(discountCents)} aplicado
+                            Desconto de {formatCurrency(discountCents)} aplicado
                           </p>
                         </div>
                         <Button

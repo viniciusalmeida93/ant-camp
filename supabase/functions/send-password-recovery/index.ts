@@ -2,79 +2,80 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface EmailData {
-    registrationId: string;
+  registrationId: string;
 }
 
 serve(async (req) => {
-    if (req.method === "OPTIONS") {
-        return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Create client with Service Role to access admin functions
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    // Default to testing domain if variable not set, but prefer verified domain
+    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev";
+
+    if (!resendApiKey) {
+      return new Response(JSON.stringify({
+        error: "Email service not configured",
+        details: "RESEND_API_KEY is missing."
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const { registrationId }: EmailData = await req.json();
 
-        // Create client with Service Role to access admin functions
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // 1. Fetch registration details
+    const { data: registration, error: regError } = await supabase
+      .from("registrations")
+      .select("athlete_name, athlete_email, team_name")
+      .eq("id", registrationId)
+      .single();
 
-        const resendApiKey = Deno.env.get("RESEND_API_KEY");
-        // Default to testing domain if variable not set, but prefer verified domain
-        const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev";
+    if (regError || !registration) {
+      throw new Error("Registration not found");
+    }
 
-        if (!resendApiKey) {
-            return new Response(JSON.stringify({
-                error: "Email service not configured",
-                details: "RESEND_API_KEY is missing."
-            }), {
-                status: 500,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-        }
+    if (!registration.athlete_email) {
+      throw new Error("Registration has no email address");
+    }
 
-        const { registrationId }: EmailData = await req.json();
+    // 2. Generate Password Recovery Link
+    // Note: This relies on Supabase Auth. 
+    // If the proper user doesn't exist for this email, this might fail or return nothing.
+    // However, usually registrations are linked to users. 
+    // PRO TIP: In this system, registrations might be standalone. 
+    // IF the user is not in Auth table, we cannot recover password.
+    // Let's assume the email corresponds to a user.
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: registration.athlete_email
+    });
 
-        // 1. Fetch registration details
-        const { data: registration, error: regError } = await supabase
-            .from("registrations")
-            .select("athlete_name, athlete_email, team_name")
-            .eq("id", registrationId)
-            .single();
+    if (linkError) {
+      console.error("Error generating link:", linkError);
+      throw new Error(`Failed to generate recovery link: ${linkError.message}`);
+    }
 
-        if (regError || !registration) {
-            throw new Error("Registration not found");
-        }
+    const recoveryLink = linkData.properties.action_link;
+    const recipientName = registration.athlete_name || registration.team_name || "Atleta";
 
-        if (!registration.athlete_email) {
-            throw new Error("Registration has no email address");
-        }
-
-        // 2. Generate Password Recovery Link
-        // Note: This relies on Supabase Auth. 
-        // If the proper user doesn't exist for this email, this might fail or return nothing.
-        // However, usually registrations are linked to users. 
-        // PRO TIP: In this system, registrations might be standalone. 
-        // IF the user is not in Auth table, we cannot recover password.
-        // Let's assume the email corresponds to a user.
-        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-            type: 'recovery',
-            email: registration.athlete_email
-        });
-
-        if (linkError) {
-            console.error("Error generating link:", linkError);
-            throw new Error(`Failed to generate recovery link: ${linkError.message}`);
-        }
-
-        const recoveryLink = linkData.properties.action_link;
-        const recipientName = registration.athlete_name || registration.team_name || "Atleta";
-
-        // 3. Build HTML Email
-        const emailHtml = `
+    // 3. Build HTML Email
+    const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -142,41 +143,42 @@ serve(async (req) => {
 </html>
     `;
 
-        // 4. Send Email via Resend
-        const emailResponse = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${resendApiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                from: fromEmail,
-                to: registration.athlete_email,
-                subject: `🔑 Redefinição de Senha - AntCamp`,
-                html: emailHtml,
-            }),
-        });
+    // 4. Send Email via Resend
+    const emailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: registration.athlete_email,
+        subject: `🔑 Redefinição de Senha - AntCamp`,
+        html: emailHtml,
+      }),
+    });
 
-        if (!emailResponse.ok) {
-            const errorData = await emailResponse.text();
-            throw new Error(`Failed to send email via Resend: ${errorData}`);
-        }
-
-        const emailData = await emailResponse.json();
-
-        return new Response(JSON.stringify({
-            success: true,
-            emailId: emailData.id
-        }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-
-    } catch (error: any) {
-        console.error("Error in send-password-recovery:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    if (!emailResponse.ok) {
+      const errorData = await emailResponse.text();
+      throw new Error(`Failed to send email via Resend: ${errorData}`);
     }
+
+    const emailData = await emailResponse.json();
+
+    return new Response(JSON.stringify({
+      success: true,
+      emailId: emailData.id
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  } catch (error: any) {
+    console.error("Error in send-password-recovery:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
+

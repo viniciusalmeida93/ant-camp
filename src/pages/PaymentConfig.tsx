@@ -21,6 +21,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/utils";
 import {
     Loader2,
     Download,
@@ -147,9 +148,9 @@ export default function PaymentConfig() {
             r.athlete_email,
             r.categories?.name || "N/A",
             r.payment_status,
-            formatPrice(r.subtotal_cents),
-            formatPrice(r.platform_fee_cents),
-            formatPrice(r.subtotal_cents), // Simplificado
+            formatCurrency(r.subtotal_cents),
+            formatCurrency(r.platform_fee_cents),
+            formatCurrency(r.subtotal_cents), // Simplificado
             new Date(r.created_at).toLocaleDateString("pt-BR"),
         ]);
 
@@ -163,12 +164,6 @@ export default function PaymentConfig() {
         toast.success("CSV exportado com sucesso!");
     };
 
-    const formatPrice = (cents: number) => {
-        return new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(cents / 100);
-    };
 
     const getStatusBadge = (status: string) => {
         const variants: Record<string, { variant: any; icon: any; label: string }> = {
@@ -390,7 +385,7 @@ export default function PaymentConfig() {
         if (coupon.discount_type === "percentage") {
             return `${coupon.discount_value}%`;
         }
-        return formatPrice(coupon.discount_value);
+        return formatCurrency(coupon.discount_value);
     };
 
 
@@ -435,7 +430,7 @@ export default function PaymentConfig() {
                                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{formatPrice(stats.totalGross)}</div>
+                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalGross)}</div>
                                     <p className="text-xs text-muted-foreground">{stats.approvedCount} pagamentos confirmados</p>
                                 </CardContent>
                             </Card>
@@ -445,7 +440,7 @@ export default function PaymentConfig() {
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{formatPrice(stats.totalFees)}</div>
+                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalFees)}</div>
                                     <p className="text-xs text-muted-foreground">Taxa da plataforma</p>
                                 </CardContent>
                             </Card>
@@ -455,7 +450,7 @@ export default function PaymentConfig() {
                                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{formatPrice(stats.totalNet)}</div>
+                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalNet)}</div>
                                     <p className="text-xs text-muted-foreground">Seu total líquido</p>
                                 </CardContent>
                             </Card>
@@ -534,7 +529,7 @@ export default function PaymentConfig() {
                                                         </TableCell>
                                                         <TableCell>{reg.categories?.name}</TableCell>
                                                         <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
-                                                        <TableCell className="text-right">{formatPrice(reg.subtotal_cents)}</TableCell>
+                                                        <TableCell className="text-right">{formatCurrency(reg.subtotal_cents)}</TableCell>
                                                         <TableCell className="text-muted-foreground">{new Date(reg.created_at).toLocaleDateString("pt-BR")}</TableCell>
                                                     </TableRow>
                                                 ))
@@ -551,7 +546,21 @@ export default function PaymentConfig() {
 
                         {showColumnError && (
                             <Alert variant="destructive">
-                                <AlertDescription>Erro de configuração no banco de dados. Contate o suporte.</AlertDescription>
+                                <AlertDescription>
+                                    <p className="font-semibold mb-2">⚠️ Coluna pix_payload não encontrada no banco de dados</p>
+                                    <p className="mb-3">Como você é um organizador, pode ser necessário atualizar o esquema do banco. Execute este SQL no Supabase Dashboard:</p>
+                                    <div className="bg-muted p-3 rounded-md mb-3">
+                                        <code className="text-xs break-all text-destructive">
+                                            ALTER TABLE public.championships ADD COLUMN IF NOT EXISTS pix_payload TEXT;
+                                        </code>
+                                    </div>
+                                    <ol className="list-decimal list-inside space-y-1 text-sm">
+                                        <li>Acesse o <a href="https://app.supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Supabase Dashboard</a></li>
+                                        <li>Vá em <strong>SQL Editor</strong></li>
+                                        <li>Cole o comando SQL acima e clique em <strong>Run</strong></li>
+                                        <li>Recarregue esta página</li>
+                                    </ol>
+                                </AlertDescription>
                             </Alert>
                         )}
 

@@ -15,10 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { 
-  ArrowLeft, Download, Filter, DollarSign, 
-  TrendingUp, Users, CheckCircle, XCircle, Clock 
+import {
+  ArrowLeft, Download, Filter, DollarSign,
+  TrendingUp, Users, CheckCircle, XCircle, Clock
 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 export default function ChampionshipFinance() {
   const { championshipId } = useParams();
@@ -107,7 +108,7 @@ export default function ChampionshipFinance() {
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(r => 
+      filtered = filtered.filter(r =>
         r.athlete_name.toLowerCase().includes(term) ||
         r.athlete_email.toLowerCase().includes(term) ||
         r.team_name?.toLowerCase().includes(term)
@@ -124,9 +125,9 @@ export default function ChampionshipFinance() {
       r.athlete_email,
       r.categories.name,
       r.payment_status,
-      formatPrice(r.subtotal_cents),
-      formatPrice(r.platform_fee_cents),
-      formatPrice(r.subtotal_cents),
+      formatCurrency(r.subtotal_cents),
+      formatCurrency(r.platform_fee_cents),
+      formatCurrency(r.subtotal_cents),
       new Date(r.created_at).toLocaleDateString("pt-BR"),
     ]);
 
@@ -140,12 +141,6 @@ export default function ChampionshipFinance() {
     toast.success("CSV exportado com sucesso!");
   };
 
-  const formatPrice = (cents: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(cents / 100);
-  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; icon: any; label: string }> = {
@@ -199,7 +194,7 @@ export default function ChampionshipFinance() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatPrice(stats.totalGross)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalGross)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 {stats.approvedCount} pagamentos confirmados
               </p>
@@ -214,7 +209,7 @@ export default function ChampionshipFinance() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatPrice(stats.totalFees)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalFees)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Taxa da plataforma
               </p>
@@ -229,7 +224,7 @@ export default function ChampionshipFinance() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatPrice(stats.totalNet)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalNet)}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Seu total líquido
               </p>
@@ -322,7 +317,7 @@ export default function ChampionshipFinance() {
                       <TableCell>{reg.categories.name}</TableCell>
                       <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatPrice(reg.subtotal_cents)}
+                        {formatCurrency(reg.subtotal_cents)}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(reg.created_at).toLocaleDateString("pt-BR")}

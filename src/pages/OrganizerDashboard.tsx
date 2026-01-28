@@ -21,7 +21,7 @@ import {
 import {
   Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign, Globe
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useChampionship } from "@/contexts/ChampionshipContext";
 
 import { ProfileDialog } from "@/components/ProfileDialog";
@@ -300,12 +300,6 @@ export default function OrganizerDashboard() {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(cents / 100);
-  };
 
   const formatDateRange = (championship: any) => {
     if (!championship.date) return '';

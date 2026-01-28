@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar, MapPin, User, Trophy, Loader2, Users, QrCode, CreditCard, CheckCircle2, ChevronRight, Share2, ExternalLink, FileText, Router, LogIn, UserPlus, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 type PublicRegistrationMember = {
   name: string;
@@ -291,9 +291,6 @@ export default function PublicRegistration() {
     return activeBatch ? activeBatch.price_cents : category.price_cents;
   };
 
-  const formatPrice = (cents: number) => {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-  };
   // Kept for consistency if we decide to show navigation buttons
   const handleButtonClick = (buttonType: string) => {
     const cacheBust = `?v=${Date.now()}`;
@@ -363,7 +360,7 @@ export default function PublicRegistration() {
               cpf: profile.cpf || "",
               whatsapp: profile.phone || "",
               birthDate: profile.birth_date || "",
-              box: profile.box || ""
+              box: (profile as any).box || ""
             };
           }
           return newMembers;
@@ -433,7 +430,7 @@ export default function PublicRegistration() {
           whatsapp: profile.phone || "",
           cpf: profile.cpf || "",
           birthDate: profile.birth_date || "",
-          box: profile.box || ""
+          box: (profile as any).box || ""
         };
         setMembers(initialMembers);
       }
@@ -1022,7 +1019,7 @@ export default function PublicRegistration() {
                         {cat.name}
                       </h3>
                       <p className="text-xs text-muted-foreground mt-1">
-                        + Taxa de serviço ({formatPrice(
+                        + Taxa de serviço ({formatCurrency(
                           (platformFeeConfig.type === 'percentage'
                             ? Math.round(price * (platformFeeConfig.value / 100))
                             : platformFeeConfig.value) + 199
@@ -1033,7 +1030,7 @@ export default function PublicRegistration() {
                     <div className="text-right shrink-0">
                       <span className="block text-xs text-muted-foreground mb-0.5">Total</span>
                       <span className="block text-lg font-bold text-foreground leading-none">
-                        {formatPrice(price)}
+                        {formatCurrency(price)}
                       </span>
                     </div>
                   </div>

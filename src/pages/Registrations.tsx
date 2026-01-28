@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
+import { formatCurrency } from '@/lib/utils';
 import {
   DndContext,
   closestCenter,
@@ -294,7 +295,7 @@ export default function Registrations() {
           `"${reg.team_name || reg.athlete_name || ''}"`,
           `"${reg.box_name || ''}"`,
           reg.payment_status,
-          (reg.total_cents / 100).toFixed(2),
+          (reg.total_cents / 100).toFixed(2).replace('.', ','),
           ...memberCols
         ].join(",");
       })
@@ -536,7 +537,7 @@ export default function Registrations() {
           category:categories(*)
         `)
         .eq("championship_id", selectedChampionship.id)
-        .order("order_index", { ascending: true, nullsLast: false }) // Ordenar por order_index primeiro
+        .order("order_index", { ascending: true, nullsFirst: false }) // Ordenar por order_index primeiro
         .order("created_at", { ascending: true }); // Fallback para created_at se order_index for NULL
 
       if (regsError) throw regsError;
@@ -676,7 +677,7 @@ export default function Registrations() {
   };
 
   const handleApprovePayment = async (reg: any) => {
-    if (!confirm(`Confirmar pagamento de R$ ${(reg.total_cents / 100).toFixed(2).replace('.', ',')} para ${reg.team_name || reg.athlete_name}?`)) {
+    if (!confirm(`Confirmar pagamento de ${formatCurrency(reg.total_cents)} para ${reg.team_name || reg.athlete_name}?`)) {
       return;
     }
 

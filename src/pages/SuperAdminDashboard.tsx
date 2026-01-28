@@ -11,6 +11,7 @@ import {
   LogOut, Settings, BarChart3, Building2,
   ArrowLeft, Loader2
 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 interface OrganizerStats {
   organizer_id: string;
@@ -157,12 +158,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(cents / 100);
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

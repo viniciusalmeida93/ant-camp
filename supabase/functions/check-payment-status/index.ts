@@ -4,11 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -34,22 +35,30 @@ serve(async (req) => {
     const asaasApiKey = Deno.env.get("ASAAS_API_KEY");
     const useMockPayment = !asaasApiKey || asaasApiKey === "mock";
 
+    const getAsaasBaseUrl = () => {
+      if (asaasApiKey?.startsWith("$aact_hmlg_")) {
+        return "https://api-sandbox.asaas.com/v3";
+      }
+      return "https://api.asaas.com/v3";
+    };
+
     let status = payment.status;
 
     if (!useMockPayment && payment.asaas_payment_id) {
       // Fetch real status from Asaas
+      const baseUrl = getAsaasBaseUrl();
       const asaasResponse = await fetch(
-        `https://www.asaas.com/api/v3/payments/${payment.asaas_payment_id}`,
+        `${baseUrl}/payments/${payment.asaas_payment_id}`,
         {
           headers: {
-            "access_token": asaasApiKey,
+            "access_token": asaasApiKey ?? "",
           },
         }
       );
 
       if (asaasResponse.ok) {
         const asaasData = await asaasResponse.json();
-        
+
         // Map Asaas status to our status
         const statusMap: Record<string, string> = {
           PENDING: "pending",
@@ -71,10 +80,10 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         status,
-        payment 
+        payment
       }),
       {
         status: 200,

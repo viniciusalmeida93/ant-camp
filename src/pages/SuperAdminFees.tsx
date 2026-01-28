@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { DollarSign, Loader2, TrendingUp } from "lucide-react";
+import { CurrencyInput } from "@/components/CurrencyInput";
+import { formatCurrency } from "@/lib/utils";
 
 export default function SuperAdminFees() {
     const [loading, setLoading] = useState(true);
@@ -78,12 +80,6 @@ export default function SuperAdminFees() {
         }
     };
 
-    const formatCurrency = (cents: number) => {
-        return new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(cents / 100);
-    };
 
     if (loading) {
         return (
@@ -139,20 +135,17 @@ export default function SuperAdminFees() {
                                 <div>
                                     <label className="text-sm font-medium mb-1 block">Valor da Taxa (R$)</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                            value={feeConfig.value / 100}
-                                            onChange={(e) => {
-                                                const val = parseFloat(e.target.value);
+                                        <CurrencyInput
+                                            valueCents={feeConfig.value}
+                                            onChange={(cents) => {
                                                 setFeeConfig({
                                                     type: 'fixed',
-                                                    value: Math.round(val * 100)
+                                                    value: cents
                                                 });
                                             }}
+                                            className="pl-9"
                                         />
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-2">
                                         Taxa de {formatCurrency(feeConfig.value)} aplicada a cada inscrição individual ou por time.

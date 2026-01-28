@@ -2,69 +2,70 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface InviteData {
-    email: string;
-    fullName: string;
-    password?: string;
+  email: string;
+  fullName: string;
+  password?: string;
 }
 
 serve(async (req) => {
-    if (req.method === "OPTIONS") {
-        return new Response(null, { headers: corsHeaders });
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Create client with Service Role to access admin functions
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev";
+
+    if (!resendApiKey) {
+      throw new Error("Email service not configured (RESEND_API_KEY missing)");
     }
 
-    try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const { email, fullName, password: providedPassword }: InviteData = await req.json();
+    const finalPassword = providedPassword || Math.random().toString(36).slice(-10) + "A1!";
 
-        // Create client with Service Role to access admin functions
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // 1. Create User via Auth Admin
+    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      password: finalPassword,
+      user_metadata: { full_name: fullName },
+      email_confirm: true
+    });
 
-        const resendApiKey = Deno.env.get("RESEND_API_KEY");
-        const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev";
+    if (createError) {
+      console.error("Error creating user:", createError);
+      throw createError;
+    }
 
-        if (!resendApiKey) {
-            throw new Error("Email service not configured (RESEND_API_KEY missing)");
-        }
+    const user = userData.user;
 
-        const { email, fullName, password: providedPassword }: InviteData = await req.json();
-        const finalPassword = providedPassword || Math.random().toString(36).slice(-10) + "A1!";
+    // 2. Assign Organizer Role
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({
+        user_id: user.id,
+        role: 'organizer'
+      });
 
-        // 1. Create User via Auth Admin
-        const { data: userData, error: createError } = await supabase.auth.admin.createUser({
-            email,
-            password: finalPassword,
-            user_metadata: { full_name: fullName },
-            email_confirm: true
-        });
+    if (roleError) {
+      console.error("Error assigning role:", roleError);
+    }
 
-        if (createError) {
-            console.error("Error creating user:", createError);
-            throw createError;
-        }
-
-        const user = userData.user;
-
-        // 2. Assign Organizer Role
-        const { error: roleError } = await supabase
-            .from("user_roles")
-            .insert({
-                user_id: user.id,
-                role: 'organizer'
-            });
-
-        if (roleError) {
-            console.error("Error assigning role:", roleError);
-            // We don't throw here to avoid failing if user was created but role failed 
-            // (though ideally we'd handle this better)
-        }
-
-        // 3. Build HTML Email
-        const emailHtml = `
+    // 3. Build HTML Email
+    const appUrl = Deno.env.get("APP_URL") || "https://antcamp.com.br";
+    const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -111,7 +112,7 @@ serve(async (req) => {
 
               <!-- CTA Button -->
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${window?.location?.origin || 'https://antcamp.com.br'}/auth" 
+                <a href="${appUrl}/auth" 
                    style="display: inline-block; background-color: #DC2626; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;">
                   Acessar Painel
                 </a>
@@ -137,39 +138,39 @@ serve(async (req) => {
 </html>
     `;
 
-        // 4. Send Email via Resend
-        const emailResponse = await fetch("https://api.resend.com/emails", {
-            fetcher: fetch, // Needed for Edge Runtime usually
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${resendApiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                from: fromEmail,
-                to: email,
-                subject: `🚀 Suas credenciais de Organizador - AntCamp`,
-                html: emailHtml,
-            }),
-        });
+    // 4. Send Email via Resend
+    const emailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: email,
+        subject: `🚀 Suas credenciais de Organizador - AntCamp`,
+        html: emailHtml,
+      }),
+    });
 
-        if (!emailResponse.ok) {
-            console.error("Resend error:", await emailResponse.text());
-        }
-
-        return new Response(JSON.stringify({
-            success: true,
-            userId: user.id
-        }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-
-    } catch (error: any) {
-        console.error("Error in invite-organizer:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    if (!emailResponse.ok) {
+      console.error("Resend error:", await emailResponse.text());
     }
+
+    return new Response(JSON.stringify({
+      success: true,
+      userId: user.id
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  } catch (error: any) {
+    console.error("Error in invite-organizer:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
+

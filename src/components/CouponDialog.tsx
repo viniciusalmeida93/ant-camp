@@ -11,6 +11,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Coupon, CouponFormData } from "@/types/coupon";
+import { CurrencyInput } from "./CurrencyInput";
+import { formatCurrency } from "@/lib/utils";
 
 interface CouponDialogProps {
     open: boolean;
@@ -93,9 +95,7 @@ export function CouponDialog({ open, onOpenChange, coupon, championshipId, onSuc
                 code: formData.code.trim().toUpperCase(),
                 description: formData.description.trim() || null,
                 discount_type: formData.discount_type,
-                discount_value: formData.discount_type === "percentage"
-                    ? Math.round(formData.discount_value)
-                    : Math.round(formData.discount_value * 100), // Convert to cents for fixed
+                discount_value: formData.discount_value,
                 championship_id: championshipId,
                 max_uses: formData.max_uses,
                 expires_at: formData.expires_at ? new Date(formData.expires_at).toISOString() : null,
@@ -189,9 +189,9 @@ export function CouponDialog({ open, onOpenChange, coupon, championshipId, onSuc
                                         <Label htmlFor="discount_type">Tipo de desconto</Label>
                                         <Select
                                             value={formData.discount_type}
-                                            onValueChange={(value: "percentage" | "fixed") =>
-                                                setFormData({ ...formData, discount_type: value })
-                                            }
+                                            onValueChange={(value: "percentage" | "fixed") => {
+                                                setFormData({ ...formData, discount_type: value, discount_value: 0 });
+                                            }}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue />
@@ -206,17 +206,26 @@ export function CouponDialog({ open, onOpenChange, coupon, championshipId, onSuc
                                     {/* Valor do cupom */}
                                     <div className="space-y-2">
                                         <Label htmlFor="discount_value">Valor do cupom</Label>
-                                        <Input
-                                            id="discount_value"
-                                            type="number"
-                                            min="0"
-                                            max={formData.discount_type === "percentage" ? "100" : undefined}
-                                            value={formData.discount_value}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })
-                                            }
-                                            placeholder={formData.discount_type === "percentage" ? "0-100" : "0.00"}
-                                        />
+                                        {formData.discount_type === 'fixed' ? (
+                                            <CurrencyInput
+                                                id="discount_value"
+                                                valueCents={formData.discount_value}
+                                                onChange={(cents) => setFormData({ ...formData, discount_value: cents })}
+                                                placeholder="0,00"
+                                            />
+                                        ) : (
+                                            <Input
+                                                id="discount_value"
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={formData.discount_value}
+                                                onChange={(e) =>
+                                                    setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })
+                                                }
+                                                placeholder="0-100"
+                                            />
+                                        )}
                                         <p className="text-xs text-muted-foreground">
                                             {formData.discount_type === "percentage"
                                                 ? "Porcentagem de desconto (0-100%)"

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 import { CouponDialog } from "@/components/CouponDialog";
 import { Coupon } from "@/types/coupon";
+import { formatCurrency } from "@/lib/utils";
 
 export default function Coupons() {
     const navigate = useNavigate();
@@ -41,7 +42,7 @@ export default function Coupons() {
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            setCoupons(data || []);
+            setCoupons((data as any) || []);
         } catch (error) {
             console.error("Error loading coupons:", error);
             toast.error("Erro ao carregar cupons");
@@ -100,10 +101,7 @@ export default function Coupons() {
         if (coupon.discount_type === "percentage") {
             return `${coupon.discount_value}%`;
         }
-        return new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(coupon.discount_value / 100);
+        return formatCurrency(coupon.discount_value);
     };
 
     if (!selectedChampionship) {

@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface EmailData {
@@ -12,7 +13,7 @@ interface EmailData {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
@@ -58,6 +59,8 @@ serve(async (req) => {
         currency: "BRL",
       }).format(cents / 100);
     };
+
+    const appUrl = Deno.env.get("APP_URL") || "https://antcamp.com.br";
 
     // Template do email de recuperação de carrinho
     const emailHtml = `
@@ -138,7 +141,7 @@ serve(async (req) => {
 
               <!-- CTA Button -->
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${Deno.env.get("SUPABASE_URL")?.replace('/rest/v1', '')}/checkout/${registration.id}" 
+                <a href="${appUrl}/checkout/${registration.id}" 
                    style="display: inline-block; background-color: #DC2626; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;">
                   🚀 Finalizar Pagamento Agora
                 </a>
@@ -209,3 +212,4 @@ serve(async (req) => {
     });
   }
 });
+
