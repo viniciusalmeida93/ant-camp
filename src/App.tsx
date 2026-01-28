@@ -43,6 +43,7 @@ import AssignRoles from "./pages/AssignRoles";
 import AthleteDashboard from "./pages/AthleteDashboard";
 import PaymentConfig from "./pages/PaymentConfig";
 import Coupons from "./pages/Coupons";
+import RegistrationSuccess from "./pages/RegistrationSuccess";
 import { ChampionshipProvider } from "./contexts/ChampionshipContext";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="/links/:slug" element={<LinkPage />} />
             <Route path="/inscricao/:slug" element={<PublicRegistration />} />
             <Route path="/checkout/:registrationId" element={<Checkout />} />
+            <Route path="/inscricao-confirmada/:registrationId" element={<RegistrationSuccess />} />
             <Route path="/tv-display" element={<TVDisplay />} />
             <Route path="/:slug/leaderboard" element={<PublicLeaderboard />} />
             <Route path="/:slug/heats" element={<PublicHeats />} />

@@ -74,6 +74,33 @@ export default function Checkout() {
   useEffect(() => {
     if (registration) {
       calculateFees();
+
+      // Setup real-time subscription for payment status
+      if (registration.payment_status !== 'approved') {
+        const channel = supabase
+          .channel(`registration-${registrationId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'registrations',
+              filter: `id=eq.${registrationId}`,
+            },
+            (payload) => {
+              console.log('Realtime update received:', payload);
+              if (payload.new && (payload.new as any).payment_status === 'approved') {
+                toast.success("Pagamento aprovado!");
+                navigate(`/inscricao-confirmada/${registrationId}`);
+              }
+            }
+          )
+          .subscribe();
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
     }
   }, [registration, paymentMethod, installments, discountCents]);
 
@@ -595,24 +622,18 @@ export default function Checkout() {
           {/* LEFT SIDE: Payment Method */}
           <div className="lg:col-span-8 order-1 lg:order-1">
             {registration.payment_status === "approved" ? (
-              <Card className="border-primary shadow-lg bg-card/50">
-                <CardContent className="pt-10 pb-10 px-6">
-                  <div className="text-center space-y-4">
-                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-2">
-                      <CheckCircle2 className="w-12 h-12 text-primary" />
-                    </div>
-                    <h3 className="text-3xl font-bold">Inscrição Confirmada!</h3>
-                    <p className="text-muted-foreground max-w-md mx-auto">
-                      Tudo certo! Recebemos seu pagamento e sua vaga está garantida no {registration.championships.name}.
-                    </p>
-                    <div className="pt-4">
-                      <Button onClick={() => navigate(`/links/${registration.championships.slug}`)} size="lg" className="px-8">
-                        Voltar para o Evento
-                      </Button>
-                    </div>
-                  </div >
-                </CardContent >
-              </Card >
+              <div className="flex flex-col items-center justify-center p-12 bg-card rounded-xl border border-border shadow-sm text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+                <h3 className="text-xl font-bold italic uppercase tracking-tight">Pagamento Confirmado!</h3>
+                <p className="text-muted-foreground mt-2">Você está sendo redirecionado para a confirmação...</p>
+                <Button
+                  onClick={() => navigate(`/inscricao-confirmada/${registrationId}`)}
+                  variant="link"
+                  className="mt-4"
+                >
+                  Clique aqui se não for redirecionado
+                </Button>
+              </div>
             ) : hasManualPix ? (
               <Card className="shadow-md border-border bg-card/50">
                 <CardHeader>
