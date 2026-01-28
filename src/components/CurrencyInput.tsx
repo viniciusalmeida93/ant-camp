@@ -1,44 +1,50 @@
 import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { parseCurrencyToCents } from "@/lib/utils";
 
 interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
     valueCents: number;
     onChange: (cents: number) => void;
-    label?: string;
 }
 
 export function CurrencyInput({ valueCents, onChange, ...props }: CurrencyInputProps) {
-    const [displayValue, setDisplayValue] = useState("");
+    // Local state for the typed string to avoid cursor jumping and race conditions
+    const [inputValue, setInputValue] = useState("");
 
+    // Format cents to BRL string (e.g., 170 -> "1,70")
+    const formatCents = (cents: number) => {
+        const reais = cents / 100;
+        return reais.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    };
+
+    // Initialize/Sync input value from external valueCents
     useEffect(() => {
-        // Update display value when external valueCents changes
-        const reais = valueCents / 100;
-        setDisplayValue(reais.toFixed(2).replace(".", ","));
+        setInputValue(formatCents(valueCents));
     }, [valueCents]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        // Allow only numbers, comma and dot
-        const sanitized = val.replace(/[^0-9,.]/g, "");
-        setDisplayValue(sanitized);
+        // Get only digits
+        const digits = e.target.value.replace(/\D/g, "");
 
-        const cents = parseCurrencyToCents(sanitized);
+        // Convert digits back to cents (max 12 digits to avoid overflow)
+        const cents = parseInt(digits.slice(0, 12)) || 0;
+
+        // Notify parent of the numeric change
         onChange(cents);
-    };
 
-    const handleBlur = () => {
-        const reais = valueCents / 100;
-        setDisplayValue(reais.toFixed(2).replace(".", ","));
+        // Local mask update
+        setInputValue(formatCents(cents));
     };
 
     return (
         <Input
             {...props}
             type="text"
-            value={displayValue}
+            inputMode="numeric"
+            value={inputValue}
             onChange={handleChange}
-            onBlur={handleBlur}
         />
     );
 }

@@ -229,7 +229,7 @@ export function CouponDialog({ open, onOpenChange, coupon, championshipId, onSuc
                                         <p className="text-xs text-muted-foreground">
                                             {formData.discount_type === "percentage"
                                                 ? "Porcentagem de desconto (0-100%)"
-                                                : "Valor fixo em reais (R$)"}
+                                                : "Valor fixo"}
                                         </p>
                                     </div>
 

@@ -134,19 +134,15 @@ export default function SuperAdminFees() {
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="text-sm font-medium mb-1 block">Valor da Taxa (R$)</label>
-                                    <div className="relative">
-                                        <CurrencyInput
-                                            valueCents={feeConfig.value}
-                                            onChange={(cents) => {
-                                                setFeeConfig({
-                                                    type: 'fixed',
-                                                    value: cents
-                                                });
-                                            }}
-                                            className="pl-9"
-                                        />
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-                                    </div>
+                                    <CurrencyInput
+                                        valueCents={feeConfig.value}
+                                        onChange={(cents) => {
+                                            setFeeConfig({
+                                                type: 'fixed',
+                                                value: cents
+                                            });
+                                        }}
+                                    />
                                     <p className="text-xs text-muted-foreground mt-2">
                                         Taxa de {formatCurrency(feeConfig.value)} aplicada a cada inscrição individual ou por time.
                                     </p>
