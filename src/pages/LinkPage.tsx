@@ -65,13 +65,13 @@ export default function LinkPage() {
       const finalButtons = [...(linkButtons || [])];
 
       const hasWodButton = (linkButtons || []).some(button => button.button_type === "wods");
-      if (!hasWodButton) finalButtons.push({ id: "wods-default", label: "Provas", button_type: "wods", is_active: true });
+      if (!hasWodButton) finalButtons.push({ id: "wods-default", label: "Provas", button_type: "wods", is_active: true } as any);
 
       const hasLeaderboard = finalButtons.some(b => b.button_type === 'leaderboard');
-      if (!hasLeaderboard) finalButtons.push({ id: "leaderboard-default", label: "Leaderboard", button_type: "leaderboard", is_active: true });
+      if (!hasLeaderboard) finalButtons.push({ id: "leaderboard-default", label: "Leaderboard", button_type: "leaderboard", is_active: true } as any);
 
       const hasHeats = finalButtons.some(b => b.button_type === 'heats');
-      if (!hasHeats) finalButtons.push({ id: "heats-default", label: "Baterias", button_type: "heats", is_active: true });
+      if (!hasHeats) finalButtons.push({ id: "heats-default", label: "Baterias", button_type: "heats", is_active: true } as any);
 
       setButtons(finalButtons);
 
@@ -106,15 +106,15 @@ export default function LinkPage() {
 
       <div className="w-full max-w-[600px] px-6 py-8 flex flex-col gap-6">
         {/* 2. Banner/Logo Area */}
-        <div className="rounded-xl overflow-hidden aspect-video relative flex items-center justify-center">
+        <div className="rounded-xl overflow-hidden relative flex items-center justify-center w-full bg-muted/20">
           {(linkPage?.banner_url || championship.banner_url) ? (
             <img
               src={linkPage?.banner_url || championship.banner_url}
               alt={linkPage?.banner_alt || championship.name}
-              className="w-full h-full object-cover"
+              className="w-full h-auto block"
             />
           ) : (
-            <div className="text-center p-6">
+            <div className="text-center p-6 aspect-video flex flex-col items-center justify-center">
               <h1 className="text-2xl font-bold text-foreground mb-3">{championship.name}</h1>
               <Badge variant="outline" className="text-primary border-primary/50 bg-primary/10">AntCamp Eventos</Badge>
             </div>

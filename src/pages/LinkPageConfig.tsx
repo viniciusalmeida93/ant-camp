@@ -468,7 +468,7 @@ export default function LinkPageConfig() {
               <CardHeader>
                 <CardTitle>Banner</CardTitle>
                 <CardDescription>
-                  Adicione uma imagem de banner no topo da página (recomendado: 1200x400px)
+                  Adicione uma imagem de banner no topo da página (proporção sugerida 3:1, ex: 1200x400px)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -693,16 +693,16 @@ export default function LinkPageConfig() {
                     <div className="w-full h-full px-4 py-8 flex flex-col gap-6">
 
                       {/* 1. Banner/Logo Area */}
-                      <div className="rounded-xl overflow-hidden aspect-video relative flex items-center justify-center bg-muted shrink-0">
+                      <div className="rounded-xl overflow-hidden relative flex items-center justify-center bg-muted shrink-0 w-full min-h-[80px]">
                         {linkPage?.banner_url ? (
                           <img
                             src={linkPage.banner_url}
                             alt="Banner Preview"
-                            className="w-full h-full object-cover"
+                            className="w-full h-auto block"
                           />
                         ) : (
-                          <div className="text-center p-2">
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px] uppercase">
+                          <div className="text-center p-2 aspect-video flex items-center justify-center w-full">
+                            <div className="text-muted-foreground text-[10px] uppercase">
                               Sem Banner
                             </div>
                           </div>
