@@ -520,7 +520,8 @@ export default function Dashboard() {
         return;
       }
 
-      const { name, date, description, address, city, state } = formData;
+      const { name, description, address, city, state, startDate, endDate, registrationDeadline } = formData;
+      const date = startDate; // Use startDate as the main date
       const location = `${address} - ${city}/${state}`;
 
       if (!name || !date || !address || !city || !state) {
@@ -559,6 +560,9 @@ export default function Dashboard() {
           city: city || null,
           state: state || null,
           description: description || null,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          registration_end_date: registrationDeadline || null,
           organizer_id: session.user.id,
           is_published: false,
           is_indexable: true,
@@ -570,7 +574,18 @@ export default function Dashboard() {
 
       toast.success("Campeonato criado com sucesso!");
       setIsDialogOpen(false);
-      setFormData({ name: '', date: '', location: '', description: '', address: '', city: '', state: '' });
+      setFormData({
+        name: '',
+        date: '',
+        location: '',
+        description: '',
+        address: '',
+        city: '',
+        state: '',
+        startDate: '',
+        endDate: '',
+        registrationDeadline: '',
+      });
 
       await loadChampionships();
       if (championship) {
@@ -609,7 +624,18 @@ export default function Dashboard() {
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) {
-                setFormData({ name: '', date: '', location: '', description: '' });
+                setFormData({
+                  name: '',
+                  date: '',
+                  location: '',
+                  description: '',
+                  address: '',
+                  city: '',
+                  state: '',
+                  startDate: '',
+                  endDate: '',
+                  registrationDeadline: '',
+                });
               }
             }}>
               <DialogTrigger asChild>
@@ -637,16 +663,40 @@ export default function Dashboard() {
                       required
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="date">Data *</Label>
+                      <Label htmlFor="startDate">Data de Início do Evento *</Label>
                       <Input
-                        id="date"
-                        name="date"
+                        id="startDate"
+                        name="startDate"
                         type="date"
-                        value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                         required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="endDate">Data do Final do Evento *</Label>
+                      <Input
+                        id="endDate"
+                        name="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="registrationDeadline">Encerramento Inscrições</Label>
+                      <Input
+                        id="registrationDeadline"
+                        name="registrationDeadline"
+                        type="date"
+                        value={formData.registrationDeadline}
+                        onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
                       />
                     </div>
                   </div>
@@ -883,17 +933,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="edit-date">Data de Exibição Principal *</Label>
-                            <Input
-                              id="edit-date"
-                              type="date"
-                              value={editInfoData.date}
-                              onChange={(e) => setEditInfoData({ ...editInfoData, date: e.target.value })}
-                              required
-                            />
-                          </div>
-                          <div>
+                          <div className="md:col-span-1">
                             <Label htmlFor="edit-registrationDeadline">Encerramento Inscrições</Label>
                             <Input
                               id="edit-registrationDeadline"
@@ -961,7 +1001,7 @@ export default function Dashboard() {
                           <Button
                             onClick={async () => {
                               if (!selectedChampionship?.id) return;
-                              if (!editInfoData.name || !editInfoData.date || !editInfoData.address || !editInfoData.city || !editInfoData.state) {
+                              if (!editInfoData.name || !editInfoData.address || !editInfoData.city || !editInfoData.state) {
                                 toast.error('Preencha os campos obrigatórios');
                                 return;
                               }
@@ -970,10 +1010,11 @@ export default function Dashboard() {
                                 setSavingInfo(true);
 
                                 const location = `${editInfoData.address} - ${editInfoData.city}/${editInfoData.state}`;
+                                const date = editInfoData.startDate; // Use startDate as the main date
 
                                 const updateData: Record<string, any> = {
                                   name: editInfoData.name,
-                                  date: editInfoData.date,
+                                  date: date,
                                   location: location,
                                   address: editInfoData.address,
                                   city: editInfoData.city,

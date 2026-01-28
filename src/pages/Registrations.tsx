@@ -185,15 +185,6 @@ function SortableRegistrationItem({
             </Select>
           </div>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onPreviewEmail}
-            title="👁️ Visualizar email"
-            className="h-8 w-8"
-          >
-            <Eye className="w-4 h-4 text-purple-600" />
-          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -490,6 +481,29 @@ export default function Registrations() {
     checkAuth();
     if (selectedChampionship) {
       loadData();
+
+      // Configurar Realtime para atualizações automáticas
+      const channel = supabase
+        .channel(`public:registrations:championship_id=eq.${selectedChampionship.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'registrations',
+            filter: `championship_id=eq.${selectedChampionship.id}`
+          },
+          (payload) => {
+            console.log('Realtime update received:', payload);
+            // Ao detectar uma mudança, recarregamos os dados para garantir consistência
+            loadData();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [selectedChampionship]);
 

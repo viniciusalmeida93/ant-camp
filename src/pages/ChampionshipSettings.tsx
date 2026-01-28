@@ -122,11 +122,8 @@ export default function ChampionshipSettings() {
         regulation_url: formData.regulation_url || null,
         start_date: formData.startDate || null,
         end_date: formData.endDate || null,
+        date: formData.startDate, // Use startDate as the main date
       };
-
-      if (formData.date) {
-        updateData.date = formData.date;
-      }
 
       if (formData.registrationEndDate) {
         updateData.registration_end_date = formData.registrationEndDate;
@@ -256,16 +253,6 @@ export default function ChampionshipSettings() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date">Data de Exibição Principal *</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  required
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="registrationEndDate">Data de Encerramento das Inscrições</Label>
                 <Input

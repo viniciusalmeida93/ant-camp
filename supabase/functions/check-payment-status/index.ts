@@ -76,6 +76,19 @@ serve(async (req) => {
           .from("payments")
           .update({ status })
           .eq("id", paymentId);
+
+        // Se o status for aprovado, atualizar também a inscrição
+        if (status === "approved") {
+          await supabase
+            .from("registrations")
+            .update({
+              payment_status: "approved",
+              paid_at: new Date().toISOString()
+            })
+            .eq("id", payment.registration_id);
+
+          console.log(`Registration ${payment.registration_id} updated via check-payment-status manual check.`);
+        }
       }
     }
 

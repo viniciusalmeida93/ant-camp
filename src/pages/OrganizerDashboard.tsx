@@ -227,7 +227,8 @@ export default function OrganizerDashboard() {
         finalLocation = `${formData.address}${formData.city ? ` - ${formData.city}` : ''}${formData.state ? `/${formData.state}` : ''}`;
       }
 
-      const { name, date, description, registrationDeadline, startDate, endDate } = formData;
+      const { name, description, registrationDeadline, startDate, endDate } = formData;
+      const date = startDate; // Use startDate as the main date
 
       if (!name || !date || !finalLocation || !startDate || !endDate) {
         toast.error("Preencha todos os campos obrigatórios");
@@ -553,18 +554,7 @@ export default function OrganizerDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="date">Data de Exibição Principal *</Label>
-                <Input
-                  id="date"
-                  name="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
+              <div className="md:col-span-1">
                 <Label htmlFor="registrationDeadline">Encerramento Inscrições</Label>
                 <Input
                   id="registrationDeadline"
