@@ -129,7 +129,26 @@ export default function LinkPage() {
                 <Calendar className="w-3 h-3" />
                 <span className="text-[10px] font-medium">Data</span>
               </div>
-              <span className="font-medium text-foreground text-[10px]">{new Date(championship.date).toLocaleDateString('pt-BR')}</span>
+              <span className="font-medium text-foreground text-[10px]">
+                {(() => {
+                  const start = championship.start_date || championship.date;
+                  const end = championship.end_date || start;
+                  if (!start) return '';
+
+                  const formatDate = (dateStr: string) => {
+                    const date = new Date(dateStr);
+                    return new Date(date.getTime() + date.getTimezoneOffset() * 60000).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit'
+                    });
+                  };
+
+                  const startF = formatDate(start);
+                  const endF = formatDate(end);
+
+                  return startF === endF ? startF : `${startF} a ${endF}`;
+                })()}
+              </span>
             </div>
             <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-1.5 text-muted-foreground">

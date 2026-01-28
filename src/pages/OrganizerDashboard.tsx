@@ -313,25 +313,28 @@ export default function OrganizerDashboard() {
 
 
   const formatDateRange = (championship: any) => {
-    if (!championship.date) return '';
+    const start = championship.start_date || championship.date;
+    const end = championship.end_date || start;
 
-    const startDate = new Date(championship.date);
-    const endDate = championship.total_days
-      ? new Date(new Date(championship.date).setDate(startDate.getDate() + (championship.total_days - 1)))
-      : startDate;
+    if (!start) return '';
 
-    const formatDate = (date: Date) => {
-      return date.toLocaleDateString('pt-BR', {
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      // Ajuste para fuso horário local ao converter de ISO
+      return new Date(date.getTime() + date.getTimezoneOffset() * 60000).toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
       });
     };
 
-    if (championship.total_days > 1) {
-      return `${formatDate(startDate)} a ${formatDate(endDate)}`;
+    const startFormatted = formatDate(start);
+    const endFormatted = formatDate(end);
+
+    if (startFormatted !== endFormatted) {
+      return `${startFormatted} a ${endFormatted}`;
     }
-    return formatDate(startDate);
+    return startFormatted;
   };
 
   if (loading) {
