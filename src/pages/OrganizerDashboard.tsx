@@ -55,7 +55,9 @@ export default function OrganizerDashboard() {
     registrationDeadline: '',
     city: '',
     state: '',
-    address: ''
+    address: '',
+    startDate: '',
+    endDate: ''
   });
 
   useEffect(() => {
@@ -225,9 +227,9 @@ export default function OrganizerDashboard() {
         finalLocation = `${formData.address}${formData.city ? ` - ${formData.city}` : ''}${formData.state ? `/${formData.state}` : ''}`;
       }
 
-      const { name, date, description, registrationDeadline } = formData;
+      const { name, date, description, registrationDeadline, startDate, endDate } = formData;
 
-      if (!name || !date || !finalLocation) {
+      if (!name || !date || !finalLocation || !startDate || !endDate) {
         toast.error("Preencha todos os campos obrigatórios");
         setCreating(false);
         return;
@@ -259,11 +261,17 @@ export default function OrganizerDashboard() {
           name,
           slug,
           date,
-          location: finalLocation, // using the constructed location
+          location: finalLocation, // using the constructed location for search/display
+          address: formData.address || null,
+          city: formData.city || null,
+          state: formData.state || null,
           description: description || null,
           organizer_id: session.user.id,
           is_published: false,
           is_indexable: true,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          registration_end_date: registrationDeadline || null,
         })
         .select()
         .single();
@@ -280,7 +288,9 @@ export default function OrganizerDashboard() {
         registrationDeadline: '',
         city: '',
         state: '',
-        address: ''
+        address: '',
+        startDate: '',
+        endDate: ''
       });
 
       await loadDashboard();
@@ -517,9 +527,34 @@ export default function OrganizerDashboard() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="date">Data do Evento *</Label>
+                <Label htmlFor="startDate">Data de Início do Evento *</Label>
+                <Input
+                  id="startDate"
+                  name="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">Data do Final do Evento *</Label>
+                <Input
+                  id="endDate"
+                  name="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="date">Data de Exibição Principal *</Label>
                 <Input
                   id="date"
                   name="date"

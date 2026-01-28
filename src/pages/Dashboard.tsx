@@ -25,10 +25,13 @@ export default function Dashboard() {
   const [editInfoData, setEditInfoData] = useState({
     name: '',
     date: '',
+    location: '',
     description: '',
     address: '',
     city: '',
     state: '',
+    startDate: '',
+    endDate: '',
     registrationDeadline: '',
   });
   const [savingInfo, setSavingInfo] = useState(false);
@@ -49,6 +52,12 @@ export default function Dashboard() {
     date: '',
     location: '',
     description: '',
+    address: '',
+    city: '',
+    state: '',
+    startDate: '',
+    endDate: '',
+    registrationDeadline: '',
   });
   const [scheduleConfig, setScheduleConfig] = useState({
     startTime: '08:00',
@@ -511,9 +520,10 @@ export default function Dashboard() {
         return;
       }
 
-      const { name, date, location, description } = formData;
+      const { name, date, description, address, city, state } = formData;
+      const location = `${address} - ${city}/${state}`;
 
-      if (!name || !date || !location) {
+      if (!name || !date || !address || !city || !state) {
         toast.error("Preencha todos os campos obrigatórios");
         setCreating(false);
         return;
@@ -545,6 +555,9 @@ export default function Dashboard() {
           slug,
           date,
           location,
+          address: address || null,
+          city: city || null,
+          state: state || null,
           description: description || null,
           organizer_id: session.user.id,
           is_published: false,
@@ -557,7 +570,7 @@ export default function Dashboard() {
 
       toast.success("Campeonato criado com sucesso!");
       setIsDialogOpen(false);
-      setFormData({ name: '', date: '', location: '', description: '' });
+      setFormData({ name: '', date: '', location: '', description: '', address: '', city: '', state: '' });
 
       await loadChampionships();
       if (championship) {
@@ -636,18 +649,47 @@ export default function Dashboard() {
                         required
                       />
                     </div>
+                  </div>
+
+                  {/* Address Fields */}
+                  <div className="space-y-4">
                     <div>
-                      <Label htmlFor="location">Local *</Label>
+                      <Label htmlFor="address">Endereço *</Label>
                       <Input
-                        id="location"
-                        name="location"
-                        value={formData.location}
-                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        placeholder="Ex: Box CrossFit SP"
+                        id="address"
+                        name="address"
+                        value={formData.address || ""}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="Rua, Número, Bairro"
                         required
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city">Cidade *</Label>
+                        <Input
+                          id="city"
+                          name="city"
+                          value={formData.city || ""}
+                          onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="state">Estado (UF) *</Label>
+                        <Input
+                          id="state"
+                          name="state"
+                          value={formData.state || ""}
+                          onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                          required
+                          maxLength={2}
+                        />
+                      </div>
+                    </div>
                   </div>
+
                   <div>
                     <Label htmlFor="description">Descrição</Label>
                     <Textarea
@@ -788,7 +830,9 @@ export default function Dashboard() {
                             address: selectedChampionship.address || '',
                             city: selectedChampionship.city || '',
                             state: selectedChampionship.state || '',
-                            registrationDeadline: selectedChampionship.registration_deadline ? selectedChampionship.registration_deadline.split('T')[0] : '',
+                            startDate: selectedChampionship.start_date || '',
+                            endDate: selectedChampionship.end_date || '',
+                            registrationDeadline: selectedChampionship.registration_end_date || '',
                           });
                         }}
                       >
@@ -815,9 +859,32 @@ export default function Dashboard() {
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="edit-date">Data do Evento *</Label>
+                            <Label htmlFor="edit-startDate">Data de Início do Evento *</Label>
+                            <Input
+                              id="edit-startDate"
+                              type="date"
+                              value={editInfoData.startDate}
+                              onChange={(e) => setEditInfoData({ ...editInfoData, startDate: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-endDate">Data do Final do Evento *</Label>
+                            <Input
+                              id="edit-endDate"
+                              type="date"
+                              value={editInfoData.endDate}
+                              onChange={(e) => setEditInfoData({ ...editInfoData, endDate: e.target.value })}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="edit-date">Data de Exibição Principal *</Label>
                             <Input
                               id="edit-date"
                               type="date"
@@ -912,7 +979,9 @@ export default function Dashboard() {
                                   city: editInfoData.city,
                                   state: editInfoData.state,
                                   description: editInfoData.description || null,
-                                  registration_deadline: editInfoData.registrationDeadline || null
+                                  start_date: editInfoData.startDate || null,
+                                  end_date: editInfoData.endDate || null,
+                                  registration_end_date: editInfoData.registrationDeadline || null
                                 };
 
                                 const { error } = await supabase

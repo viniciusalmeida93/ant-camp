@@ -31,6 +31,8 @@ export default function ChampionshipSettings() {
     address: "",
     city: "",
     state: "",
+    startDate: "",
+    endDate: "",
     regulation_url: "",
   });
 
@@ -68,7 +70,7 @@ export default function ChampionshipSettings() {
       setLoading(true);
       const { data, error } = await supabase
         .from("championships")
-        .select("id, name, slug, location, date, registration_end_date, is_published, description, city, state, address, regulation_url")
+        .select("id, name, slug, location, date, start_date, end_date, registration_end_date, is_published, description, city, state, address, regulation_url")
         .eq("id", championshipId)
         .single();
 
@@ -80,6 +82,8 @@ export default function ChampionshipSettings() {
         slug: data.slug,
         location: data.location || "",
         date: data.date ? data.date.split("T")[0] : "",
+        startDate: data.start_date ? data.start_date.split("T")[0] : "",
+        endDate: data.end_date ? data.end_date.split("T")[0] : "",
         registrationEndDate: data.registration_end_date ? data.registration_end_date.split("T")[0] : "",
         description: data.description || "",
         address: data.address || "",
@@ -106,24 +110,19 @@ export default function ChampionshipSettings() {
     try {
       setSaving(true);
 
+      const location = `${formData.address} - ${formData.city}/${formData.state}`;
+
       const updateData: Record<string, any> = {
         name: formData.name,
         description: formData.description || null,
         address: formData.address || null,
         city: formData.city || null,
         state: formData.state || null,
+        location: location,
         regulation_url: formData.regulation_url || null,
+        start_date: formData.startDate || null,
+        end_date: formData.endDate || null,
       };
-
-      // Construct location string
-      let finalLocation = formData.location;
-      if (formData.address || formData.city || formData.state) {
-        finalLocation = `${formData.address}${formData.city ? ` - ${formData.city}` : ''}${formData.state ? `/${formData.state}` : ''}`;
-      }
-
-      if (finalLocation.trim()) {
-        updateData.location = finalLocation.trim();
-      }
 
       if (formData.date) {
         updateData.date = formData.date;
@@ -235,7 +234,30 @@ export default function ChampionshipSettings() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="date">Data do Campeonato *</Label>
+                <Label htmlFor="startDate">Data de Início do Evento *</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">Data do Final do Evento *</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Data de Exibição Principal *</Label>
                 <Input
                   id="date"
                   type="date"

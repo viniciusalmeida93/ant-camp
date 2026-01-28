@@ -276,16 +276,19 @@ export type Database = {
       }
       championships: {
         Row: {
+          address: string | null
           asaas_wallet_id: string | null
           banner_url: string | null
           break_after_wod_number: number | null
           break_duration_minutes: number | null
           break_interval_minutes: number | null
           category_interval_minutes: number | null
+          city: string | null
           created_at: string | null
           date: string
           description: string | null
           enable_break: boolean | null
+          end_date: string | null
           id: string
           is_indexable: boolean | null
           is_published: boolean | null
@@ -300,23 +303,28 @@ export type Database = {
           regulation: string | null
           regulation_url: string | null
           slug: string
+          start_date: string | null
           start_time: string | null
+          state: string | null
           total_days: number | null
           transition_time_minutes: number | null
           updated_at: string | null
           wod_interval_minutes: number | null
         }
         Insert: {
+          address?: string | null
           asaas_wallet_id?: string | null
           banner_url?: string | null
           break_after_wod_number?: number | null
           break_duration_minutes?: number | null
           break_interval_minutes?: number | null
           category_interval_minutes?: number | null
+          city?: string | null
           created_at?: string | null
           date: string
           description?: string | null
           enable_break?: boolean | null
+          end_date?: string | null
           id?: string
           is_indexable?: boolean | null
           is_published?: boolean | null
@@ -331,23 +339,28 @@ export type Database = {
           regulation?: string | null
           regulation_url?: string | null
           slug: string
+          start_date?: string | null
           start_time?: string | null
+          state?: string | null
           total_days?: number | null
           transition_time_minutes?: number | null
           updated_at?: string | null
           wod_interval_minutes?: number | null
         }
         Update: {
+          address?: string | null
           asaas_wallet_id?: string | null
           banner_url?: string | null
           break_after_wod_number?: number | null
           break_duration_minutes?: number | null
           break_interval_minutes?: number | null
           category_interval_minutes?: number | null
+          city?: string | null
           created_at?: string | null
           date?: string
           description?: string | null
           enable_break?: boolean | null
+          end_date?: string | null
           id?: string
           is_indexable?: boolean | null
           is_published?: boolean | null
@@ -362,7 +375,9 @@ export type Database = {
           regulation?: string | null
           regulation_url?: string | null
           slug?: string
+          start_date?: string | null
           start_time?: string | null
+          state?: string | null
           total_days?: number | null
           transition_time_minutes?: number | null
           updated_at?: string | null
