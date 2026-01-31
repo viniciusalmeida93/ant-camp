@@ -1126,7 +1126,6 @@ export default function Checkout() {
                       <span className="font-semibold text-foreground">{formatCurrency(basePrice)}</span>
                     </div>
 
-                    {/* 2. Service Fee (Platform + Asaas PIX Cost) - FIXED */}
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground font-medium">Taxa de Serviço:</span>
                       <span className="font-semibold text-foreground">

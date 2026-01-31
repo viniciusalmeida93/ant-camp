@@ -567,18 +567,14 @@ export default function PublicRegistration() {
       const subtotalCents = computeCategoryPrice(selectedCategory);
 
       let platformFeeCents = 0;
+      const athleteCount = members.length;
+
       if (platformFeeConfig.type === 'percentage') {
         platformFeeCents = Math.round(subtotalCents * (platformFeeConfig.value / 100));
       } else {
-        platformFeeCents = Math.round(platformFeeConfig.value); // Value already in cents? No, value in settings is usually R$ or % number. 
-        // Wait, in SuperAdminFees we store value as number. If fixed, is it cents or reals?
-        // In SuperAdminFees input type=number step=0.01 implies Reals. 
-        // Let's assume the stored value for fixed is in CENTS or Reals? 
-        // Looking at SuperAdminFees: 
-        // value={feeConfig.type === 'percentage' ? feeConfig.value : feeConfig.value / 100}
-        // This implies for FIXED, the state `feeConfig.value` is in CENTS.
-        // So here `platformFeeConfig.value` should be in CENTS.
-        platformFeeCents = platformFeeConfig.value;
+        // Multiplicar valor fixo pelo número de atletas (integrantes preenchidos)
+        // Somando 199 (PIX_FEE_CENTS) conforme logicamente definido no frontend
+        platformFeeCents = (platformFeeConfig.value + 199) * athleteCount;
       }
 
       const totalCents = subtotalCents + platformFeeCents;
@@ -1018,12 +1014,12 @@ export default function PublicRegistration() {
                       <h3 className="text-base font-semibold text-foreground truncate pr-2">
                         {cat.name}
                       </h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        + Taxa de serviço ({formatCurrency(
+                      <p className="text-xs text-muted-foreground mt-1 text-[#D71C1D]">
+                        + Taxa de Serviço {formatCurrency(
                           (platformFeeConfig.type === 'percentage'
                             ? Math.round(price * (platformFeeConfig.value / 100))
-                            : platformFeeConfig.value) + 199
-                        )})
+                            : (platformFeeConfig.value + 199))
+                        )} por atleta
                       </p>
                     </div>
 

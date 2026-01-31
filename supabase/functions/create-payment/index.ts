@@ -192,20 +192,16 @@ serve(async (req) => {
     }
 
     if (feeConfig.type === 'fixed') {
-      platformFeeCents = Number(feeConfig.value); // Value in cents
+      const athleteCount = Array.isArray(registration.team_members) ? registration.team_members.length : 1;
+      // Multiplicar valor fixo pelo número de atletas e somar o custo base do PIX (R$ 1,99)
+      // para bater com a lógica do frontend
+      platformFeeCents = (Number(feeConfig.value) + 199) * athleteCount;
     } else {
-      // Percentage of the SUB-TOTAL (Original Price), not the Markup Total?
-      // Actually, standard is usually percentage of the transaction.
-      // But 'registration.total_cents' in DB is the Subtotal + Platform Fee (from PublicRegistration logic).
-      // Let's rely on calculating based on 'registration.subtotal_cents' OR 'registration.total_cents' (which is subtotal + fee in logic).
-      // If we use 'totalCents' (Markup Total), we might double charge if fee is %.
-      // Safest: Use 'registration.subtotal_cents' if available, or 'category.price_cents'.
-
-      const baseForFee = registration.subtotal_cents || category.price_cents || registration.total_cents; // Fallback
+      const baseForFee = registration.subtotal_cents || category.price_cents || registration.total_cents;
       platformFeeCents = Math.round(baseForFee * (Number(feeConfig.value) / 100));
     }
 
-    console.log(`Calculated Platform Fee: ${platformFeeCents} cents.`);
+    console.log(`Calculated Platform Fee: ${platformFeeCents} cents (Athletes: ${Array.isArray(registration.team_members) ? registration.team_members.length : 1}).`);
 
     // 5. Create/Get Customer in Asaas
     const customerEmail = registration.athlete_email;

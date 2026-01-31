@@ -25,12 +25,12 @@ BEGIN
         UPDATE registrations r
         SET 
             platform_fee_cents = CASE 
-                WHEN (new_fee_config->>'type')::text = 'fixed' THEN (new_fee_config->>'value')::numeric::integer
+                WHEN (new_fee_config->>'type')::text = 'fixed' THEN ((new_fee_config->>'value')::numeric::integer + 199) * COALESCE(jsonb_array_length(r.team_members), 1)
                 WHEN (new_fee_config->>'type')::text = 'percentage' THEN ROUND(r.subtotal_cents * ((new_fee_config->>'value')::numeric / 100))::integer
                 ELSE r.platform_fee_cents
             END,
             total_cents = r.subtotal_cents + CASE 
-                WHEN (new_fee_config->>'type')::text = 'fixed' THEN (new_fee_config->>'value')::numeric::integer
+                WHEN (new_fee_config->>'type')::text = 'fixed' THEN ((new_fee_config->>'value')::numeric::integer + 199) * COALESCE(jsonb_array_length(r.team_members), 1)
                 WHEN (new_fee_config->>'type')::text = 'percentage' THEN ROUND(r.subtotal_cents * ((new_fee_config->>'value')::numeric / 100))::integer
                 ELSE r.platform_fee_cents
             END
