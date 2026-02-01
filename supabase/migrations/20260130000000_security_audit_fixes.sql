@@ -52,6 +52,8 @@ ALTER FUNCTION public.send_registration_email_trigger() SET search_path = public
 DROP POLICY IF EXISTS "Permitir acesso ao mural" ON public.mural;
 DROP POLICY IF EXISTS "allow all" ON public.mural;
 DROP POLICY IF EXISTS "allow_all_authenticated" ON public.mural;
+DROP POLICY IF EXISTS "Mural viewable by everyone" ON public.mural;
+DROP POLICY IF EXISTS "Organizers can manage mural" ON public.mural;
 
 -- Criar políticas mais seguras para mural
 CREATE POLICY "Mural viewable by everyone"
@@ -73,6 +75,7 @@ CREATE POLICY "Organizers can manage mural"
 -- (O relatório indicou que o WITH CHECK era true para INSERT, o que é esperado para inscrições públicas,
 -- mas vamos garantir que outras ações são restritas)
 DROP POLICY IF EXISTS "Anyone can join waitlist" ON public.waitlist;
+DROP POLICY IF EXISTS "Waitlist only manageable by organizers" ON public.waitlist;
 
 CREATE POLICY "Anyone can join waitlist"
   ON public.waitlist FOR INSERT

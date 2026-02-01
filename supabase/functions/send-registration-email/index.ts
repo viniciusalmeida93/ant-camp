@@ -230,7 +230,7 @@ serve(async (req) => {
     `;
 
     // Preparar lista de destinatários (todos os membros do time)
-    const recipients: string[] = [registration.athlete_email];
+    const recipients: string[] = [registration.athlete_email].filter(Boolean);
 
     // Se for time, adicionar emails de todos os membros
     if (category.format !== "individual" && registration.team_members) {
@@ -242,6 +242,18 @@ serve(async (req) => {
         if (member.email && member.email !== registration.athlete_email) {
           recipients.push(member.email);
         }
+      });
+    }
+
+    if (recipients.length === 0) {
+      console.log("No recipients found (no emails provided for athlete or team members). Skipping email sending.");
+      return new Response(JSON.stringify({
+        success: true,
+        message: "No recipients found, skipping email.",
+        registrationId: registrationId
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

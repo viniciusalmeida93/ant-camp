@@ -1,4 +1,5 @@
 -- 1. Permitir que Organizadores vejam as inscrições de seus campeonatos
+DROP POLICY IF EXISTS "Organizers can view registrations for their championships" ON public.registrations;
 CREATE POLICY "Organizers can view registrations for their championships"
 ON public.registrations
 FOR SELECT
@@ -12,6 +13,7 @@ USING (
 );
 
 -- 2. Permitir que Organizadores atualizem inscrições de seus campeonatos
+DROP POLICY IF EXISTS "Organizers can update registrations for their championships" ON public.registrations;
 CREATE POLICY "Organizers can update registrations for their championships"
 ON public.registrations
 FOR UPDATE
@@ -25,6 +27,7 @@ USING (
 );
 
 -- 3. Permitir que Organizadores deletem inscrições se necessário
+DROP POLICY IF EXISTS "Organizers can delete registrations for their championships" ON public.registrations;
 CREATE POLICY "Organizers can delete registrations for their championships"
 ON public.registrations
 FOR DELETE
