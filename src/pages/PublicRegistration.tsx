@@ -557,9 +557,21 @@ export default function PublicRegistration() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCategory) return;
-    if (selectedCategory.format !== 'individual' && !teamName) { toast.error("Nome do time é obrigatório"); return; }
-    if (!boxName) { toast.error("Box para Chamada é obrigatório"); return; }
-    for (const m of members) { if (!m.name || !m.email || !m.cpf) { toast.error("Preencha todos os campos obrigatórios dos integrantes"); return; } }
+    if (selectedCategory.format !== 'individual' && !teamName) {
+      toast.error("Nome do time é obrigatório *");
+      return;
+    }
+    if (!boxName) {
+      toast.error("Box para Chamada é obrigatório *");
+      return;
+    }
+
+    // Validação estrita para o primeiro integrante
+    const m1 = members[0];
+    if (!m1.name || !m1.email || !m1.cpf || !m1.birthDate) {
+      toast.error("Preencha todos os campos obrigatórios do Integrante 1 (Nome, Email, CPF e Data de Nascimento) *");
+      return;
+    }
 
 
     setSubmitting(true);
@@ -730,7 +742,7 @@ export default function PublicRegistration() {
                   {selectedCategory?.format !== 'individual' && (
                     <div className="space-y-4">
                       <div className="space-y-1">
-                        <Label>Nome do Time/Pessoa *</Label>
+                        <Label>Nome do Time/Pessoa * (Obrigatório)</Label>
                         <Input
                           value={teamName}
                           onChange={e => setTeamName(e.target.value)}
@@ -741,7 +753,7 @@ export default function PublicRegistration() {
                   )}
 
                   <div className="space-y-1">
-                    <Label>Box para Chamada *</Label>
+                    <Label>Box para Chamada * (Obrigatório)</Label>
                     <Input
                       value={boxName}
                       onChange={e => setBoxName(e.target.value)}
@@ -759,17 +771,21 @@ export default function PublicRegistration() {
 
                       <div className="grid gap-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">Nome Completo</Label>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            Nome Completo {idx === 0 ? "* (Obrigatório)" : ""}
+                          </Label>
                           <Input
-                            placeholder="Nome completo (opcional)"
+                            placeholder="Nome completo"
                             value={member.name}
                             onChange={e => updateMember(idx, 'name', e.target.value)}
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">Email</Label>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            Email {idx === 0 ? "* (Obrigatório)" : ""}
+                          </Label>
                           <Input
-                            placeholder="email@exemplo.com (opcional)"
+                            placeholder="email@exemplo.com"
                             type="email"
                             value={member.email}
                             onChange={e => updateMember(idx, 'email', e.target.value)}
@@ -779,9 +795,11 @@ export default function PublicRegistration() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">CPF</Label>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            CPF {idx === 0 ? "* (Obrigatório)" : ""}
+                          </Label>
                           <Input
-                            placeholder="000.000.000-00 (opcional)"
+                            placeholder="000.000.000-00"
                             value={member.cpf}
                             onChange={e => updateMember(idx, 'cpf', e.target.value)}
                             maxLength={14}
@@ -790,7 +808,7 @@ export default function PublicRegistration() {
                         <div>
                           <Label className="text-xs text-muted-foreground mb-1 block">WhatsApp</Label>
                           <Input
-                            placeholder="(11) 99999-9999 (opcional)"
+                            placeholder="(11) 99999-9999"
                             value={member.whatsapp}
                             onChange={e => updateMember(idx, 'whatsapp', e.target.value)}
                           />
@@ -798,13 +816,14 @@ export default function PublicRegistration() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1 block">Data de Nascimento</Label>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            Data de Nascimento {idx === 0 ? "* (Obrigatório)" : ""}
+                          </Label>
                           <Input
                             type="date"
                             value={member.birthDate}
                             onChange={e => updateMember(idx, 'birthDate', e.target.value)}
                             className="block w-full"
-                            placeholder="dd/mm/aaaa"
                           />
                         </div>
                         {selectedCategory?.has_kits && selectedCategory?.kits_active && (
@@ -835,7 +854,7 @@ export default function PublicRegistration() {
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground mb-1 block">Box do Atleta</Label>
                         <Input
-                          placeholder="Box onde treina (opcional)"
+                          placeholder="Box onde treina"
                           value={member.box}
                           onChange={e => updateMember(idx, 'box', e.target.value)}
                         />
