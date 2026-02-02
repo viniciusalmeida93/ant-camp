@@ -11,7 +11,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, QrCode, Shield, Copy, CheckCircle2, CreditCard, RefreshCcw, Ticket, X } from "lucide-react";
-import { getPixPayloadForDisplay } from "@/utils/pix";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { cn, formatCurrency } from "@/lib/utils";
 import { Coupon } from "@/types/coupon";
