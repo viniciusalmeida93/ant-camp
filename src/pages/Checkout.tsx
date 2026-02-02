@@ -617,62 +617,6 @@ export default function Checkout() {
                   Clique aqui se não for redirecionado
                 </Button>
               </div>
-            ) : hasManualPix ? (
-              <Card className="shadow-md border-border bg-card/50">
-                <CardHeader>
-                  <CardTitle>Pagamento via PIX</CardTitle>
-                  <CardDescription>
-                    Utilize o QR Code abaixo para concluir o pagamento diretamente com o organizador.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 px-3 sm:px-6">
-                  {/* Manual Pix Content */}
-                  <div className="flex flex-col items-center gap-4">
-                    {pixImageUrl ? (
-                      <div className="bg-white p-4 rounded-lg border shadow-sm">
-                        <img src={pixImageUrl} alt="QR Code PIX" className="w-52 h-52" />
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground text-center">
-                        QR Code indisponível. Copie o código PIX abaixo.
-                      </div>
-                    )}
-                    <div className="w-full max-w-xl space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Caso prefira, copie o código “copia e cola”:
-                      </p>
-                      <div className="flex gap-2 items-center">
-                        <Input value={pixCopyPayload} readOnly className="font-mono text-xs bg-muted/20" />
-                        <Button onClick={copyPixCode} variant="outline">
-                          {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                      {manualPixData.generatedFromKey && (
-                        <p className="text-xs text-muted-foreground">
-                          Chave informada pelo organizador: {rawPixPayload}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-muted/30 rounded-lg text-sm text-muted-foreground space-y-2 border border-border">
-                    <div className="flex items-center gap-2 text-foreground font-medium">
-                      <QrCode className="w-4 h-4 text-primary" />
-                      Como prosseguir
-                    </div>
-                    <ol className="list-decimal list-inside space-y-1">
-                      <li>Realize o pagamento via PIX utilizando o QR Code ou o código acima.</li>
-                      <li>Salve o comprovante. O organizador pode solicitá-lo para validação.</li>
-                      <li>
-                        Assim que o repasse for confirmado, sua inscrição constará como “Pago”.
-                      </li>
-                    </ol>
-                  </div>
-                  <Button onClick={() => navigate(`/links/${registration.championships.slug}`)} className="w-full" variant="outline">
-                    Voltar para o evento
-                  </Button>
-                </CardContent>
-              </Card>
             ) : !payment ? (
               <Card className="shadow-md border-border bg-card/50">
                 <CardHeader className="border-b border-border bg-muted/5">
@@ -1069,9 +1013,7 @@ export default function Checkout() {
                   <Badge variant={registration.payment_status === "approved" ? "default" : "secondary"} className="uppercase text-[10px]">
                     {registration.payment_status === "approved"
                       ? "Pago"
-                      : hasManualPix
-                        ? "À confirmar"
-                        : "Pendente"}
+                      : "Pendente"}
                   </Badge>
                 </div>
               </CardHeader>
