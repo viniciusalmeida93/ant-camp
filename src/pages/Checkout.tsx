@@ -482,26 +482,10 @@ export default function Checkout() {
     }
   };
 
-  const rawPixPayload = registration?.championships?.pix_payload
-    ? String(registration.championships.pix_payload).trim()
-    : "";
 
-  const manualPixData = getPixPayloadForDisplay({
-    rawPayload: rawPixPayload,
-    merchantName: registration?.championships?.name,
-    merchantCity: registration?.championships?.location,
-  });
-
-  const hasManualPix = manualPixData.qrPayload.length > 0;
-  const pixCopyPayload = manualPixData.copyPayload || rawPixPayload;
-  const pixImageUrl = hasManualPix
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-      manualPixData.qrPayload
-    )}`
-    : "";
 
   const copyPixCode = () => {
-    const codeToCopy = hasManualPix ? pixCopyPayload : (payment?.pix_copy_paste || "");
+    const codeToCopy = payment?.pix_copy_paste || "";
     if (codeToCopy) {
       // IMPORTANTE: Remover TODOS os espaços do código PIX
       const cleanCode = codeToCopy.replace(/\s+/g, '');
