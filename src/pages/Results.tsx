@@ -368,10 +368,13 @@ export default function Results() {
     try {
       // Buscar resultados existentes para deletar
       const { data: existing } = await supabase
-        .from("wod_results")
-        .select("id")
+        .select("id, is_published")
         .eq("category_id", selectedCategory)
         .eq("wod_id", selectedWOD);
+
+      // Verificar se já estava publicado para não "despublicar" acidentalmente
+      const wasPublished = existing?.some((r: any) => r.is_published) || false;
+      const shouldPublish = publish || wasPublished;
 
       if (existing && existing.length > 0) {
         const { error: deleteError } = await supabase
@@ -404,7 +407,7 @@ export default function Results() {
             result: input.result?.trim() || null,
             tiebreak_value: input.tiebreakValue?.trim() || null,
             status: input.status || 'completed',
-            is_published: publish, // Definir se está publicado ou não (false ao salvar, true ao publicar)
+            is_published: shouldPublish, // Mantém publicado se já estava, ou se foi solicitado explicitamente
           });
         }
       });
@@ -507,8 +510,8 @@ export default function Results() {
       }
 
       // Se não estiver publicando, garantir que os resultados inseridos tenham is_published = false
-      // Se estiver publicando, atualizar para is_published = true
-      if (publish) {
+      // Se estiver publicando (ou já estava), atualizar para is_published = true
+      if (shouldPublish) {
         const { error: publishError } = await supabase
           .from("wod_results")
           .update({ is_published: true })
@@ -520,7 +523,11 @@ export default function Results() {
         // ATUALIZAR ORDER_INDEX AUTOMATICAMENTE BASEADO NO LEADERBOARD
         await updateOrderIndexFromLeaderboard(selectedCategory);
 
-        toast.success("Resultados salvos, pontuação calculada e publicados no leaderboard!");
+        if (publish) {
+          toast.success("Resultados salvos, pontuação calculada e publicados no leaderboard!");
+        } else {
+          toast.success("Resultados atualizados (mantendo status publicado)!");
+        }
       } else {
         // Garantir que resultados salvos sem publicar tenham is_published = false
         const { error: unpublishError } = await supabase
@@ -787,7 +794,7 @@ export default function Results() {
               disabled={saving}
             >
               <FileText className="w-4 h-4 mr-2" />
-              {saving ? 'Salvando...' : 'Salvar Resultados'}
+              {saving ? 'Salvando...' : 'Salvar Rascunho (Não aparece)'}
             </Button>
             <Button
               onClick={() => handleSave(true)}
@@ -795,7 +802,7 @@ export default function Results() {
               disabled={saving}
             >
               <Globe className="w-4 h-4 mr-2" />
-              {saving ? 'Publicando...' : 'Publicar Resultados'}
+              {saving ? 'Publicando...' : 'Salvar e Publicar (Ao Vivo)'}
             </Button>
           </div>
         </Card>

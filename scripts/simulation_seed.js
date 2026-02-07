@@ -219,9 +219,9 @@ async function main() {
             ];
 
             const { data: day } = await supabase.from('championship_days')
-                .select('id').eq('championship_id', champId).eq('day_number', 1).maybeSingle();
+                .select('*').eq('championship_id', champId).eq('day_number', 1).maybeSingle();
 
-            if (!day) console.log("     ⚠️ Dia 1 não encontrado");
+            if (!day) console.log("     ⚠️ Dia 1 não encontrado, criando...");
 
             for (const [idx, wodDef] of wods.entries()) {
                 let wodId;
@@ -232,9 +232,8 @@ async function main() {
                 if (wodExist) {
                     wodId = wodExist.id;
                 } else {
-                    // >>> FIXED: Added championship_id <<<
                     const { data: wod, error: wodErr } = await supabase.from('wods').insert({
-                        championship_id: champId, // Required field
+                        championship_id: champId,
                         name: uniqueName,
                         type: wodDef.type,
                         description: wodDef.description,
@@ -243,20 +242,22 @@ async function main() {
 
                     if (wodErr) {
                         console.error(`     ❌ Erro criando WOD ${uniqueName}:`, wodErr.message);
-                        continue; // Skip execution for this WOD
-                    }
-                    if (!wod) {
-                        console.error(`     ❌ WOD criado é null?`);
                         continue;
                     }
                     wodId = wod.id;
 
                     if (day && wodId) {
-                        await supabase.from('championship_day_wods').insert({
-                            championship_day_id: day.id,
-                            wod_id: wodId,
-                            order_num: idx + 1
-                        });
+                        // Check if connection exists
+                        const { data: existingLink } = await supabase.from('championship_day_wods')
+                            .select('wod_id').eq('wod_id', wodId).maybeSingle();
+
+                        if (!existingLink) {
+                            await supabase.from('championship_day_wods').insert({
+                                championship_day_id: day.id,
+                                wod_id: wodId,
+                                order_num: idx + 1
+                            });
+                        }
                     }
                 }
 
@@ -267,7 +268,6 @@ async function main() {
                 if (regs && wodId) {
                     console.log(`         📝 Lançando Resultados para ${wodDef.name}`);
                     for (const [rIdx, r] of regs.entries()) {
-
                         const { data: resExist } = await supabase.from('wod_results')
                             .select('id').eq('wod_id', wodId).eq('registration_id', r.id).maybeSingle();
 
@@ -291,7 +291,214 @@ async function main() {
                             });
                         }
                     }
+
+                    // --- ADDED HEAT GENERATION LOGIC ---
+                    console.log(`         🔥 Gerando Baterias para ${wodDef.name}`);
+
+                    // Check if heats exist for this WOD/Cat
+                    const { data: existingHeats } = await supabase.from('heats')
+                        .select('id').eq('championship_id', champId).eq('category_id', catId).eq('wod_id', wodId);
+
+                    if (!existingHeats || existingHeats.length === 0) {
+                        const athletesPerHeat = 5;
+                        const regChunks = [];
+                        for (let i = 0; i < regs.length; i += athletesPerHeat) {
+                            regChunks.push(regs.slice(i, i + athletesPerHeat));
+                        }
+
+                        let heatNum = 1;
+                        // FIX TIMESTAMP FORMAT: YYYY-MM-DDTHH:mm:ss (no extra :00)
+                        let rawTime = `${day.date}T${day.start_time}`;
+                        if (day.start_time.length === 5) rawTime += ':00';
+                        const startTime = rawTime;
+
+                        for (const chunk of regChunks) {
+                            const { data: newHeat, error: heatErr } = await supabase.from('heats').insert({
+                                championship_id: champId,
+                                category_id: catId,
+                                wod_id: wodId,
+                                heat_number: heatNum++,
+                                athletes_per_heat: athletesPerHeat,
+                                scheduled_time: startTime
+                            }).select().single();
+
+                            if (heatErr) {
+                                console.error("Erro criando heat:", heatErr);
+                                continue;
+                            }
+
+                            const entries = chunk.map((r, i) => ({
+                                heat_id: newHeat.id,
+                                registration_id: r.id,
+                                lane_number: i + 1
+                            }));
+
+                            await supabase.from('heat_entries').insert(entries);
+                        }
+                        console.log(`            -> Geradas ${regChunks.length} baterias.`);
+                    } else {
+                        console.log("            -> Baterias já existem.");
+                    }
                 }
+            }
+        }
+
+        // --- TIE BREAKER LAB (Specific for Battle of AntCamp) ---
+        if (champConfig.style === 'games') {
+            console.log(`   🧪 Criando Categoria de Laboratório de Empates...`);
+            const tieCatName = 'Tie Breaker Lab';
+            let tieCatId;
+            const { data: existingTieCat, error: findErr } = await supabase.from('categories')
+                .select('id')
+                .eq('championship_id', champId)
+                .eq('name', tieCatName)
+                .maybeSingle();
+
+            if (existingTieCat) {
+                tieCatId = existingTieCat.id;
+            } else {
+                const { data: newTieCat, error: createErr } = await supabase.from('categories').insert({
+                    championship_id: champId,
+                    name: tieCatName,
+                    format: 'individual',
+                    gender: 'misto',
+                    capacity: 10,
+                    price_cents: 10000,
+                    athletes_per_heat: 5
+                }).select().single();
+
+                if (createErr) {
+                    console.error("   ❌ Erro detalhado criar categoria:", createErr);
+                    continue;
+                }
+                tieCatId = newTieCat.id;
+            }
+
+            const tieCat = { id: tieCatId }; // Mock object for compatibility
+
+            if (!tieCatId) {
+                console.error("   ❌ Falha fatal: ID da categoria é null");
+                continue;
+            }
+
+            // Config Scoring
+            const { data: existingScore } = await supabase.from('scoring_configs').select('id').eq('category_id', tieCat.id).maybeSingle();
+            if (!existingScore) {
+                await supabase.from('scoring_configs').insert({
+                    category_id: tieCat.id,
+                    preset_type: 'crossfit-games',
+                    ranking_method: 'standard', // 1, 1, 3
+                    points_table: CROSSFIT_GAMES_POINTS,
+                    dnf_points: 0,
+                    dns_points: 0
+                });
+            }
+
+            // Create Athletes
+            const athletes = [
+                { name: 'Atleta A (Ouro+5º)', email: 'tie_a@test.com' },
+                { name: 'Atleta B (3º+3º)', email: 'tie_b@test.com' },
+                { name: 'Atleta C (Prata+4º)', email: 'tie_c@test.com' }
+            ];
+
+            const regMap = {};
+            for (const ath of athletes) {
+                let regId;
+                const { data: existingReg } = await supabase.from('registrations')
+                    .select('id')
+                    .eq('category_id', tieCat.id)
+                    .eq('athlete_email', ath.email)
+                    .maybeSingle();
+
+                if (existingReg) {
+                    regId = existingReg.id;
+                } else {
+                    const { data: newReg, error: regErr } = await supabase.from('registrations').insert({
+                        championship_id: champId,
+                        category_id: tieCat.id,
+                        status: 'approved',
+                        athlete_name: ath.name,
+                        athlete_email: ath.email,
+                        payment_status: 'approved',
+                        subtotal_cents: 0, total_cents: 0, platform_fee_cents: 0
+                    }).select().single();
+
+                    if (regErr) console.error("Erro criando registro tie lab:", regErr);
+                    regId = newReg?.id;
+                }
+                if (regId) regMap[ath.name] = { id: regId };
+            }
+
+            // Create 2 WODs
+            const wods = ['WOD Tie 1', 'WOD Tie 2'];
+            // Safe fetch day
+            const { data: days } = await supabase.from('championship_days').select('*').eq('championship_id', champId);
+            const day = days && days.length > 0 ? days[0] : null; // Get first day
+
+            if (!day) {
+                console.error("   ❌ Erro: Dia não encontrado para Tie Breaker Lab.");
+                continue;
+            }
+
+            const wodIds = [];
+            for (const [idx, wName] of wods.entries()) {
+                const uniqueName = `${wName} (Lab)`;
+                let wodId;
+
+                const { data: existWod } = await supabase.from('wods').select('id').eq('championship_id', champId).eq('name', uniqueName).maybeSingle();
+                if (existWod) {
+                    wodId = existWod.id;
+                } else {
+                    const { data: wod, error: wodErr } = await supabase.from('wods').insert({
+                        championship_id: champId, name: uniqueName, type: 'tempo', description: 'Tie Break Test', order_num: idx + 1
+                    }).select().single();
+
+                    if (wodErr) { console.error("Erro criando WOD Tie Lab", wodErr); continue; }
+                    wodId = wod.id;
+                }
+                wodIds.push(wodId);
+
+                // Link WOD to Day
+                const { data: checkLink } = await supabase.from('championship_day_wods').select('*').eq('championship_day_id', day.id).eq('wod_id', wodId).maybeSingle();
+
+                if (!checkLink) {
+                    await supabase.from('championship_day_wods').insert({
+                        championship_day_id: day.id, wod_id: wodId, order_num: idx + 1
+                    });
+                }
+            }
+
+            if (wodIds.length === 2 && regMap['Atleta A (Ouro+5º)'] && regMap['Atleta B (3º+3º)'] && regMap['Atleta C (Prata+4º)']) {
+                // Insert Results
+
+                // Helper to insert result safely
+                const insertRes = async (wodId, regId, res) => {
+                    const { data: ex } = await supabase.from('wod_results').select('id').eq('wod_id', wodId).eq('registration_id', regId).maybeSingle();
+                    if (!ex) {
+                        await supabase.from('wod_results').insert({
+                            wod_id: wodId,
+                            category_id: tieCat.id,
+                            registration_id: regId,
+                            result: res,
+                            status: 'completed',
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                };
+
+                // WOD 1 Results: A(05:00), B(05:10), C(05:20)
+                await insertRes(wodIds[0], regMap['Atleta A (Ouro+5º)'].id, '05:00'); // 1st
+                await insertRes(wodIds[0], regMap['Atleta C (Prata+4º)'].id, '05:10'); // 2nd
+                await insertRes(wodIds[0], regMap['Atleta B (3º+3º)'].id, '05:20'); // 3rd
+
+                // WOD 2 Results
+                await insertRes(wodIds[1], regMap['Atleta C (Prata+4º)'].id, '110'); // 1st
+                await insertRes(wodIds[1], regMap['Atleta B (3º+3º)'].id, '100'); // 2nd
+                await insertRes(wodIds[1], regMap['Atleta A (Ouro+5º)'].id, '90'); // 3rd
+
+                console.log("   🧪 Resultados de Laboratório lançados.");
+            } else {
+                console.error("   ❌ Falha ao preparar dados para resultados (Regs ou WODs faltando)");
             }
         }
     }

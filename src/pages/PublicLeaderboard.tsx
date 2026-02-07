@@ -63,10 +63,20 @@ export default function PublicLeaderboard() {
       )
       .subscribe();
 
+    // POLBACK: Polling de segurança a cada 15 segundos
+    // Isso garante atualização mesmo se o socket falhar ou RLS bloquear eventos
+    const intervalId = setInterval(() => {
+      if (selectedCategory) {
+        console.log("🔄 Polling leaderboard update...");
+        loadLeaderboard();
+      }
+    }, 15000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
-  }, [slug]);
+  }, [slug, selectedCategory]); // Adicionei selectedCategory nas deps para o intervalo funcionar corretamente
 
   useEffect(() => {
     if (selectedCategory && championship) {
@@ -272,7 +282,7 @@ export default function PublicLeaderboard() {
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory)
-        .eq("is_published", true) // Apenas resultados publicados aparecem no leaderboard público
+        .eq("is_published", true) // Restaurado: Apenas resultados publicados
         .order("created_at");
 
       if (resultsError) {
