@@ -368,6 +368,7 @@ export default function Results() {
     try {
       // Buscar resultados existentes para deletar
       const { data: existing } = await supabase
+        .from("wod_results")
         .select("id, is_published")
         .eq("category_id", selectedCategory)
         .eq("wod_id", selectedWOD);
