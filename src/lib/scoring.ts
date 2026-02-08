@@ -1,4 +1,4 @@
-import { WODResult, ScoringConfig, LeaderboardEntry, WOD } from './types';
+import { WODResult, ScoringConfig, LeaderboardEntry } from './types';
 
 // Preset CrossFit Games: pontuação padrão
 export const CROSSFIT_GAMES_POINTS: { [position: number]: number } = {
@@ -30,8 +30,10 @@ export const generateDefaultPoints = (maxParticipants: number): { [position: num
 const parseTimeToSeconds = (timeStr: string): number => {
   if (!timeStr) return 0;
 
+  const cleanTime = timeStr.toString().trim();
+
   // Formato MM:SS (ex: 5:30 = 5 minutos e 30 segundos)
-  const match = timeStr.match(/^(\d+):(\d{2})$/);
+  const match = cleanTime.match(/^(\d+):(\d{2})$/);
   if (match) {
     const minutes = parseInt(match[1], 10);
     const seconds = parseInt(match[2], 10);
@@ -39,7 +41,7 @@ const parseTimeToSeconds = (timeStr: string): number => {
   }
 
   // Tentar como número direto (segundos)
-  const num = parseFloat(timeStr);
+  const num = parseFloat(cleanTime);
   if (!isNaN(num)) return num;
 
   return 0;
@@ -55,11 +57,24 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
 
   if (!a.result || !b.result) return 0;
 
+  const normalizedType = wodType ? wodType.toLowerCase().trim() : '';
+  const resultLooksLikeTime = a.result.toString().includes(':') || b.result.toString().includes(':');
+
   // Para For Time: converter tempo para segundos e comparar (menor é melhor)
-  if (wodType === 'for-time' || wodType === 'tempo') {
+  // SE o tipo for explicitamente tempo OU se o resultado parecer tempo (contém :)
+  if (
+    normalizedType === 'for-time' ||
+    normalizedType === 'for_time' ||
+    normalizedType === 'tempo' ||
+    normalizedType === 'time' ||
+    (resultLooksLikeTime && normalizedType !== 'amrap' && normalizedType !== 'reps' && normalizedType !== 'carga' && normalizedType !== 'tonelagem')
+  ) {
     const aSeconds = parseTimeToSeconds(a.result);
     const bSeconds = parseTimeToSeconds(b.result);
+
+    // DEBUG: Se a diferença for pequena, garantir ordem correta
     if (aSeconds !== bSeconds) return aSeconds - bSeconds;
+
     // Tiebreak: reps completados (maior é melhor)
     if (a.tiebreakValue && b.tiebreakValue) {
       const aTiebreak = parseFloat(a.tiebreakValue);
@@ -70,7 +85,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
   }
 
   // Para AMRAP: maior rounds/reps é melhor
-  if (wodType === 'amrap' || wodType === 'emom') {
+  if (normalizedType === 'amrap' || normalizedType === 'emom') {
     const aValue = parseFloat(a.result);
     const bValue = parseFloat(b.result);
     if (bValue !== aValue) return bValue - aValue;
@@ -84,7 +99,7 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
   }
 
   // Para Tonelagem e Carga Máxima: maior peso é melhor
-  if (wodType === 'tonelagem' || wodType === 'carga-maxima' || wodType === 'carga') {
+  if (normalizedType === 'tonelagem' || normalizedType === 'carga-maxima' || normalizedType === 'carga') {
     const aValue = parseFloat(a.result);
     const bValue = parseFloat(b.result);
     if (bValue !== aValue) return bValue - aValue;
@@ -97,15 +112,23 @@ export const compareResults = (a: WODResult, b: WODResult, wodType: string): num
     return 0;
   }
 
-  // Para reps (legado): maior é melhor
-  if (wodType === 'reps') {
-    const aValue = parseFloat(a.result);
-    const bValue = parseFloat(b.result);
+  // Fallback seguro: se parece tempo, usa parser de tempo
+  if (resultLooksLikeTime) {
+    const aSeconds = parseTimeToSeconds(a.result);
+    const bSeconds = parseTimeToSeconds(b.result);
+    if (aSeconds !== bSeconds) return aSeconds - bSeconds;
+  }
+
+  // Fallback numérico genérico (reps, carga simples)
+  const aValue = parseFloat(a.result);
+  const bValue = parseFloat(b.result);
+  if (!isNaN(aValue) && !isNaN(bValue)) {
     if (bValue !== aValue) return bValue - aValue;
-    // Tiebreak (menor tempo é melhor)
-    if (a.tiebreakValue && b.tiebreakValue) {
-      return parseFloat(a.tiebreakValue) - parseFloat(b.tiebreakValue);
-    }
+  }
+
+  // Tiebreak geral
+  if (a.tiebreakValue && b.tiebreakValue) {
+    return parseFloat(a.tiebreakValue) - parseFloat(b.tiebreakValue);
   }
 
   return 0;
@@ -171,8 +194,6 @@ export const calculateWODPoints = (
   });
 };
 
-// Função auxiliar para comparar dois atletas com desempate completo
-// Compara sequencialmente: pontos, 1º lugares, 2º lugares, 3º lugares, 4º lugares, etc.
 // Função auxiliar para comparar dois atletas com desempate completo
 export const compareLeaderboardEntries = (
   a: { totalPoints: number; wodResults: WODResult[]; orderIndex?: number | null },

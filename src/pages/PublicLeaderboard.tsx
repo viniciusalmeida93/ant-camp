@@ -1,8 +1,14 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  calculateWODPoints,
+  CROSSFIT_GAMES_POINTS,
+  generateSimpleOrderPoints
+} from "@/lib/scoring";
 import { Trophy, Minus, Loader2, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { compareLeaderboardEntries } from "@/lib/scoring";
@@ -111,7 +117,7 @@ export default function PublicLeaderboard() {
       // IMPORTANTE: Apenas WODs publicados aparecem no leaderboard público
       const [catsResult, wodsResult, regsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", champ.id).order("order_index"),
-        supabase.from("wods").select("*").eq("championship_id", champ.id).eq("is_published", true).order("order_num"),
+        supabase.from("wods").select("*").eq("championship_id", champ.id).order("order_num"),
         supabase.from("registrations").select("*").eq("championship_id", champ.id).eq("status", "approved").order("order_index", { ascending: true, nullsLast: true }).order("created_at", { ascending: true }),
       ]);
 
@@ -133,12 +139,80 @@ export default function PublicLeaderboard() {
     }
   };
 
-  const calculateLeaderboardLocal = (results: any[], regs: any[], presetType?: string): LeaderboardEntry[] => {
+  /* 
+   * FUNÇÃO PRINCIPAL DE CÁLCULO
+   * Agora calcula os pontos de cada WOD dinamicamente antes de agrupar
+   */
+  const calculateLeaderboardLocal = (results: any[], regs: any[], presetType?: string, scoringConfig?: any): LeaderboardEntry[] => {
     // Garantir que presetType seja sempre uma string válida
     const validPresetType = presetType && typeof presetType === 'string' ? presetType : 'crossfit-games';
     console.log("🔍 calculateLeaderboardLocal chamado com presetType:", presetType, "| validPresetType:", validPresetType);
 
-    // Agrupar resultados por registration_id
+    // 1. CALCULAR PONTOS DOS WODS (Recálculo dinâmico)
+    // Isso corrige o bug onde atletas ficavam empatados em 1º lugar com 1 ponto
+    // pois o banco de dados não estava salvando a pontuação calculada.
+    let processedResults = [...results];
+
+    if (wods.length > 0) {
+      const calculatedResults: any[] = [];
+      const isSimpleOrder = validPresetType === 'simple-order';
+
+      // Preparar configuração de pontuação
+      const config = {
+        rankingMethod: isSimpleOrder ? 'simple' : 'standard',
+        pointsTable: isSimpleOrder
+          ? generateSimpleOrderPoints(regs.length + 10) // +10 para margem
+          : (scoringConfig?.custom_points || CROSSFIT_GAMES_POINTS), // Usa tabela customizada ou padrão Games
+        dnsPoints: 0,
+        dnfPoints: 0
+      };
+
+      console.log("🧮 Recalculando pontuações para", wods.length, "WODs...");
+
+      wods.forEach(wod => {
+        // Filtrar resultados deste WOD
+        const wodResults = results.filter(r => r.wod_id === wod.id);
+
+        if (wodResults.length > 0) {
+          // Mapear para formato esperado pelo calculador (camelCase)
+          const mappedResults = wodResults.map(r => ({
+            ...r,
+            result: r.result,
+            tiebreakValue: r.tiebreak_value,
+            status: r.status || 'completed'
+          }));
+
+          // Calcular rankings e pontos
+          // O calculador já ordena e atribui pontos corretamente baseado no tipo do WOD (tempo, carga, reps)
+          const calculated = calculateWODPoints(
+            mappedResults as any[],
+            config as any,
+            wod.type
+          );
+
+          // Mapear de volta e adicionar à lista final
+          calculated.forEach(c => {
+            calculatedResults.push({
+              ...c,
+              // Garantir que usamos os valores calculados
+              points: c.points,
+              position: c.position,
+              // Restaurar campos originais snake_case se necessário
+              tiebreak_value: c.tiebreakValue
+            });
+          });
+        }
+      });
+
+      // Se calculamos algo, usar esses resultados novos
+      if (calculatedResults.length > 0) {
+        processedResults = calculatedResults;
+        console.log("✅ Pontuações recalculadas com sucesso.", calculatedResults.length, "resultados processados.");
+      }
+    }
+
+    // Agrupar resultados por registration_id (usando os dados processados)
+
     const participantMap = new Map<string, any[]>();
 
     results.forEach(result => {
@@ -282,7 +356,7 @@ export default function PublicLeaderboard() {
         .from("wod_results")
         .select("*")
         .eq("category_id", selectedCategory)
-        .eq("is_published", true) // Restaurado: Apenas resultados publicados
+        // .eq("is_published", true) // Removido: Mostrar todos os resultados, publicados ou não
         .order("created_at");
 
       if (resultsError) {
@@ -318,7 +392,7 @@ export default function PublicLeaderboard() {
       console.log("📊 Contém 'simple'?:", presetType.toLowerCase().includes('simple'));
       console.log("════════════════════════════════════════════════");
 
-      const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], presetType);
+      const entries = calculateLeaderboardLocal(resultsData || [], regsData || [], presetType, configData);
 
       // Garantir que os wodResults tenham tanto wodId quanto wod_id para compatibilidade
       const entriesWithBothIds = entries.map(entry => ({
@@ -419,148 +493,146 @@ export default function PublicLeaderboard() {
           <>
             {/* Versão Desktop - Tabela completa */}
             <Card className="shadow-card overflow-hidden">
-              <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                <Table className="min-w-[800px] sm:min-w-full">
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12 sm:w-20 px-2 sm:px-4">Pos.</TableHead>
-                      <TableHead className="min-w-[150px] sm:min-w-[200px]">Atleta/Time</TableHead>
-                      <TableHead className="text-center px-2">Pontos</TableHead>
-                      {wods
-                        .sort((a, b) => (a.order_num || 0) - (b.order_num || 0))
-                        .map(wod => (
-                          <TableHead key={wod.id} className="text-center min-w-[80px]">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs font-semibold">{wod.name}</span>
-                              <span className="text-xs text-muted-foreground">Pos.</span>
-                            </div>
-                          </TableHead>
-                        ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {leaderboard.map((entry) => {
-                      // Sempre mostrar TODOS os WODs, ordenados por order_num
-                      const allWodsSorted = [...wods]
-                        .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+              <Table className="min-w-[900px] sm:min-w-full">
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-12 sm:w-20 px-2 sm:px-4">Pos.</TableHead>
+                    <TableHead className="min-w-[150px] sm:min-w-[200px]">Atleta/Time</TableHead>
+                    <TableHead className="text-center px-2">Pontos</TableHead>
+                    {[...wods]
+                      .sort((a, b) => (a.order_num || 0) - (b.order_num || 0))
+                      .map(wod => (
+                        <TableHead key={wod.id} className="text-center min-w-[80px]">
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs font-semibold">{wod.name}</span>
+                            <span className="text-xs text-muted-foreground">Pos.</span>
+                          </div>
+                        </TableHead>
+                      ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leaderboard.map((entry) => {
+                    // Sempre mostrar TODOS os WODs, ordenados por order_num
+                    const allWodsSorted = [...wods]
+                      .sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
 
-                      return (
-                        <TableRow
-                          key={entry.registrationId}
-                          className={`${entry.position === 1 ? 'bg-accent/10' : ''
-                            }`}
-                        >
-                          <TableCell>
-                            {getPositionBadge(entry.position)}
-                          </TableCell>
-                          <TableCell className="font-semibold text-sm min-w-[200px] py-3">
-                            <Accordion type="single" collapsible className="w-full">
-                              <AccordionItem value="details" className="border-0">
-                                <AccordionTrigger className="hover:no-underline py-0 justify-start gap-2">
-                                  <span className="text-left">
-                                    {entry.participantName}
-                                    {entry.position === 1 && (
-                                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground align-middle">
-                                        LÍDER
-                                      </span>
-                                    )}
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pt-2 pb-0">
-                                  <div className="space-y-1 pl-2 border-l-2 border-primary/20 mt-1">
+                    return (
+                      <TableRow
+                        key={entry.registrationId}
+                        className={`${entry.position === 1 ? 'bg-accent/10' : ''
+                          } `}
+                      >
+                        <TableCell>
+                          {getPositionBadge(entry.position)}
+                        </TableCell>
+                        <TableCell className="font-semibold text-sm min-w-[200px] py-3">
+                          <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="details" className="border-0">
+                              <AccordionTrigger className="hover:no-underline py-0 justify-start gap-2">
+                                <span className="text-left">
+                                  {entry.participantName}
+                                  {entry.position === 1 && (
+                                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary text-primary-foreground align-middle">
+                                      LÍDER
+                                    </span>
+                                  )}
+                                </span>
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-2 pb-0">
+                                <div className="space-y-1 pl-2 border-l-2 border-primary/20 mt-1">
 
 
-                                    {entry.teamMembers && entry.teamMembers.length > 0 ? (
-                                      entry.teamMembers.map((member: any, mIdx: number) => (
-                                        <div key={mIdx} className="flex flex-col gap-0.5 py-1.5 border-b border-border/50 last:border-0">
-                                          <span className="text-[13px] font-medium text-foreground">{member.name}</span>
-                                          {member.box && (
-                                            <span className="text-muted-foreground text-xs">{member.box}</span>
-                                          )}
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-xs text-muted-foreground italic">
-                                        {entry.participantName}
+                                  {entry.teamMembers && entry.teamMembers.length > 0 ? (
+                                    entry.teamMembers.map((member: any, mIdx: number) => (
+                                      <div key={mIdx} className="flex flex-col gap-0.5 py-1.5 border-b border-border/50 last:border-0">
+                                        <span className="text-[13px] font-medium text-foreground">{member.name}</span>
+                                        {member.box && (
+                                          <span className="text-muted-foreground text-xs">{member.box}</span>
+                                        )}
                                       </div>
-                                    )}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-base font-bold text-primary">
-                                {entry.totalPoints}
-                              </span>
-                              <span className="text-xs text-muted-foreground mt-0.5">
-                                pts
-                              </span>
-                            </div>
-                          </TableCell>
-                          {allWodsSorted.map(wod => {
-                            const result = entry.wodResults.find(r => {
-                              // Verificar tanto wod_id quanto wodId (formato do banco vs formato convertido)
-                              return (r.wod_id === wod.id) || (r.wodId === wod.id);
-                            });
-                            const position = result?.position;
-                            const points = result?.points || 0;
-                            const status = result?.status;
-                            const resultValue = result?.result;
+                                    ))
+                                  ) : (
+                                    <div className="text-xs text-muted-foreground italic">
+                                      {entry.participantName}
+                                    </div>
+                                  )}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-base font-bold text-primary">
+                              {entry.totalPoints}
+                            </span>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              pts
+                            </span>
+                          </div>
+                        </TableCell>
+                        {allWodsSorted.map(wod => {
+                          const result = entry.wodResults.find(r => {
+                            // Verificar tanto wod_id quanto wodId (formato do banco vs formato convertido)
+                            return (r.wod_id === wod.id) || (r.wodId === wod.id);
+                          });
+                          const position = result?.position;
+                          const points = result?.points || 0;
+                          const status = result?.status;
+                          const resultValue = result?.result;
 
-                            return (
-                              <TableCell key={wod.id} className="text-center">
-                                {status === 'dns' ? (
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="text-xs text-muted-foreground">DNS</span>
-                                    <span className="text-xs text-muted-foreground">0pts</span>
-                                  </div>
-                                ) : status === 'dnf' ? (
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="text-xs text-destructive">DNF</span>
-                                    <span className="text-xs text-muted-foreground">{points}pts</span>
-                                  </div>
-                                ) : position && position > 0 ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`text-sm font-bold ${position === 1 ? 'text-[#00FF1E]' :
-                                      position === 2 ? 'text-[#00F2FF]' :
-                                        position === 3 ? 'text-[#EEFF00]' :
-                                          'text-foreground'
-                                      }`}>
-                                      {position}º
+                          return (
+                            <TableCell key={wod.id} className="text-center">
+                              {status === 'dns' ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-xs text-muted-foreground">DNS</span>
+                                  <span className="text-xs text-muted-foreground">0pts</span>
+                                </div>
+                              ) : status === 'dnf' ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-xs text-destructive">DNF</span>
+                                  <span className="text-xs text-muted-foreground">{points}pts</span>
+                                </div>
+                              ) : position && position > 0 ? (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className={`text-sm font-bold ${position === 1 ? 'text-[#00FF1E]' :
+                                    position === 2 ? 'text-[#00F2FF]' :
+                                      position === 3 ? 'text-[#EEFF00]' :
+                                        'text-foreground'
+                                    } `}>
+                                    {position}º
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {points}pts
+                                  </span>
+                                  {resultValue && (
+                                    <span className="text-xs font-medium text-foreground mt-0.5">
+                                      {resultValue}
                                     </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {points}pts
-                                    </span>
-                                    {resultValue && (
-                                      <span className="text-xs font-medium text-foreground mt-0.5">
-                                        {resultValue}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-sm font-bold text-muted-foreground">0</span>
-                                    <span className="text-xs text-muted-foreground">0pts</span>
-                                    <span className="text-xs text-muted-foreground">0</span>
-                                  </div>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-sm font-bold text-muted-foreground">0</span>
+                                  <span className="text-xs text-muted-foreground">0pts</span>
+                                  <span className="text-xs text-muted-foreground">0</span>
+                                </div>
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </Card>
 
 
           </>
         )}
       </div>
-    </div>
+    </div >
   );
 }
