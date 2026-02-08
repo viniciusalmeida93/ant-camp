@@ -419,13 +419,13 @@ export default function PublicLeaderboard() {
           <>
             {/* Versão Desktop - Tabela completa */}
             <Card className="shadow-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                <Table className="min-w-[800px] sm:min-w-full">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead className="w-20">Pos.</TableHead>
-                      <TableHead className="min-w-[200px]">Atleta/Time</TableHead>
-                      <TableHead className="text-center">Pontos</TableHead>
+                      <TableHead className="w-12 sm:w-20 px-2 sm:px-4">Pos.</TableHead>
+                      <TableHead className="min-w-[150px] sm:min-w-[200px]">Atleta/Time</TableHead>
+                      <TableHead className="text-center px-2">Pontos</TableHead>
                       {wods
                         .sort((a, b) => (a.order_num || 0) - (b.order_num || 0))
                         .map(wod => (
