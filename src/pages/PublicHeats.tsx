@@ -14,6 +14,17 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PublicHeader } from "@/components/layout/PublicHeader"; // IMPORTED
 
+interface FormattedHeatEntry {
+  id: string;
+  participant_id: string;
+  participant_name: string;
+  lane_number: number;
+  category_id?: string;
+  category_name?: string;
+  team_members?: any[];
+  box_name?: string;
+}
+
 interface Heat {
   id: string;
   heat_number: number;
@@ -26,13 +37,7 @@ interface Heat {
   wod_name: string;
   wod_order?: number; // Ordem do WOD (order_num)
   day_number?: number;
-  participants: Array<{
-    participant_id: string;
-    participant_name: string;
-    lane_number: number | null;
-    category_id?: string; // Categoria do participante
-    category_name?: string; // ADICIONAR: nome da categoria do participante
-  }>;
+  participants: Array<FormattedHeatEntry>;
   participant_categories?: string[]; // Categorias presentes na bateria (para baterias intercaladas)
 }
 
@@ -253,7 +258,8 @@ export default function PublicHeats() {
       const { data: wodsDataFull, error: wodsErrorFull } = await supabase
         .from("wods")
         .select("id, name, order_num")
-        .in("id", wodIds);
+        .in("id", wodIds)
+        .eq("is_published", true);
 
       if (wodsErrorFull) {
         console.error("Erro ao buscar WODs:", wodsErrorFull);
@@ -264,19 +270,34 @@ export default function PublicHeats() {
       const wodsMap = new Map((wodsDataFull || []).map((w: any) => [w.id, w.name]));
       const wodsOrderMap = new Map((wodsDataFull || []).map((w: any) => [w.id, w.order_num ?? 0]));
 
+      // Filtrar heatsData para remover baterias de WODs não publicados (que não estão no map)
+      const visibleHeats = heatsData.filter((h: any) => wodsMap.has(h.wod_id));
+
+      console.log(`Baterias visíveis (WODs publicados): ${visibleHeats.length} de ${heatsData.length}`);
+
       console.log("Mapa de categorias:", Array.from(categoriesMap.entries()));
       console.log("Mapa de ordem das categorias:", Array.from(categoriesOrderMap.entries()));
       console.log("Mapa de WODs:", Array.from(wodsMap.entries()));
 
       // Buscar heat_entries
-      const heatIds = heatsData.map((h: any) => h.id);
+      const heatIds = visibleHeats.map((h: any) => h.id);
       console.log("IDs das baterias para buscar entries:", heatIds.length, "baterias");
 
-      // Buscar entries primeiro sem join para ver todos
-      const { data: entriesDataRaw, error: entriesErrorRaw } = await supabase
-        .from("heat_entries")
-        .select("id, heat_id, lane_number, registration_id")
-        .in("heat_id", heatIds);
+      let entriesDataRaw: any[] = [];
+      let entriesErrorRaw: any = null;
+
+      if (heatIds.length > 0) {
+        // Buscar entries primeiro sem join para ver todos
+        const result = await supabase
+          .from("heat_entries")
+          .select("id, heat_id, lane_number, registration_id")
+          .in("heat_id", heatIds);
+
+        entriesDataRaw = result.data || [];
+        entriesErrorRaw = result.error;
+      } else {
+        console.log("Nenhuma bateria visível, pulando busca de entries");
+      }
 
       console.log("Entries brutos (sem join):", entriesDataRaw?.length || 0);
       if (entriesDataRaw && entriesDataRaw.length > 0) {

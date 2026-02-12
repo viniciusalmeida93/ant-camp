@@ -39,6 +39,7 @@ export default function PublicRegistration() {
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isRegulationOpen, setIsRegulationOpen] = useState(false);
+  const [isWaitlistDialogOpen, setIsWaitlistDialogOpen] = useState(false);
   const [organizerName, setOrganizerName] = useState("AntCamp");
 
   // Form State
@@ -210,7 +211,7 @@ export default function PublicRegistration() {
       // 5. Fetch Registrations for Batch Calculation
       const { data: regs, error: regsError } = await supabase
         .from("registrations")
-        .select("id, created_at, category_id, status")
+        .select("id, created_at, category_id, status, team_members")
         .eq("championship_id", champ.id)
         .in("status", ["approved", "pending", "waiting_payment"]); // Consider slots taken for these statuses
 
@@ -284,6 +285,24 @@ export default function PublicRegistration() {
     if (currentBatchIndex >= category.batches.length) return null; // Sold out
 
     return category.batches[currentBatchIndex];
+  };
+
+  const getCategoryStats = (categoryId: string) => {
+    const categoryRegs = allRegistrations.filter(r => r.category_id === categoryId);
+    const registrationsCount = categoryRegs.length;
+
+    const soldKitsMap: Record<string, number> = {};
+    categoryRegs.forEach(reg => {
+      if (reg.team_members && Array.isArray(reg.team_members)) {
+        reg.team_members.forEach((member: any) => {
+          if (member.shirtSize) {
+            soldKitsMap[member.shirtSize] = (soldKitsMap[member.shirtSize] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    return { registrationsCount, soldKitsMap };
   };
 
   const computeCategoryPrice = (category: any) => {
@@ -573,6 +592,52 @@ export default function PublicRegistration() {
       return;
     }
 
+    // Validação de idade para TODOS os integrantes com data de nascimento preenchida
+    for (let i = 0; i < members.length; i++) {
+      const member = members[i];
+      if (member.birthDate) {
+        const age = calculateAge(member.birthDate);
+        if (!checkAgeEligibility(age, selectedCategory)) {
+          const memberLabel = selectedCategory.format === 'individual' ? 'Sua' : `Integrante ${i + 1}:`;
+          const ageRange = `${selectedCategory.min_age ? 'Mín: ' + selectedCategory.min_age : ''}${selectedCategory.min_age && selectedCategory.max_age ? ' / ' : ''}${selectedCategory.max_age ? 'Máx: ' + selectedCategory.max_age : ''}`;
+          toast.error(`${memberLabel} idade (${age} anos) não é compatível com esta categoria (${ageRange}).`);
+          return;
+        }
+      }
+    }
+
+
+    // Validação de Capacidade da Categoria e Estoque de Kits
+    const stats = getCategoryStats(selectedCategory.id);
+
+    // 1. Capacidade
+    if (selectedCategory.capacity && stats.registrationsCount >= selectedCategory.capacity) {
+      setIsWaitlistDialogOpen(true);
+      return;
+    }
+
+    // 2. Estoque de Kits
+    if (selectedCategory.kits_config && selectedCategory.kits_config.length > 0) {
+      // Contar quantos kits de cada tamanho estão sendo solicitados NESTA inscrição
+      const requestedKits: Record<string, number> = {};
+      members.forEach(m => {
+        if (m.shirtSize) {
+          requestedKits[m.shirtSize] = (requestedKits[m.shirtSize] || 0) + 1;
+        }
+      });
+
+      for (const [size, count] of Object.entries(requestedKits)) {
+        const config = selectedCategory.kits_config.find((k: any) => k.size === size);
+        if (config && config.total !== null) {
+          const sold = stats.soldKitsMap[size] || 0;
+          if (sold + count > config.total) {
+            toast.error(`O tamanho ${size} está esgotado (restam ${Math.max(0, config.total - sold)} unidades).`);
+            return;
+          }
+        }
+      }
+    }
+
 
     setSubmitting(true);
     try {
@@ -585,8 +650,8 @@ export default function PublicRegistration() {
         platformFeeCents = Math.round(subtotalCents * (platformFeeConfig.value / 100));
       } else {
         // Multiplicar valor fixo pelo número de atletas (integrantes preenchidos)
-        // Somando 199 (PIX_FEE_CENTS) conforme logicamente definido no frontend
-        platformFeeCents = (platformFeeConfig.value + 199) * athleteCount;
+        // Valor total fixo por atleta (R$ 10,99)
+        platformFeeCents = platformFeeConfig.value * athleteCount;
       }
 
       const totalCents = subtotalCents + platformFeeCents;
@@ -621,6 +686,43 @@ export default function PublicRegistration() {
     } catch (err: any) {
       console.error(err);
       toast.error("Erro ao processar inscrição: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleJoinWaitlist = async () => {
+    if (!selectedCategory) return;
+    setSubmitting(true);
+    try {
+      // Get current position
+      const { data: currentWaitlist } = await supabase
+        .from("waitlist")
+        .select("position")
+        .eq("category_id", selectedCategory.id)
+        .order("position", { ascending: false })
+        .limit(1);
+
+      const nextPosition = (currentWaitlist && currentWaitlist.length > 0) ? currentWaitlist[0].position + 1 : 1;
+
+      const { error } = await supabase.from("waitlist").insert({
+        championship_id: championship.id,
+        category_id: selectedCategory.id,
+        athlete_name: selectedCategory.format === "individual" ? members[0].name : teamName,
+        athlete_email: members[0].email,
+        athlete_phone: members[0].whatsapp,
+        position: nextPosition,
+        status: "waiting"
+      });
+
+      if (error) throw error;
+
+      toast.success("Você entrou na lista de espera com sucesso!");
+      setIsWaitlistDialogOpen(false);
+      setIsFormOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao entrar na lista de espera: " + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -835,11 +937,17 @@ export default function PublicRegistration() {
                               </SelectTrigger>
                               <SelectContent>
                                 {selectedCategory.kits_config && selectedCategory.kits_config.length > 0 ? (
-                                  selectedCategory.kits_config.map((k: any) => (
-                                    <SelectItem key={k.size} value={k.size} disabled={k.total !== null && (k.sold || 0) >= k.total}>
-                                      {k.size} {k.total !== null && (k.sold || 0) >= k.total ? '(Esgotado)' : ''}
-                                    </SelectItem>
-                                  ))
+                                  selectedCategory.kits_config.map((k: any) => {
+                                    const stats = getCategoryStats(selectedCategory.id);
+                                    const sold = stats.soldKitsMap[k.size] || 0;
+                                    const isSoldOut = k.total !== null && sold >= k.total;
+
+                                    return (
+                                      <SelectItem key={k.size} value={k.size} disabled={isSoldOut}>
+                                        {k.size} {isSoldOut ? '(Esgotado)' : ''}
+                                      </SelectItem>
+                                    );
+                                  })
                                 ) : (
                                   ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XXG', 'XXXG'].map(s => (
                                     <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -977,6 +1085,33 @@ export default function PublicRegistration() {
             </div>
           </DialogContent>
         </Dialog>
+        {/* Waitlist Dialog */}
+        <Dialog open={isWaitlistDialogOpen} onOpenChange={setIsWaitlistDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" />
+                Vagas Esgotadas
+              </DialogTitle>
+              <DialogDescription className="pt-2">
+                Infelizmente todas as vagas para a categoria <span className="font-bold text-foreground">{selectedCategory?.name}</span> já foram preenchidas.
+                <br /><br />
+                Deseja entrar na **lista de espera**? Se houver alguma desistência, você será o próximo a ser notificado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="ghost" onClick={() => setIsWaitlistDialogOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleJoinWaitlist}
+                disabled={submitting}
+                className="bg-primary hover:bg-primary/90"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                Entrar na Lista
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* 6. Registration Section */}
         <div id="registration-section">
@@ -1021,6 +1156,11 @@ export default function PublicRegistration() {
                         {isRegistered && (
                           <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200 text-[10px] px-2 h-5">
                             Inscrito
+                          </Badge>
+                        )}
+                        {cat.capacity && getCategoryStats(cat.id).registrationsCount >= cat.capacity && (
+                          <Badge variant="destructive" className="text-[10px] px-2 h-5">
+                            Esgotado
                           </Badge>
                         )}
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
@@ -1085,6 +1225,6 @@ export default function PublicRegistration() {
           </Button>
         </div>
       </div>
-    </div>
+    </div >
   );
 }

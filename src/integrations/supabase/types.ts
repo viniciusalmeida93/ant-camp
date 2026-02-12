@@ -286,6 +286,7 @@ export type Database = {
           city: string | null
           created_at: string | null
           date: string
+          default_athletes_per_heat: number | null
           description: string | null
           enable_break: boolean | null
           end_date: string | null
@@ -322,6 +323,7 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           date: string
+          default_athletes_per_heat?: number | null
           description?: string | null
           enable_break?: boolean | null
           end_date?: string | null
@@ -358,6 +360,7 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           date?: string
+          default_athletes_per_heat?: number | null
           description?: string | null
           enable_break?: boolean | null
           end_date?: string | null

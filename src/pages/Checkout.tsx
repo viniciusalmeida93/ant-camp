@@ -88,9 +88,16 @@ export default function Checkout() {
             },
             (payload) => {
               console.log('Realtime update received:', payload);
-              if (payload.new && (payload.new as any).payment_status === 'approved') {
-                toast.success("Pagamento aprovado!");
-                navigate(`/inscricao-confirmada/${registrationId}`);
+              if (payload.new) {
+                const newStatus = (payload.new as any).payment_status;
+                if (newStatus === 'approved') {
+                  toast.success("Pagamento aprovado!");
+                  navigate(`/inscricao-confirmada/${registrationId}`);
+                } else if (newStatus === 'processing') {
+                  toast.info("Pagamento em análise pelo cartão.");
+                } else if (newStatus === 'rejected') {
+                  toast.error("Pagamento recusado pelo cartão.");
+                }
               }
             }
           )
@@ -604,18 +611,26 @@ export default function Checkout() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* LEFT SIDE: Payment Method */}
           <div className="lg:col-span-8 order-1 lg:order-1">
-            {registration.payment_status === "approved" ? (
+            {registration.payment_status === "approved" || registration.payment_status === "processing" ? (
               <div className="flex flex-col items-center justify-center p-12 bg-card rounded-xl border border-border shadow-sm text-center">
                 <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                <h3 className="text-xl font-bold italic uppercase tracking-tight">Pagamento Confirmado!</h3>
-                <p className="text-muted-foreground mt-2">Você está sendo redirecionado para a confirmação...</p>
-                <Button
-                  onClick={() => navigate(`/inscricao-confirmada/${registrationId}`)}
-                  variant="link"
-                  className="mt-4"
-                >
-                  Clique aqui se não for redirecionado
-                </Button>
+                <h3 className="text-xl font-bold italic uppercase tracking-tight">
+                  {registration.payment_status === "approved" ? "Pagamento Confirmado!" : "Pagamento em Análise"}
+                </h3>
+                <p className="text-muted-foreground mt-2">
+                  {registration.payment_status === "approved"
+                    ? "Você está sendo redirecionado para a confirmação..."
+                    : "O Asaas está processando seus dados. Aguarde a confirmação automática nesta tela."}
+                </p>
+                {registration.payment_status === "approved" && (
+                  <Button
+                    onClick={() => navigate(`/inscricao-confirmada/${registrationId}`)}
+                    variant="link"
+                    className="mt-4"
+                  >
+                    Clique aqui se não for redirecionado
+                  </Button>
+                )}
               </div>
             ) : !payment ? (
               <Card className="shadow-md border-border bg-card/50">

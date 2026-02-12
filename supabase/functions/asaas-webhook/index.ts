@@ -62,6 +62,17 @@ serve(async (req) => {
         paidAt = new Date().toISOString();
         shouldUpdate = true;
         break;
+      case "PAYMENT_CREATED":
+        newStatus = "pending";
+        registrationStatus = "pending";
+        shouldUpdate = true;
+        break;
+      case "PAYMENT_AWAITING_RISK_ANALYSIS":
+      case "PAYMENT_AUTHORIZED":
+        newStatus = "processing";
+        registrationStatus = "processing";
+        shouldUpdate = true;
+        break;
       case "PAYMENT_OVERDUE":
         registrationStatus = "expired";
         shouldUpdate = true;
@@ -70,6 +81,11 @@ serve(async (req) => {
       case "PAYMENT_REFUNDED":
         newStatus = "refunded";
         registrationStatus = "refunded";
+        shouldUpdate = true;
+        break;
+      case "PAYMENT_REPROVED_BY_RISK_ANALYSIS":
+        newStatus = "rejected";
+        registrationStatus = "rejected";
         shouldUpdate = true;
         break;
     }

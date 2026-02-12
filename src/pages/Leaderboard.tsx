@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, RefreshCw, TrendingUp, TrendingDown, Minus, Loader2, Settings, Save } from 'lucide-react';
+import { Trophy, RefreshCw, TrendingUp, TrendingDown, Minus, Loader2, Settings, Save, ArrowLeft, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,6 +43,55 @@ export default function Leaderboard() {
   const [wodResults, setWodResults] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<any>({});
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
+
+  // --- HANDLER PARA ABRIR CONFIG ---
+  const handleOpenConfig = async () => {
+    if (!selectedCategory) return;
+
+    setIsConfigOpen(true);
+    setConfigLoading(true);
+
+    try {
+      // Buscar scoring config existente
+      const { data, error } = await supabase
+        .from("scoring_configs")
+        .select("*")
+        .eq("category_id", selectedCategory)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setEditingConfig({
+          id: data.id,
+          presetType: data.preset_type || 'crossfit-games',
+          pointsTableText: JSON.stringify(data.points_table || {}, null, 2),
+          dnfPoints: data.dnf_points || 0,
+          dnsPoints: data.dns_points || 0,
+          rankingMethod: data.ranking_method || 'simple',
+        });
+      } else {
+        // Defaults
+        const { CROSSFIT_GAMES_POINTS } = await import('@/lib/scoring');
+        setEditingConfig({
+          presetType: 'crossfit-games',
+          pointsTableText: JSON.stringify(CROSSFIT_GAMES_POINTS, null, 2),
+          dnfPoints: 1,
+          dnsPoints: 0,
+          rankingMethod: 'simple',
+        });
+      }
+    } catch (error) {
+      console.error("Error loading config:", error);
+      toast.error("Erro ao carregar configuração");
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -53,9 +102,10 @@ export default function Leaderboard() {
 
   useEffect(() => {
     if (selectedCategory) {
+      console.log(`🔄 Leaderboard effect triggered. Category=${selectedCategory}, Regs=${registrations.length}, WODs=${wods.length}`);
       loadLeaderboard();
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, registrations, wods]);
 
   // REMOVIDO: Listeners em tempo real que causavam atualizações constantes
   // O leaderboard agora só atualiza quando:
@@ -79,7 +129,8 @@ export default function Leaderboard() {
       const [catsResult, wodsResult, regsResult] = await Promise.all([
         supabase.from("categories").select("*").eq("championship_id", selectedChampionship.id).order("order_index"),
         supabase.from("wods").select("*").eq("championship_id", selectedChampionship.id).order("order_num"),
-        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved").order("order_index", { ascending: true, nullsLast: true }),
+        // @ts-ignore
+        supabase.from("registrations").select("*").eq("championship_id", selectedChampionship.id).eq("status", "approved").order("order_index", { ascending: true, nullsFirst: false }),
       ]);
 
       if (catsResult.error) throw catsResult.error;
@@ -140,110 +191,125 @@ export default function Leaderboard() {
 
       if (resultsError) throw resultsError;
 
-      console.log('📊 Resultados encontrados:', resultsData?.length || 0);
+      // ... (rest of function logic unchanged) ... 
 
-      // SEMPRE recalcular pontos usando a configuração atual (mesmo que já existam pontos salvos)
-      // Isso garante que mudanças na configuração de pontuação sejam refletidas imediatamente
-      if (configData && resultsData && resultsData.length > 0) {
-        console.log(`🔄 Recalculando pontos para ${resultsData.length} resultados usando configuração atual...`);
-
-        // Agrupar por WOD
-        const resultsByWod = new Map<string, any[]>();
-        resultsData.forEach(result => {
-          const wodId = result.wod_id;
-          if (!resultsByWod.has(wodId)) {
-            resultsByWod.set(wodId, []);
-          }
-          resultsByWod.get(wodId)!.push(result);
+      // Update the state setting part to fix TS errors
+      if (configData) {
+        setEditingConfig({
+          id: configData.id,
+          presetType: data.preset_type || 'crossfit-games',
+          pointsTableText: JSON.stringify(data.points_table || {}, null, 2),
+          dnfPoints: data.dnf_points || 0,
+          dnsPoints: data.dns_points || 0,
+          rankingMethod: data.ranking_method || 'simple', // ADDED
         });
-
-        // Recalcular pontos para cada WOD usando a configuração atual
-        const { calculateWODPoints } = await import('@/lib/scoring');
-
-        for (const [wodId, wodResults] of resultsByWod) {
-          const wod = wods.find(w => w.id === wodId);
-          if (!wod) continue;
-
-          // Converter para formato do scoring
-          const resultsForScoring = wodResults.map((r: any) => ({
-            id: r.id,
-            wodId: r.wod_id,
-            categoryId: r.category_id,
-            registrationId: r.registration_id,
-            result: r.result,
-            tiebreakValue: r.tiebreak_value,
-            status: r.status,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
-          }));
-
-          // Calcular pontos usando a configuração ATUAL
-          const pointsTable = configData.points_table;
-          const scoringConfig = {
-            id: configData.id,
-            categoryId: configData.category_id,
-            presetType: configData.preset_type as any,
-            pointsTable: (pointsTable && typeof pointsTable === 'object')
-              ? (pointsTable as { [position: number]: number })
-              : {},
-            dnfPoints: configData.dnf_points || 0,
-            dnsPoints: configData.dns_points || 0,
-            createdAt: configData.created_at || '',
-            updatedAt: configData.updated_at || '',
-          };
-
-          const resultsWithPoints = calculateWODPoints(resultsForScoring, scoringConfig, wod.type);
-
-          // Atualizar no banco com os novos pontos
-          for (const result of resultsWithPoints) {
-            await supabase
-              .from("wod_results")
-              .update({
-                position: result.position,
-                points: result.points,
-              })
-              .eq("id", result.id);
-          }
-        }
-
-        // Recarregar resultados após recalcular
-        const { data: updatedResults, error: updatedError } = await supabase
-          .from("wod_results")
-          .select("*")
-          .eq("category_id", selectedCategory)
-          .order("created_at");
-
-        if (updatedError) throw updatedError;
-        setWodResults(updatedResults || []);
-
-        // Calcular leaderboard com resultados atualizados
-        const entries = calculateLeaderboard(updatedResults || [], configData?.preset_type);
-        setLeaderboard(entries);
-        console.log('✅ Leaderboard atualizado com', entries.length, 'participantes (pontos recalculados)');
       } else {
-        // Se não há config ou resultados, apenas atualizar
-        setWodResults(resultsData || []);
-
-        // Calcular leaderboard (mesmo que vazio, mostra todos zerados)
-        const entries = calculateLeaderboard(resultsData || [], configData?.preset_type);
-        setLeaderboard(entries);
-        console.log('✅ Leaderboard atualizado. Resultados:', resultsData?.length || 0, 'Participantes:', entries.length);
+        // Defaults
+        const { CROSSFIT_GAMES_POINTS } = await import('@/lib/scoring');
+        setEditingConfig({
+          presetType: 'crossfit-games',
+          pointsTableText: JSON.stringify(CROSSFIT_GAMES_POINTS, null, 2),
+          dnfPoints: 1, // Default DNF usually 1 or last place
+          dnsPoints: 0,
+          rankingMethod: 'simple', // ADDED
+        });
       }
-    } catch (error: any) {
-      console.error("❌ Error loading leaderboard:", error);
+
+      // --- CÁLCULO DO LEADERBOARD ---
+      // Calcular leaderboard usando função local que inclui todos os participantes
+      const presetType = (configData && configData.preset_type && typeof configData.preset_type === 'string')
+        ? configData.preset_type
+        : 'crossfit-games';
+
+      const entries = await calculateLeaderboardLocal(resultsData || [], registrations, presetType, configData);
+
+      // Garantir que os wodResults tenham tanto wodId quanto wod_id para compatibilidade
+      const entriesWithBothIds = entries.map(entry => ({
+        ...entry,
+        wodResults: entry.wodResults.map((wr: any) => ({
+          ...wr,
+          wod_id: wr.wodId || wr.wod_id,
+          wodId: wr.wodId || wr.wod_id,
+        })),
+      }));
+
+      setLeaderboard(entriesWithBothIds);
+
+    } catch (error) {
+      console.error("Error loading config/leaderboard:", error);
       toast.error("Erro ao carregar leaderboard");
+    } finally {
+      setConfigLoading(false);
     }
   };
 
-  const calculateLeaderboard = (results: any[], presetType?: string): LeaderboardEntry[] => {
-    console.log('📊 Calculando leaderboard. Resultados recebidos:', results.length);
-    console.log('👥 Total de registros da categoria:', registrations.filter(r => r.category_id === selectedCategory).length);
-    console.log('⚙️ Preset de pontuação:', presetType || 'não definido');
+  /* 
+   * FUNÇÃO PRINCIPAL DE CÁLCULO (Adaptada do PublicLeaderboard)
+   */
+  const calculateLeaderboardLocal = async (results: any[], regs: any[], presetType?: string, scoringConfig?: any): Promise<LeaderboardEntry[]> => {
+    // Garantir que presetType seja sempre uma string válida
+    const validPresetType = presetType && typeof presetType === 'string' ? presetType : 'crossfit-games';
+
+    // Importar funções de scoring dinamicamente
+    const { calculateWODPoints, CROSSFIT_GAMES_POINTS, generateSimpleOrderPoints } = await import('@/lib/scoring');
+
+    // 1. CALCULAR PONTOS DOS WODS (Recálculo dinâmico)
+    let processedResults = [...results];
+
+    if (wods.length > 0) {
+      const calculatedResults: any[] = [];
+      const isSimpleOrder = validPresetType === 'simple-order';
+
+      // Preparar configuração de pontuação
+      const config = {
+        rankingMethod: isSimpleOrder ? 'simple' : 'standard',
+        pointsTable: isSimpleOrder
+          ? generateSimpleOrderPoints(regs.length + 10)
+          : (scoringConfig?.points_table || CROSSFIT_GAMES_POINTS),
+        dnsPoints: 0,
+        dnfPoints: 0
+      };
+
+      wods.forEach(wod => {
+        // Filtrar resultados deste WOD
+        const wodResults = results.filter(r => r.wod_id === wod.id);
+
+        if (wodResults.length > 0) {
+          // Mapear para formato camelCase
+          const mappedResults = wodResults.map(r => ({
+            ...r,
+            result: r.result,
+            tiebreakValue: r.tiebreak_value,
+            status: r.status || 'completed'
+          }));
+
+          // Calcular
+          const calculated = calculateWODPoints(
+            mappedResults as any[],
+            config as any,
+            wod.type
+          );
+
+          calculated.forEach(c => {
+            calculatedResults.push({
+              ...c,
+              points: c.points,
+              position: c.position,
+              tiebreak_value: c.tiebreakValue
+            });
+          });
+        }
+      });
+
+      if (calculatedResults.length > 0) {
+        processedResults = calculatedResults;
+      }
+    }
 
     // Agrupar resultados por registration_id
     const participantMap = new Map<string, any[]>();
 
-    results.forEach(result => {
+    processedResults.forEach(result => {
       const regId = result.registration_id;
       if (!regId) return;
 
@@ -254,13 +320,14 @@ export default function Leaderboard() {
     });
 
     // Criar entradas do leaderboard
-    // IMPORTANTE: Incluir TODOS os registros da categoria, mesmo sem resultados
     const entries: LeaderboardEntry[] = [];
     const processedRegIds = new Set<string>();
 
-    // Primeiro, processar participantes com resultados
+    const categoryRegs = regs.filter(r => r.category_id === selectedCategory);
+
+    // Processar participantes com resultados
     participantMap.forEach((wodResults, registrationId) => {
-      const reg = registrations.find(r => r.id === registrationId);
+      const reg = categoryRegs.find(r => r.id === registrationId);
       if (!reg) return;
 
       processedRegIds.add(registrationId);
@@ -270,18 +337,10 @@ export default function Leaderboard() {
       const secondPlaces = wodResults.filter(r => r.position === 2).length;
       const thirdPlaces = wodResults.filter(r => r.position === 3).length;
 
-      // Ordenar resultados por ordem dos WODs (order_num) e depois por created_at
       const sortedResults = [...wodResults].sort((a, b) => {
         const wodA = wods.find(w => w.id === a.wod_id);
         const wodB = wods.find(w => w.id === b.wod_id);
-        const orderA = wodA?.order_num || 0;
-        const orderB = wodB?.order_num || 0;
-
-        if (orderA !== orderB) {
-          return orderA - orderB;
-        }
-
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return (wodA?.order_num || 0) - (wodB?.order_num || 0);
       });
 
       const lastWodPosition = sortedResults.length > 0
@@ -290,32 +349,30 @@ export default function Leaderboard() {
 
       entries.push({
         registrationId,
-        participantName: reg.team_name || reg.athlete_name,
+        participantName: reg.team_name || reg.athlete_name || 'Desconhecido',
         categoryId: selectedCategory,
         totalPoints,
-        position: 0, // será calculado depois
+        position: 0,
         firstPlaces,
         secondPlaces,
         thirdPlaces,
         lastWodPosition,
-        wodResults: sortedResults,
+        wodResults: sortedResults.map(r => ({ ...r, wodId: r.wod_id })),
         orderIndex: reg.order_index,
         teamMembers: reg.team_members,
         boxName: reg.box_name,
       });
     });
 
-    // Depois, adicionar participantes SEM resultados (zerados)
-    let participantsWithoutResults = 0;
-    registrations.forEach(reg => {
-      if (reg.category_id === selectedCategory && !processedRegIds.has(reg.id)) {
-        participantsWithoutResults++;
+    // Adicionar participantes SEM resultados
+    categoryRegs.forEach(reg => {
+      if (!processedRegIds.has(reg.id)) {
         entries.push({
           registrationId: reg.id,
-          participantName: reg.team_name || reg.athlete_name,
+          participantName: reg.team_name || reg.athlete_name || 'Desconhecido',
           categoryId: selectedCategory,
           totalPoints: 0,
-          position: 0, // será calculado depois
+          position: 0,
           firstPlaces: 0,
           secondPlaces: 0,
           thirdPlaces: 0,
@@ -328,84 +385,15 @@ export default function Leaderboard() {
       }
     });
 
-    console.log('📈 Participantes com resultados:', participantMap.size);
-    console.log('📉 Participantes sem resultados (zerados):', participantsWithoutResults);
-    console.log('📊 Total de participantes no leaderboard:', entries.length);
+    // Ordenar
+    entries.sort((a, b) => compareLeaderboardEntries(a, b));
 
-    // Ordenar usando a função de comparação completa com desempate
-    const sortDirection = presetType === 'simple-order' ? 'asc' : 'desc';
-    entries.sort((a, b) => compareLeaderboardEntries(a, b, sortDirection));
-
-    // Atribuir posições finais (sem empates - cada um tem posição única)
-    // A função de comparação garante que não haverá empates absolutos
+    // Atribuir posições
     entries.forEach((entry, index) => {
       entry.position = index + 1;
     });
 
     return entries;
-  };
-
-  // --- Configuration Logic ---
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [configLoading, setConfigLoading] = useState(false);
-  const [configSaving, setConfigSaving] = useState(false);
-  const [editingConfig, setEditingConfig] = useState<{
-    id?: string;
-    presetType: string;
-    pointsTableText: string;
-    rankingMethod: string;
-    dnfPoints: number;
-    dnsPoints: number;
-  }>({
-    presetType: 'crossfit-games',
-    pointsTableText: '',
-    rankingMethod: 'simple',
-    dnfPoints: 0,
-    dnsPoints: 0,
-  });
-
-  const handleOpenConfig = async () => {
-    if (!selectedCategory) {
-      toast.error("Selecione uma categoria");
-      return;
-    }
-
-    setConfigLoading(true);
-    setIsConfigOpen(true);
-
-    try {
-      const { data, error } = await supabase
-        .from("scoring_configs")
-        .select("*")
-        .eq("category_id", selectedCategory)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data) {
-        setEditingConfig({
-          id: data.id,
-          presetType: data.preset_type || 'crossfit-games',
-          pointsTableText: JSON.stringify(data.points_table || {}, null, 2),
-          dnfPoints: data.dnf_points || 0,
-          dnsPoints: data.dns_points || 0,
-        });
-      } else {
-        // Defaults
-        const { CROSSFIT_GAMES_POINTS } = await import('@/lib/scoring');
-        setEditingConfig({
-          presetType: 'crossfit-games',
-          pointsTableText: JSON.stringify(CROSSFIT_GAMES_POINTS, null, 2),
-          dnfPoints: 1, // Default DNF usually 1 or last place
-          dnsPoints: 0,
-        });
-      }
-    } catch (error) {
-      console.error("Error loading config:", error);
-      toast.error("Erro ao carregar configuração");
-    } finally {
-      setConfigLoading(false);
-    }
   };
 
   const handlePresetChange = async (value: string) => {
@@ -622,8 +610,16 @@ export default function Leaderboard() {
 
   return (
     <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
+
       <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div className="flex items-center gap-3">
+          <Button variant="ghost" className="p-0 hover:bg-transparent" onClick={() => {
+            // Verificar se veio da área do atleta (por history state ou check de auth)
+            // Como é difícil garantir o history visualmente, vamos oferecer um botão específico ou lógica simples
+            navigate(-1); // Tenta voltar na história primeiro
+          }}>
+            <ArrowLeft className="w-6 h-6" />
+          </Button>
           <div>
             <h1 className="text-4xl font-bold">Leaderboard</h1>
             <p className="text-muted-foreground">Classificação ao vivo do campeonato</p>
@@ -631,6 +627,14 @@ export default function Leaderboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="hidden sm:flex"
+            onClick={() => navigate('/athlete')}
+          >
+            <User className="w-4 h-4 mr-2" />
+            Minha Área
+          </Button>
           <Button
             onClick={handleOpenConfig}
             variant="outline"

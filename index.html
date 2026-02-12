@@ -1,61 +1,66 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- Anti-cache headers AGRESSIVOS -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    
-    <!-- Favicon DESABILITADO para forçar limpeza de cache -->
-    <link rel="icon" href="data:," />
-    
-    <title>AntCamp - Gerenciamento de Campeonatos</title>
-    <meta name="description" content="Sistema premium para gerenciamento de campeonatos de CrossFit - AntCamp" />
-    <meta name="author" content="AntSports" />
 
-    <meta property="og:title" content="AntCamp - Gerenciamento de Campeonatos" />
-    <meta property="og:description" content="Sistema premium para gerenciamento de campeonatos de CrossFit" />
-    <meta property="og:type" content="website" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    
-    <!-- Google Fonts - Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  </head>
+  <!-- Anti-cache headers AGRESSIVOS -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-    
-    <!-- Force reload AGRESSIVO em mobile -->
-    <script>
-      // Versão atual - INCREMENTADA para forçar novo cache bust
-      const APP_VERSION = '2024-12-06-V2-FORCE-CLEAR';
-      const storedVersion = localStorage.getItem('app_version');
-      
-      if (storedVersion !== APP_VERSION) {
-        console.log('🔄 FORÇANDO limpeza total de cache...');
-        
-        // Limpar TUDO
-        localStorage.clear();
-        sessionStorage.clear();
-        localStorage.setItem('app_version', APP_VERSION);
-        
-        // Limpar cache do browser
-        if ('caches' in window) {
-          caches.keys().then(names => {
-            names.forEach(name => caches.delete(name));
-          });
-        }
-        
-        // Force hard reload
-        window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+  <!-- Favicon AntCamp -->
+  <link rel="icon" type="image/webp" href="/logo-antcamp.webp" />
+  <link rel="apple-touch-icon" href="/logo-antcamp.webp" />
+  <link rel="manifest" href="/manifest.json" />
+
+  <title>AntCamp - Gerenciamento de Campeonatos</title>
+  <meta name="description" content="Sistema premium para gerenciamento de campeonatos de CrossFit - AntCamp" />
+  <meta name="author" content="AntSports" />
+
+  <meta property="og:title" content="AntCamp - Gerenciamento de Campeonatos" />
+  <meta property="og:description" content="Sistema premium para gerenciamento de campeonatos de CrossFit" />
+  <meta property="og:type" content="website" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+
+  <!-- Force reload AGRESSIVO em mobile -->
+  <script>
+    // Versão atual - INCREMENTADA para forçar novo cache bust
+    const APP_VERSION = '2024-12-06-V2-FORCE-CLEAR';
+    const storedVersion = localStorage.getItem('app_version');
+
+    if (storedVersion !== APP_VERSION) {
+      console.log('🔄 FORÇANDO limpeza total de cache...');
+
+      // Limpar TUDO
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('app_version', APP_VERSION);
+
+      // Limpar cache do browser
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        });
       }
-    </script>
-  </body>
+
+      // Force hard reload
+      window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+    }
+  </script>
+</body>
+
 </html>

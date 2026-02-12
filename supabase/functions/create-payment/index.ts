@@ -45,6 +45,7 @@ serve(async (req) => {
       creditCardHolderInfo,
       priceCents: requestPriceCents,
       athleteCpf: requestAthleteCpf,
+      athletePhone: requestAthletePhone, // Adicionado
       installments = 1,
       couponCode // Receive coupon code
     } = await req.json();
@@ -178,7 +179,7 @@ serve(async (req) => {
       .eq('key', 'platform_fee_config')
       .maybeSingle();
 
-    let feeConfig = { type: 'percentage', value: 5 }; // Default
+    let feeConfig = { type: 'fixed', value: 1099 }; // Default fixed fee (R$ 10,99)
 
     if (champData?.platform_fee_configuration) {
       const config = champData.platform_fee_configuration;
@@ -193,9 +194,8 @@ serve(async (req) => {
 
     if (feeConfig.type === 'fixed') {
       const athleteCount = Array.isArray(registration.team_members) ? registration.team_members.length : 1;
-      // Multiplicar valor fixo pelo número de atletas e somar o custo base do PIX (R$ 1,99)
-      // para bater com a lógica do frontend
-      platformFeeCents = (Number(feeConfig.value) + 199) * athleteCount;
+      // Valor fixo por atleta (Total R$ 10,99)
+      platformFeeCents = Number(feeConfig.value) * athleteCount;
     } else {
       const baseForFee = registration.subtotal_cents || category.price_cents || registration.total_cents;
       platformFeeCents = Math.round(baseForFee * (Number(feeConfig.value) / 100));
@@ -207,7 +207,7 @@ serve(async (req) => {
     const customerEmail = registration.athlete_email;
     const customerName = registration.athlete_name;
     const customerCpf = requestAthleteCpf || registration.athlete_cpf || "";
-    const customerPhone = registration.athlete_phone || "";
+    const customerPhone = requestAthletePhone || registration.athlete_phone || "";
 
     const baseUrl = getAsaasBaseUrl();
     const headers = {
@@ -427,6 +427,7 @@ serve(async (req) => {
         .from("registrations")
         .update({
           payment_id: savedPayment.id,
+          payment_status: 'pending', // Explicitly set to pending when payment is created
           total_cents: totalCents, // Update the total to reflect the markup charged
           coupon_id: couponId,
           discount_cents: discountCents

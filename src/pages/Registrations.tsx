@@ -137,28 +137,42 @@ function SortableRegistrationItem({
             <CollapsibleContent className="mt-2">
               <div className="bg-muted/50 rounded-sm p-3 space-y-2">
                 {/* Integrantes do Time */}
-                {hasMembers && reg.team_members.map((member: any, index: number) => (
-                  <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                    <div className="font-semibold mb-1">
-                      {member.name || `Integrante ${index + 1}`}
+                {hasMembers
+                  ? reg.team_members.map((member: any, index: number) => (
+                    <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                      <div className="font-semibold mb-1">
+                        {member.name || `Integrante ${index + 1}`}
+                      </div>
+                      <div className="space-y-1 text-muted-foreground">
+                        {member.email && <div>📧 {member.email}</div>}
+                        {member.whatsapp && <div>📱 {member.whatsapp}</div>}
+                        {member.cpf && <div>🆔 CPF: {member.cpf}</div>}
+                        {member.birthDate && (
+                          <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
+                        )}
+                        {member.shirtSize && <div>Tamanho: {member.shirtSize}</div>}
+                        {member.box && <div>Box: {member.box}</div>}
+                      </div>
                     </div>
-                    <div className="space-y-1 text-muted-foreground">
-                      {member.email && <div>📧 {member.email}</div>}
-                      {member.whatsapp && <div>📱 {member.whatsapp}</div>}
-                      {member.cpf && <div>🆔 CPF: {member.cpf}</div>}
-                      {member.birthDate && (
-                        <div>🎂 {new Date(member.birthDate).toLocaleDateString('pt-BR')}</div>
-                      )}
-                      {member.shirtSize && <div>Tamanho: {member.shirtSize}</div>}
-                      {member.box && <div>Box: {member.box}</div>}
+                  ))
+                  : (
+                    /* Fallback para visualização de dados do DB se team_members estiver vazio */
+                    <div className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                      <div className="font-semibold mb-1">
+                        {reg.athlete_name || reg.team_name}
+                      </div>
+                      <div className="space-y-1 text-muted-foreground">
+                        {reg.athlete_email && <div>📧 {reg.athlete_email}</div>}
+                        {reg.athlete_phone && <div>📱 {reg.athlete_phone}</div>}
+                        {reg.athlete_cpf && <div>🆔 CPF: {reg.athlete_cpf}</div>}
+                        {reg.athlete_birth_date && (
+                          <div>🎂 {new Date(reg.athlete_birth_date).toLocaleDateString('pt-BR')}</div>
+                        )}
+                        {reg.shirt_size && <div>Tamanho: {reg.shirt_size}</div>}
+                        {reg.box_name && <div>Box: {reg.box_name}</div>}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {!hasMembers && (
-                  <div className="text-xs text-muted-foreground">
-                    Nenhum integrante adicional cadastrado.
-                  </div>
-                )}
+                  )}
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -592,27 +606,9 @@ export default function Registrations() {
   };
 
   const handleCategorySelect = (categoryId: string) => {
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return;
-
-    setSelectedCategory(category);
-
-    // Initialize form based on category format
-    const teamSize = category.team_size || (category.format === 'dupla' ? 2 : category.format === 'trio' ? 3 : category.format === 'time' ? 4 : 1);
-
-    if (category.format === 'individual') {
-      setFormData({
-        teamName: '',
-        members: [{ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }],
-        boxName: '',
-      });
-    } else {
-      setFormData({
-        teamName: '',
-        members: Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' })),
-        boxName: '',
-      });
-    }
+    // Fechar o dialog e navegar para a página de formulário
+    setIsDialogOpen(false);
+    navigate(`/registrations/new?category=${categoryId}`);
   };
 
   const updateMember = (index: number, field: string, value: string) => {
@@ -625,47 +621,56 @@ export default function Registrations() {
   };
 
   const handleEdit = (reg: any) => {
-    const category = categories.find(c => c.id === reg.category_id);
-    if (!category) {
-      toast.error("Categoria não encontrada");
-      return;
+    // Encontrar a categoria da inscrição
+    const cat = categories.find(c => c.id === reg.category_id);
+    if (cat) {
+      setSelectedCategory(cat);
     }
 
-    setEditingRegistration(reg);
-    setSelectedCategory(category);
+    // Preparar dados do formulário
+    let initialMembers = [];
 
-    // Parse team_members if exists
-    let members: any[] = [];
     if (reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0) {
-      // Só usar team_members se tiver dados reais (não apenas objetos vazios)
-      const validMembers = reg.team_members.filter((m: any) =>
-        m && (m.name || m.email || m.whatsapp || m.cpf || m.birthDate)
-      );
-      if (validMembers.length > 0) {
-        members = validMembers.map((m: any) => ({
-          name: m.name || '',
-          email: m.email || '',
-          whatsapp: m.whatsapp || '',
-          shirtSize: m.shirtSize || 'M',
-          cpf: m.cpf || '',
-          birthDate: m.birthDate || '',
-          box: m.box || '',
-        }));
-      }
+      initialMembers = reg.team_members;
+    } else {
+      // Fallback para dados planos se não houver team_members (típico de registros antigos ou manuais simples)
+      initialMembers = [{
+        name: reg.athlete_name,
+        email: reg.athlete_email || '',
+        whatsapp: reg.athlete_phone || '',
+        cpf: reg.athlete_cpf || '',
+        birthDate: reg.athlete_birth_date || '',
+        box: reg.box_name || '',
+        shirtSize: reg.shirt_size || 'M'
+      }];
     }
 
-    // Se não encontrou membros válidos, inicializar vazio baseado no formato
-    if (members.length === 0) {
-      const teamSize = category.team_size || (category.format === 'dupla' ? 2 : category.format === 'trio' ? 3 : category.format === 'time' ? 4 : 1);
-      members = Array(teamSize).fill(null).map(() => ({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' }));
+    // Padronizar estrutura dos membros
+    const formattedMembers = initialMembers.map((m: any) => ({
+      name: m.name || '',
+      email: m.email || '',
+      whatsapp: m.whatsapp || '',
+      shirtSize: m.shirtSize || m.shirt_size || 'M',
+      cpf: m.cpf || '',
+      birthDate: m.birthDate || m.birth_date || '',
+      box: m.box || ''
+    }));
+
+    // Se for time, garantir que tenha slots suficientes vazios se o array estiver incompleto
+    if (cat && cat.format !== 'individual') {
+      const teamSize = cat.team_size || (cat.format === 'dupla' ? 2 : cat.format === 'trio' ? 3 : cat.format === 'time' ? 4 : 1);
+      while (formattedMembers.length < teamSize) {
+        formattedMembers.push({ name: '', email: '', whatsapp: '', shirtSize: 'M', cpf: '', birthDate: '', box: '' });
+      }
     }
 
     setFormData({
       teamName: reg.team_name || reg.athlete_name || '',
-      members: members,
-      boxName: reg.box_name || '',
+      members: formattedMembers,
+      boxName: reg.box_name || ''
     });
 
+    setEditingRegistration(reg);
     setIsDialogOpen(true);
   };
 
@@ -951,16 +956,47 @@ export default function Registrations() {
         return;
       }
 
-      // Validar CPF apenas se foi preenchido (não obrigatório, mas se preenchido deve ser válido)
+      // Validar dados de todos os integrantes
       for (let i = 0; i < formData.members.length; i++) {
         const member = formData.members[i];
-        if (member.cpf.trim()) {
-          const cpfClean = member.cpf.replace(/\D/g, '');
-          if (cpfClean.length !== 11) {
-            toast.error(`CPF do ${selectedCategory.format === 'individual' ? 'atleta' : `integrante ${i + 1}`} deve ter 11 dígitos`);
-            setSaving(false);
-            return;
-          }
+        const memberLabel = selectedCategory.format === 'individual' ? 'do atleta' : `do integrante ${i + 1}`;
+
+        if (!member.name.trim()) {
+          toast.error(`Digite o nome ${memberLabel}`);
+          setSaving(false);
+          return;
+        }
+
+        if (!member.email.trim()) {
+          toast.error(`Digite o email ${memberLabel}`);
+          setSaving(false);
+          return;
+        }
+
+        if (!member.whatsapp.trim()) {
+          toast.error(`Digite o WhatsApp ${memberLabel}`);
+          setSaving(false);
+          return;
+        }
+
+        if (!member.birthDate.trim()) {
+          toast.error(`Digite a data de nascimento ${memberLabel}`);
+          setSaving(false);
+          return;
+        }
+
+        if (!member.cpf.trim()) {
+          toast.error(`Digite o CPF ${memberLabel}`);
+          setSaving(false);
+          return;
+        }
+
+        // Validar formato do CPF
+        const cpfClean = member.cpf.replace(/\D/g, '');
+        if (cpfClean.length !== 11) {
+          toast.error(`CPF ${memberLabel} deve ter 11 dígitos`);
+          setSaving(false);
+          return;
         }
       }
 
@@ -1235,52 +1271,52 @@ export default function Registrations() {
                           </p>
                         )}
                         <div>
-                          <Label>Nome Completo</Label>
+                          <Label>Nome Completo *</Label>
                           <Input
                             value={member.name}
                             onChange={(e) => updateMember(index, 'name', e.target.value)}
-                            placeholder="Nome completo (opcional)"
-                            required={false}
+                            placeholder="Nome completo"
+                            required
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label>Email</Label>
+                            <Label>Email *</Label>
                             <Input
-                              type="text"
+                              type="email"
                               value={member.email}
                               onChange={(e) => updateMember(index, 'email', e.target.value)}
-                              placeholder="email@exemplo.com (opcional)"
-                              required={false}
+                              placeholder="email@exemplo.com"
+                              required
                             />
                           </div>
                           <div>
-                            <Label>WhatsApp</Label>
+                            <Label>WhatsApp *</Label>
                             <Input
                               value={member.whatsapp}
                               onChange={(e) => updateMember(index, 'whatsapp', e.target.value)}
-                              placeholder="(11) 99999-9999 (opcional)"
-                              required={false}
+                              placeholder="(11) 99999-9999"
+                              required
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label>CPF</Label>
+                            <Label>CPF *</Label>
                             <Input
                               value={member.cpf}
                               onChange={(e) => updateMember(index, 'cpf', e.target.value)}
-                              placeholder="000.000.000-00 (opcional)"
-                              required={false}
+                              placeholder="000.000.000-00"
+                              required
                             />
                           </div>
                           <div>
-                            <Label>Data de Nascimento</Label>
+                            <Label>Data de Nascimento *</Label>
                             <Input
                               type="date"
                               value={member.birthDate}
                               onChange={(e) => updateMember(index, 'birthDate', e.target.value)}
-                              required={false}
+                              required
                             />
                           </div>
                         </div>
@@ -1289,8 +1325,7 @@ export default function Registrations() {
                           <Input
                             value={member.box}
                             onChange={(e) => updateMember(index, 'box', e.target.value)}
-                            placeholder="Box onde treina (opcional)"
-                            required={false}
+                            placeholder="Box onde treina (Opcional)"
                           />
                         </div>
                         <div>

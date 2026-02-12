@@ -373,9 +373,9 @@ export default function Results() {
         .eq("category_id", selectedCategory)
         .eq("wod_id", selectedWOD);
 
-      // Verificar se já estava publicado para não "despublicar" acidentalmente
-      const wasPublished = existing?.some((r: any) => r.is_published) || false;
-      const shouldPublish = publish || wasPublished;
+      // Se publish for false (Salvar Rascunho), despublicamos do leaderboard.
+      // Se publish for true (Salvar e Publicar), publicamos no leaderboard.
+      const shouldPublish = publish;
 
       if (existing && existing.length > 0) {
         const { error: deleteError } = await supabase
@@ -794,16 +794,14 @@ export default function Results() {
               className="flex-1 shadow-glow"
               disabled={saving}
             >
-              <FileText className="w-4 h-4 mr-2" />
-              {saving ? 'Salvando...' : 'Salvar Rascunho (Não aparece)'}
+              {saving ? 'Salvando...' : 'Salvar Resultados'}
             </Button>
             <Button
               onClick={() => handleSave(true)}
               className="flex-1 shadow-glow"
               disabled={saving}
             >
-              <Globe className="w-4 h-4 mr-2" />
-              {saving ? 'Publicando...' : 'Salvar e Publicar (Ao Vivo)'}
+              {saving ? 'Publicando...' : 'Publicar Resultados'}
             </Button>
           </div>
         </Card>

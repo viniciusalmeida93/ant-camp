@@ -1,0 +1,20 @@
+{
+    "short_name": "AntCamp",
+    "name": "AntCamp - Gerenciamento de Campeonatos",
+    "icons": [
+        {
+            "src": "/logo-antcamp.webp",
+            "sizes": "192x192",
+            "type": "image/webp"
+        },
+        {
+            "src": "/logo-antcamp.webp",
+            "sizes": "512x512",
+            "type": "image/webp"
+        }
+    ],
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#000000",
+    "background_color": "#000000"
+}

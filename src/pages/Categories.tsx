@@ -287,7 +287,7 @@ export default function Categories() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || active.id === active.id) {
+    if (!over || active.id === over.id) {
       return;
     }
 

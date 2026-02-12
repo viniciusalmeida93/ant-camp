@@ -846,7 +846,7 @@ export default function Dashboard() {
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="text-2xl">{selectedChampionship.name}</CardTitle>
-                  <CardDescription className="mt-2">
+                  <div className="mt-2 text-sm text-muted-foreground">
                     <div className="space-y-1">
                       <p>Data: {new Date(selectedChampionship.date).toLocaleDateString('pt-BR')}</p>
                       <p>Local: {selectedChampionship.location}</p>
@@ -854,7 +854,7 @@ export default function Dashboard() {
                         <p className="mt-2">{selectedChampionship.description}</p>
                       )}
                     </div>
-                  </CardDescription>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2 items-end">
                   <Button

@@ -9,19 +9,32 @@ export default function Logout() {
     useEffect(() => {
         const performLogout = async () => {
             try {
-                await supabase.auth.signOut();
-                // Clear anything else if needed, e.g. custom localStorage items
-                // We keep 'rememberedEmail' probably, but clear session stuff.
-                // Supabase client handles one part, but we can be extra safe:
-                // localStorage.removeItem('sb-jxuhmqctiyeheamhviob-auth-token'); // If we knew the key name
+                // 1. Tentar fazer logout no Supabase
+                const { error } = await supabase.auth.signOut();
+                if (error) throw error;
+
+                // 2. Limpar dados específicos do App
                 localStorage.removeItem('selectedChampionship');
+
+                // 3. Opcional: Limpar TUDO (Cuidado se tivermos outros dados importantes)
+                // localStorage.clear(); // Talvez muito agressivo?
+
+                // Limpar chaves do Supabase explicitamente (padrão sb-...)
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+
             } catch (error) {
                 console.error("Error signing out:", error);
             } finally {
-                // Navigate to auth after a small delay to ensure state propagation
+                // 4. Force reload para garantir que status de memória mudem
+                // Usando window.location.href para forçar recarregamento real da página
+                // Isso mata qualquer estado React residual
                 setTimeout(() => {
-                    navigate("/auth", { replace: true });
-                }, 500);
+                    window.location.href = "/auth";
+                }, 100);
             }
         };
 

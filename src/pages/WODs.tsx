@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
@@ -21,6 +22,7 @@ import {
   useSensors,
   DragEndEvent,
 } from '@dnd-kit/core';
+import { cn } from "@/lib/utils";
 import {
   arrayMove,
   SortableContext,
@@ -38,7 +40,7 @@ type CategoryVariationForm = {
 };
 
 // Componente SortableWODItem para drag and drop
-function SortableWODItem({ wod, onEdit, onDelete, categoryId, variations }: { wod: any; onEdit: () => void; onDelete: () => void; categoryId?: string; variations?: Record<string, CategoryVariationForm> }) {
+function SortableWODItem({ wod, onEdit, onDelete, onTogglePublish, categoryId, variations }: { wod: any; onEdit: () => void; onDelete: () => void; onTogglePublish: () => void; categoryId?: string; variations?: Record<string, CategoryVariationForm> }) {
   const {
     attributes,
     listeners,
@@ -88,65 +90,63 @@ function SortableWODItem({ wod, onEdit, onDelete, categoryId, variations }: { wo
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex flex-col sm:flex-row items-start gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all overflow-hidden">
-        <div className="flex items-start gap-3 w-full sm:w-auto">
-          <button
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1"
-            title="Arrastar para reorganizar"
-          >
-            <GripVertical className="w-5 h-5" />
-          </button>
+      <div className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-all shadow-sm">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1"
+          title="Arrastar para reorganizar"
+        >
+          <GripVertical className="w-5 h-5" />
+        </button>
 
-          <div className="p-2 rounded-lg bg-primary/10 shrink-0">
-            <Dumbbell className="w-5 h-5 text-primary" />
+        <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+          <Dumbbell className="w-5 h-5 text-primary" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 className="font-semibold text-base sm:text-lg truncate">{displayName}</h3>
+            <div className={`w-2 h-2 rounded-full shrink-0 ${wod.is_published ? 'bg-green-600' : 'bg-yellow-500'}`} title={wod.is_published ? "Publicado" : "Rascunho"}></div>
+            <Badge variant="outline" className="text-[10px] sm:text-xs ml-1">
+              {getTypeDisplay(wod.type)}
+            </Badge>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h3 className="font-semibold text-base sm:text-lg truncate">{displayName}</h3>
-              <Badge variant="outline" className="text-[10px] sm:text-xs">
-                {getTypeDisplay(wod.type)}
-              </Badge>
-            </div>
-            {displayDuration && (
-              <span className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                Time Cap: {displayDuration} min
-              </span>
+        </div>
+
+        <div className="flex gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onTogglePublish}
+            className={cn(
+              "h-8 px-3 transition-colors",
+              wod.is_published
+                ? "text-green-600 border-green-600 hover:bg-transparent hover:text-green-600 hover:border-green-600"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
-          </div>
-        </div>
+            title={wod.is_published ? "Despublicar" : "Publicar"}
+          >
+            <Globe className="w-4 h-4 mr-2" />
+            {wod.is_published ? "Publicado" : "Publicar"}
+          </Button>
 
-        <div className="flex-1 min-w-0 w-full sm:w-auto">
-          <div className="p-3 rounded-md bg-muted/30 mb-2 border border-border/50">
-            <pre className="text-sm whitespace-pre-wrap font-sans text-foreground/90 leading-relaxed overflow-hidden line-clamp-4 hover:line-clamp-none transition-all cursor-default">{displayDescription}</pre>
-          </div>
-          {displayNotes && (
-            <div className="flex items-start gap-2 mt-2 text-[10px] sm:text-xs text-muted-foreground bg-yellow-500/5 p-2 rounded border border-yellow-500/10">
-              <span className="font-semibold text-yellow-600/80 uppercase tracking-wider text-[9px] mt-0.5">Obs:</span>
-              <p className="line-clamp-2 hover:line-clamp-none transition-all">{displayNotes}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end sm:justify-start pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50">
           <Button
             size="sm"
             variant="outline"
             onClick={onEdit}
-            className="flex-1 sm:flex-initial h-8 px-2"
+            className="h-8 px-3 text-muted-foreground hover:text-foreground"
+            title="Editar"
           >
-            <Edit className="w-4 h-4 mr-1.5" />
-            <span className="sm:hidden lg:inline text-xs">Editar</span>
+            <Edit className="w-4 h-4" />
           </Button>
           <Button
-            size="icon"
+            size="sm"
             variant="ghost"
             onClick={onDelete}
             title="Excluir"
-            className="h-8 w-8 text-destructive"
+            className="h-8 px-3 text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -276,13 +276,20 @@ export default function WODs() {
   };
 
   const handleOpenCreate = () => {
-    setEditingWOD(null);
-    setWodType('for-time');
-    setCategoryVariations(createEmptyVariations());
-    setVariationCategoriesWithData([]);
-    setApplyToAllCategories(false);
+    // Open dialog to select category first
     setIsDialogOpen(true);
+    setEditingWOD(null); // Ensure we are in create mode
   };
+
+  const handleCategorySelect = (categoryId: string) => {
+    setIsDialogOpen(false);
+    navigate(`/wods/new?categoryId=${categoryId}`);
+  };
+
+  // ... (inside return)
+
+  // Logic continues...
+
 
   const handleWodDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -330,15 +337,11 @@ export default function WODs() {
   };
 
   const handleOpenEdit = async (wod: any) => {
-    setEditingWOD(wod);
-    // Converter tipo do banco para tipo do frontend
-    const frontendType = mapDatabaseTypeToFrontend(wod.type || 'tempo');
-    setWodType(frontendType);
-    setIsDialogOpen(true);
-    setCategoryVariations(createEmptyVariations());
-    setVariationCategoriesWithData([]);
-    setApplyToAllCategories(false);
-    await loadWodVariations(wod.id, wod); // Passar wod como parâmetro para ter acesso aos valores padrão
+    if (selectedCategoryFilter && selectedCategoryFilter !== 'all') {
+      navigate(`/wods/${wod.id}/edit?categoryId=${selectedCategoryFilter}`);
+    } else {
+      navigate(`/wods/${wod.id}/edit`);
+    }
   };
 
   useEffect(() => {
@@ -890,15 +893,31 @@ export default function WODs() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const togglePublish = async (wod: any) => {
+    try {
+      const newStatus = !wod.is_published;
+      const { error } = await supabase
+        .from("wods")
+        .update({ is_published: newStatus })
+        .eq("id", wod.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setWODs(wods.map(w => w.id === wod.id ? { ...w, is_published: newStatus } : w));
+
+      toast.success(newStatus ? "WOD publicado com sucesso!" : "WOD despublicado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao alterar status de publicação:", error);
+      toast.error("Erro ao alterar status de publicação");
+    }
+  };
+
+  const handleDelete = async (wodId: string) => {
     if (!confirm("Tem certeza que deseja excluir este WOD?")) return;
 
     try {
-      const { error } = await supabase
-        .from("wods")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("wods").delete().eq("id", wodId);
       if (error) throw error;
 
       toast.success("WOD removido com sucesso!");
@@ -944,321 +963,73 @@ export default function WODs() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Input
-            placeholder="Buscar eventos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 text-foreground"
-          />
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+      <Card className="p-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Buscar eventos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 text-foreground"
+            />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+            </div>
+          </div>
+          <div className="w-full sm:w-[250px]">
+            <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as Categorias</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className="w-full sm:w-[250px]">
-          <Select value={selectedCategoryFilter} onValueChange={setSelectedCategoryFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filtrar por Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as Categorias</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => {
-        setIsDialogOpen(open);
-        if (!open) {
-          setEditingWOD(null);
-          setWodType('for-time');
-          setCategoryVariations(createEmptyVariations());
-          setVariationCategoriesWithData([]);
-          setApplyToAllCategories(false);
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingWOD ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
+            <DialogTitle>Novo Evento</DialogTitle>
           </DialogHeader>
-          <form ref={formRef} onSubmit={(e) => { e.preventDefault(); }} className="space-y-4">
-            <div>
-              <Label htmlFor="name">Nome do Evento *</Label>
-              <Input
-                id="name"
-                name="name"
-                defaultValue={editingWOD?.name}
-                placeholder="Ex: Evento 1"
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="type">Tipo de WOD *</Label>
-              <Select
-                value={wodType}
-                onValueChange={setWodType}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="for-time">For Time</SelectItem>
-                  <SelectItem value="amrap">AMRAP</SelectItem>
-                  <SelectItem value="emom">EMOM</SelectItem>
-                  <SelectItem value="tonelagem">Tonelagem</SelectItem>
-                  <SelectItem value="carga-maxima">Carga Máxima</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="description">Descrição do Workout *</Label>
-              <Textarea
-                id="description"
-                name="description"
-                defaultValue={editingWOD?.description}
-                placeholder="21-15-9&#10;Thrusters (95/65 lb)&#10;Pull-ups"
-                rows={5}
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="timeCap">Time Cap da Prova *</Label>
-              <Input
-                id="timeCap"
-                name="timeCap"
-                type="text"
-                defaultValue={editingWOD?.time_cap || ''}
-                placeholder="Ex: 6:00 (6 minutos)"
-                required
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Formato: MM:SS (minutos:segundos) - Exemplo: 10:00 = 10 minutos
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="notes">Notas e Padrões de Movimento</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                defaultValue={editingWOD?.notes}
-                placeholder="Padrões de movimento, escalas, regras especiais..."
-                rows={3}
-              />
-            </div>
-
-            <div className="pt-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label className="font-semibold">Variações por Categoria</Label>
-                {variationsLoading && (
-                  <span className="text-xs text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Carregando variações
-                  </span>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={applyToAllCategories ? 'default' : 'destructive'}
-                  className="ml-auto flex items-center gap-1"
-                  onClick={() => {
-                    if (!applyToAllCategories && formRef.current) {
-                      // Quando ativando, copiar TODOS os dados padrão para todas as categorias
-                      // Ler valores diretamente dos elementos do formulário para garantir valores reais
-                      const descriptionInput = formRef.current.querySelector('[name="description"]') as HTMLTextAreaElement;
-                      const notesInput = formRef.current.querySelector('[name="notes"]') as HTMLTextAreaElement;
-
-                      // Obter valores reais dos campos (não usar FormData que pode não estar atualizado)
-                      // IMPORTANTE: Usar .value diretamente para garantir que sejam strings reais
-                      const descriptionValue = descriptionInput?.value ?? '';
-                      const notesValue = notesInput?.value ?? '';
-
-                      console.log('Copiando valores para todas as categorias:', {
-                        description: descriptionValue,
-                        notes: notesValue
-                      });
-
-                      setCategoryVariations(prev => {
-                        const updated: Record<string, CategoryVariationForm> = {};
-                        categories.forEach(cat => {
-                          const current = prev[cat.id] || emptyVariation();
-                          // Copiar os valores reais dos campos do formulário
-                          // Garantir que sejam strings reais (mesmo que vazias) para poder editar
-                          updated[cat.id] = {
-                            displayName: current.displayName || '',
-                            description: descriptionValue, // Valor real copiado do campo (sempre string)
-                            notes: notesValue, // Valor real copiado do campo (sempre string)
-                            estimatedDuration: '', // Será calculado automaticamente
-                          };
-                        });
-                        return updated;
-                      });
-
-                      // Marcar todas as categorias como tendo dados (para que sejam salvas)
-                      const allCategoryIds = categories.map(cat => cat.id);
-                      setVariationCategoriesWithData(prev => {
-                        const combined = new Set([...prev, ...allCategoryIds]);
-                        return Array.from(combined);
-                      });
-                    }
-                    setApplyToAllCategories(prev => !prev);
-                  }}
-                >
-                  <CopyPlus className="w-3 h-3" />
-                  {applyToAllCategories ? 'Aplicar em todas as categorias (ativado)' : 'Adicionar WOD a todas as categorias'}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Personalize detalhes do WOD para cada categoria. Campos em branco usam as informações padrão acima.
-                {applyToAllCategories && (
-                  <span className="block text-[11px] text-primary mt-1">
-                    Este WOD será aplicado automaticamente a todas as categorias.
-                  </span>
-                )}
-              </p>
-
-              {categories.length === 0 ? (
-                <p className="text-sm text-muted-foreground mt-4">
-                  Cadastre categorias para configurar variações específicas.
-                </p>
-              ) : (
-                <Accordion type="multiple" className="mt-4 space-y-2">
-                  {categories.map(category => {
-                    // Garantir que sempre temos uma variação válida do estado
-                    const variation = categoryVariations[category.id] || emptyVariation();
-                    const hasCustomData = hasVariationData(variation);
-
-                    return (
-                      <AccordionItem key={category.id} value={category.id} className="border rounded-lg px-4">
-                        <AccordionTrigger className="py-3 text-left">
-                          <div className="flex flex-col text-left">
-                            <span className="font-medium">{category.name}</span>
-                            {hasCustomData && (
-                              <span className="text-xs text-muted-foreground">Variação personalizada aplicada</span>
-                            )}
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-4 pt-2 space-y-4">
-                          <div>
-                            <Label className="text-sm">Nome exibido</Label>
-                            <Input
-                              value={variation.displayName ?? ''}
-                              onChange={(event) => updateVariationField(category.id, 'displayName', event.target.value)}
-                              placeholder={`Nome opcional para ${category.name}`}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-sm">Descrição personalizada</Label>
-                            <Textarea
-                              value={variation.description ?? ''}
-                              onChange={(event) => updateVariationField(category.id, 'description', event.target.value)}
-                              placeholder={editingWOD?.description || 'Descrição específica desta categoria'}
-                              rows={4}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-sm">Time Cap (min)</Label>
-                            <Input
-                              type="text"
-                              min="1"
-                              value={variation.estimatedDuration ?? ''}
-                              onChange={(event) => updateVariationField(category.id, 'estimatedDuration', event.target.value)}
-                              placeholder={(editingWOD?.estimated_duration_minutes || 15).toString()}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-sm">Notas específicas</Label>
-                            <Textarea
-                              value={variation.notes ?? ''}
-                              onChange={(event) => updateVariationField(category.id, 'notes', event.target.value)}
-                              placeholder={editingWOD?.notes || 'Observações ou padrões específicos desta categoria'}
-                              rows={3}
-                            />
-                          </div>
-                          {hasCustomData && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => resetCategoryVariation(category.id)}
-                              className="text-xs"
-                            >
-                              Limpar variação desta categoria
-                            </Button>
-                          )}
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
-              )}
-            </div>
-
-            <div className="flex gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleSubmit(false)}
-                className="flex-1"
-                disabled={saving}
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  'Salvar Evento'
-                )}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleSubmit(true)}
-                className="flex-1"
-                disabled={saving}
-              >
-                <Globe className="w-4 h-4 mr-2" />
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Publicando...
-                  </>
-                ) : (
-                  'Publicar Evento'
-                )}
-              </Button>
-            </div>
-          </form>
+          <div className="py-4">
+            <Label className="mb-2 block">Categoria *</Label>
+            <Select onValueChange={handleCategorySelect}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </DialogContent>
       </Dialog>
 
 
       {
-        wods.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Nenhum evento criado ainda para o campeonato "{selectedChampionship?.name}".</p>
-            <p className="text-sm text-muted-foreground mt-2">Clique no botão flutuante no canto inferior direito para criar um novo evento.</p>
-            <p className="text-xs text-muted-foreground mt-4">
-              Campeonato ID: {selectedChampionship?.id}
+        filteredWods.length === 0 ? (
+          <Card className="p-12 text-center">
+            <p className="text-muted-foreground">
+              {wods.length === 0
+                ? "Nenhum Evento ainda."
+                : "Nenhum evento encontrado para o filtro selecionado."}
             </p>
-          </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              {wods.length === 0
+                ? "Clique no botão flutuante no canto inferior direito para criar um novo Evento"
+                : "Tente selecionar outra categoria."}
+            </p>
+          </Card>
         ) : (
           <DndContext
             sensors={sensors}
@@ -1278,6 +1049,7 @@ export default function WODs() {
                     variations={variationsMap}
                     onEdit={() => handleOpenEdit(wod)}
                     onDelete={() => handleDelete(wod.id)}
+                    onTogglePublish={() => togglePublish(wod)}
                   />
                 ))}
               </div>

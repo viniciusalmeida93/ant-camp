@@ -17,6 +17,7 @@ import CategoryForm from "./pages/CategoryForm";
 import WODs from "./pages/WODs";
 import CreateWOD from "./pages/CreateWOD";
 import Registrations from "./pages/Registrations";
+import RegistrationForm from "./pages/RegistrationForm";
 import Scoring from "./pages/Scoring";
 import Results from "./pages/Results";
 import HeatsNew from "./pages/HeatsNew";
@@ -102,7 +103,10 @@ const App = () => (
                     <Route path="/categories/:id/edit" element={<CategoryForm />} />
                     <Route path="/wods" element={<WODs />} />
                     <Route path="/wods/new" element={<CreateWOD />} />
+                    <Route path="/wods/:id/edit" element={<CreateWOD />} />
                     <Route path="/registrations" element={<Registrations />} />
+                    <Route path="/registrations/new" element={<RegistrationForm />} />
+                    <Route path="/registrations/:id/edit" element={<RegistrationForm />} />
                     <Route path="/bulk-import" element={<BulkImport />} />
                     <Route path="/scoring" element={<Scoring />} />
                     <Route path="/results" element={<Results />} />

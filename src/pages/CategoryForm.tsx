@@ -33,11 +33,11 @@ export default function CategoryForm() {
     });
 
     // Team Config State
-    const [teamConfig, setTeamConfig] = useState<{ gender: string, minAge: string, maxAge: string }[]>([
-        { gender: 'misto', minAge: '', maxAge: '' },
-        { gender: 'misto', minAge: '', maxAge: '' },
-        { gender: 'misto', minAge: '', maxAge: '' },
-        { gender: 'misto', minAge: '', maxAge: '' },
+    const [teamConfig, setTeamConfig] = useState<{ gender: string }[]>([
+        { gender: 'misto' },
+        { gender: 'misto' },
+        { gender: 'misto' },
+        { gender: 'misto' },
     ]);
 
     // Batches State
@@ -49,6 +49,9 @@ export default function CategoryForm() {
     const [kitsActive, setKitsActive] = useState(true);
     const [kitsConfig, setKitsConfig] = useState<{ size: string, total: string }[]>([]);
 
+    // Championship first day for validation
+    const [championshipFirstDay, setChampionshipFirstDay] = useState<string | null>(null);
+
     const availableSizes = ["PP", "P", "M", "G", "GG", "XG", "XXG", "XXXG"];
 
     useEffect(() => {
@@ -56,6 +59,32 @@ export default function CategoryForm() {
             loadCategory();
         }
     }, [id]);
+
+    useEffect(() => {
+        if (selectedChampionship) {
+            loadChampionshipFirstDay();
+        }
+    }, [selectedChampionship]);
+
+    const loadChampionshipFirstDay = async () => {
+        if (!selectedChampionship) return;
+
+        try {
+            const { data: firstDay } = await supabase
+                .from("championship_days")
+                .select("date")
+                .eq("championship_id", selectedChampionship.id)
+                .order("day_number", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+
+            if (firstDay) {
+                setChampionshipFirstDay(firstDay.date);
+            }
+        } catch (error) {
+            console.error('Error loading championship first day:', error);
+        }
+    };
 
     const loadCategory = async () => {
         try {
@@ -81,16 +110,14 @@ export default function CategoryForm() {
 
             if (data.team_config && Array.isArray(data.team_config) && data.team_config.length > 0) {
                 setTeamConfig(data.team_config.map((m: any) => ({
-                    gender: m.gender || 'misto',
-                    minAge: m.min_age ? String(m.min_age) : '',
-                    maxAge: m.max_age ? String(m.max_age) : ''
+                    gender: m.gender || 'misto'
                 })));
             } else if (data.format === 'time') {
                 setTeamConfig([
-                    { gender: 'misto', minAge: '', maxAge: '' },
-                    { gender: 'misto', minAge: '', maxAge: '' },
-                    { gender: 'misto', minAge: '', maxAge: '' },
-                    { gender: 'misto', minAge: '', maxAge: '' },
+                    { gender: 'misto' },
+                    { gender: 'misto' },
+                    { gender: 'misto' },
+                    { gender: 'misto' },
                 ]);
             }
 
@@ -139,7 +166,7 @@ export default function CategoryForm() {
     };
 
     const handleAddTeamMember = () => {
-        setTeamConfig([...teamConfig, { gender: 'misto', minAge: '', maxAge: '' }]);
+        setTeamConfig([...teamConfig, { gender: 'misto' }]);
     };
 
     const handleRemoveTeamMember = (index: number) => {
@@ -195,13 +222,49 @@ export default function CategoryForm() {
                     price_cents: b.price_cents,
                     end_date: b.end_date || null
                 })).filter(b => b.name.trim() !== '');
+
+                // Validação 1: Data do lote não pode exceder o primeiro dia do campeonato
+                if (championshipFirstDay) {
+                    for (const batch of processedBatches) {
+                        if (batch.end_date) {
+                            const batchDate = new Date(batch.end_date);
+                            const champDate = new Date(championshipFirstDay);
+
+                            if (batchDate > champDate) {
+                                toast.error("A data do lote excede a do campeonato");
+                                setSaving(false);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Validação 2: Soma das quantidades dos lotes não pode exceder a capacidade
+                if (capacity !== 999999) {
+                    const totalBatchQuantity = processedBatches.reduce((sum, b) => {
+                        return sum + (b.quantity || 0);
+                    }, 0);
+
+                    if (totalBatchQuantity > capacity) {
+                        toast.error(`A quantidade total dos lotes (${totalBatchQuantity}) excede a capacidade da categoria (${capacity})`);
+                        setSaving(false);
+                        return;
+                    }
+                }
+
+                // Validação 3: Valor do lote é obrigatório
+                for (const batch of processedBatches) {
+                    if (!batch.price_cents || batch.price_cents <= 0) {
+                        toast.error("O valor do lote é obrigatório");
+                        setSaving(false);
+                        return;
+                    }
+                }
             }
 
             // Process team config
             const processedTeamConfig = formData.format === 'time' ? teamConfig.map(m => ({
-                gender: m.gender,
-                min_age: m.minAge ? parseInt(m.minAge) : null,
-                max_age: m.maxAge ? parseInt(m.maxAge) : null
+                gender: m.gender
             })) : [];
 
             // Calculate derived fields (backward compatibility)
@@ -262,7 +325,15 @@ export default function CategoryForm() {
                     .maybeSingle();
 
                 const maxOrderDataAny = maxOrderData as any;
-                const orderIndex = maxOrderDataAny ? (maxOrderDataAny.order_index ?? 0) + 1 : 0;
+                let orderIndex = maxOrderDataAny ? (maxOrderDataAny.order_index ?? 0) + 1 : 0;
+
+                // Tentar forçar ordem baseada no nome para manter padrão
+                const nameLower = formData.name.toLowerCase();
+                if (nameLower.includes('iniciante')) orderIndex = 1;
+                else if (nameLower.includes('scale')) orderIndex = 2;
+                else if (nameLower.includes('amador') || nameLower.includes('intermediário') || nameLower.includes('intermediate')) orderIndex = 3;
+                else if (nameLower.includes('rx')) orderIndex = 4;
+                else if (nameLower.includes('elite')) orderIndex = 5;
 
                 const { error } = await supabase
                     .from("categories")
@@ -401,63 +472,37 @@ export default function CategoryForm() {
                             <div className="space-y-0.5">
                                 <Label className="text-base">Composição do Time</Label>
                                 <p className="text-sm text-muted-foreground">
-                                    Defina os integrantes do time. Deixe as idades vazias para qualquer idade.
+                                    Defina o gênero de cada integrante do time. A validação de idade será feita com base nos limites da categoria.
                                 </p>
                             </div>
 
-                            <div className="space-y-4 pt-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                                 {teamConfig.map((member, index) => (
-                                    <div key={index} className="grid grid-cols-12 gap-4 items-end animate-fade-in border-b border-border/50 pb-4 last:border-0 last:pb-0">
-                                        <div className="col-span-12 md:col-span-4">
-                                            <Label className="text-xs">Gênero</Label>
-                                            <Select
-                                                value={member.gender}
-                                                onValueChange={(value) => handleTeamConfigChange(index, 'gender', value)}
-                                            >
-                                                <SelectTrigger className="mt-1">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="masculino">Masculino</SelectItem>
-                                                    <SelectItem value="feminino">Feminino</SelectItem>
-                                                    <SelectItem value="misto">Misto/Qualquer</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="col-span-5 md:col-span-3">
-                                            <Label className="text-xs">Idade Min.</Label>
-                                            <Input
-                                                type="number"
-                                                value={member.minAge}
-                                                onChange={(e) => handleTeamConfigChange(index, 'minAge', e.target.value)}
-                                                placeholder="Qualquer"
-                                                className="mt-1"
-                                                min="0"
-                                            />
-                                        </div>
-                                        <div className="col-span-5 md:col-span-3">
-                                            <Label className="text-xs">Idade Max.</Label>
-                                            <Input
-                                                type="number"
-                                                value={member.maxAge}
-                                                onChange={(e) => handleTeamConfigChange(index, 'maxAge', e.target.value)}
-                                                placeholder="Qualquer"
-                                                className="mt-1"
-                                                min="0"
-                                            />
-                                        </div>
-                                        <div className="col-span-2 md:col-span-2 flex justify-end">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleRemoveTeamMember(index)}
-                                                className="text-destructive hover:text-destructive/80 hover:bg-destructive/10"
-                                                disabled={teamConfig.length <= 1}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
+                                    <div key={index} className="relative animate-fade-in">
+                                        <Label className="text-xs mb-2 block">Integrante {index + 1}</Label>
+                                        <Select
+                                            value={member.gender}
+                                            onValueChange={(value) => handleTeamConfigChange(index, 'gender', value)}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="masculino">Masculino</SelectItem>
+                                                <SelectItem value="feminino">Feminino</SelectItem>
+                                                <SelectItem value="misto">Misto/Qualquer</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleRemoveTeamMember(index)}
+                                            className="absolute -top-1 -right-1 h-6 w-6 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded-full"
+                                            disabled={teamConfig.length <= 1}
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </Button>
                                     </div>
                                 ))}
 
