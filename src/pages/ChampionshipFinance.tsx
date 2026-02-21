@@ -37,12 +37,14 @@ export default function ChampionshipFinance() {
     approvedCount: 0,
     pendingCount: 0,
     cancelledCount: 0,
+  });
+  const [financialStats, setFinancialStats] = useState({
     totalRevenue: 0,
     confirmedRevenue: 0,
     pendingRevenue: 0,
     totalRegistrations: 0,
+    paymentMethods: [] as any[],
   });
-  const [paymentMethods, setPaymentMethods] = useState<{ name: string; amount: number; count: number; percentage: number }[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -87,27 +89,6 @@ export default function ChampionshipFinance() {
 
       const totalGross = approved.reduce((sum, r) => sum + r.subtotal_cents, 0);
       const totalFees = approved.reduce((sum, r) => sum + r.platform_fee_cents, 0);
-      const confirmedRevenue = totalGross;
-      const pendingRevenue = pending.reduce((sum, r) => sum + r.subtotal_cents, 0);
-      const totalRevenue = (regs || []).reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
-
-      // Calcular métodos de pagamento
-      const methodMap = new Map<string, { amount: number; count: number }>();
-      approved.forEach(r => {
-        const method = r.payment_method || 'PIX';
-        const label = method.toLowerCase().includes('credit') || method.toLowerCase().includes('card')
-          ? 'Cartão'
-          : 'PIX';
-        const curr = methodMap.get(label) || { amount: 0, count: 0 };
-        methodMap.set(label, { amount: curr.amount + r.subtotal_cents, count: curr.count + 1 });
-      });
-      const methods = Array.from(methodMap.entries()).map(([name, { amount, count }]) => ({
-        name,
-        amount: amount / 100,
-        count,
-        percentage: totalGross > 0 ? Math.round((amount / totalGross) * 100) : 0,
-      }));
-      setPaymentMethods(methods.length > 0 ? methods : [{ name: 'PIX', amount: totalGross / 100, count: approved.length, percentage: 100 }]);
 
       setStats({
         totalGross,
@@ -116,11 +97,34 @@ export default function ChampionshipFinance() {
         approvedCount: approved.length,
         pendingCount: pending.length,
         cancelledCount: cancelled.length,
-        totalRevenue,
-        confirmedRevenue,
-        pendingRevenue,
-        totalRegistrations: regs?.length || 0,
       });
+
+      // Calculate financial stats
+      const pendingRevenue = pending.reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
+      const totalRevenue = (regs || []).reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
+
+      const methodMap = new Map<string, number>();
+      approved.forEach(reg => {
+        const method = reg.payment_method || 'Não informado';
+        methodMap.set(method, (methodMap.get(method) || 0) + (reg.subtotal_cents || 0));
+      });
+
+      const paymentMethods = Array.from(methodMap.entries())
+        .map(([name, amount]) => ({
+          name,
+          amount,
+          percentage: totalGross > 0 ? Math.round((amount / totalGross) * 100) : 0,
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+      setFinancialStats({
+        totalRevenue,
+        confirmedRevenue: totalGross,
+        pendingRevenue,
+        totalRegistrations: (regs || []).length,
+        paymentMethods,
+      });
+
     } catch (error: any) {
       toast.error("Erro ao carregar dados");
       console.error(error);
@@ -214,79 +218,77 @@ export default function ChampionshipFinance() {
       </div>
 
       <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-        {/* Cards Financeiros Ampliados */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Receita Total */}
+        {/* Stats */}
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Receita Total</CardTitle>
+              <DollarSign className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
-              <p className="text-xs text-muted-foreground">Esperado (todas inscrições)</p>
+              <div className="text-2xl font-bold">{formatCurrency(financialStats.totalRevenue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Todas as inscrições</p>
             </CardContent>
           </Card>
 
-          {/* Receita Confirmada */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita Confirmada</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Confirmado</CardTitle>
+              <CheckCircle className="w-4 h-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.confirmedRevenue)}</div>
-              <p className="text-xs text-muted-foreground">Pagamentos aprovados</p>
+              <div className="text-2xl font-bold text-green-600">{formatCurrency(financialStats.confirmedRevenue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stats.approvedCount} pagamentos aprovados</p>
             </CardContent>
           </Card>
 
-          {/* Receita Pendente */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita Pendente</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pendente</CardTitle>
+              <Clock className="w-4 h-4 text-yellow-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{formatCurrency(stats.pendingRevenue)}</div>
-              <p className="text-xs text-muted-foreground">Aguardando confirmação</p>
+              <div className="text-2xl font-bold text-yellow-600">{formatCurrency(financialStats.pendingRevenue)}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stats.pendingCount} aguardando confirmação</p>
             </CardContent>
           </Card>
 
-          {/* Ticket Médio */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Ticket Médio</CardTitle>
+              <TrendingUp className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(stats.totalRegistrations > 0 ? Math.round(stats.totalRevenue / stats.totalRegistrations) : 0)}
+                {formatCurrency(financialStats.totalRegistrations > 0
+                  ? Math.round(financialStats.totalRevenue / financialStats.totalRegistrations)
+                  : 0)}
               </div>
-              <p className="text-xs text-muted-foreground">Por inscrição</p>
+              <p className="text-xs text-muted-foreground mt-1">Por atleta</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Métodos de Pagamento */}
-        {paymentMethods.length > 0 && (
-          <Card className="mb-6">
+        {financialStats.paymentMethods.length > 0 && (
+          <Card className="mb-8">
             <CardHeader>
               <CardTitle>Métodos de Pagamento</CardTitle>
-              <CardDescription>Distribuição dos pagamentos aprovados por método</CardDescription>
+              <CardDescription>Distribuição dos pagamentos confirmados</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {paymentMethods.map((method) => (
+                {financialStats.paymentMethods.map((method) => (
                   <div key={method.name}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{method.name}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium capitalize">{method.name}</span>
                       <span className="text-sm text-muted-foreground">
-                        {method.percentage}% &mdash; {formatCurrency(Math.round(method.amount * 100))}
+                        {method.percentage}% ({formatCurrency(method.amount)})
                       </span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
                       <div
-                        className="bg-primary h-2 rounded-full transition-all"
+                        className="bg-[#D71C1D] h-2 rounded-full transition-all"
                         style={{ width: `${method.percentage}%` }}
                       />
                     </div>
@@ -296,75 +298,6 @@ export default function ChampionshipFinance() {
             </CardContent>
           </Card>
         )}
-
-        {/* Stats Originais */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Receita Bruta
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalGross)}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.approvedCount} pagamentos confirmados
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Taxas (5%)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalFees)}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Taxa da plataforma
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                Líquido
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalNet)}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Seu total líquido
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Aprovados:</span>
-                  <span className="font-medium">{stats.approvedCount}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pendentes:</span>
-                  <span className="font-medium">{stats.pendingCount}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Filters and Table */}
         <Card>
