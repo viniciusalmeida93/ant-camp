@@ -93,7 +93,15 @@ export default function AthleteDashboard() {
 
             // Deduplicate by ID
             const uniqueRegistrations = Array.from(new Map(data?.map(item => [item['id'], item])).values());
-            setRegistrations(uniqueRegistrations || []);
+
+            // Ordenar por data do campeonato (próximos primeiro)
+            const sortedRegistrations = uniqueRegistrations.sort((a, b) => {
+                const dateA = a.championships?.date ? new Date(a.championships.date).getTime() : 0;
+                const dateB = b.championships?.date ? new Date(b.championships.date).getTime() : 0;
+                return dateB - dateA; // Mais recentes primeiro
+            });
+
+            setRegistrations(sortedRegistrations || []);
         } catch (error: any) {
             console.error("Erro ao carregar inscrições:", error);
             toast.error("Erro ao carregar suas inscrições");
@@ -130,6 +138,31 @@ export default function AthleteDashboard() {
                 return "Cancelado";
             default:
                 return status;
+        }
+    };
+
+    const getEventStatus = (eventDate: string) => {
+        if (!eventDate) return { label: "Data não definida", color: "secondary" as any };
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const date = new Date(eventDate);
+        date.setHours(0, 0, 0, 0);
+
+        const diffDays = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 0) {
+            return {
+                label: `Faltam ${diffDays} dia${diffDays > 1 ? 's' : ''}`,
+                color: "default" as any
+            };
+        } else if (diffDays === 0) {
+            return { label: "Hoje!", color: "destructive" as any };
+        } else if (diffDays >= -2) {
+            return { label: "Em andamento", color: "destructive" as any };
+        } else {
+            return { label: "Finalizado", color: "secondary" as any };
         }
     };
 
@@ -239,7 +272,17 @@ export default function AthleteDashboard() {
                                         return null;
                                     })()}
 
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                                    <div className="absolute top-3 left-3">
+                                        {(() => {
+                                            const eventStatus = getEventStatus(reg.championships?.date);
+                                            return (
+                                                <Badge variant={eventStatus.color} className="shadow-sm border-0 bg-black/60 backdrop-blur-sm text-white">
+                                                    {eventStatus.label}
+                                                </Badge>
+                                            );
+                                        })()}
+                                    </div>
+
                                     <div className="absolute top-3 right-3">
                                         <Badge variant={getStatusColor(reg.payment_status)} className="shadow-sm border-0">
                                             {getStatusLabel(reg.payment_status)}
@@ -278,7 +321,7 @@ export default function AthleteDashboard() {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex gap-2">
+                                    <div className="space-y-2">
                                         {/* Botão para Checkout se pendente */}
                                         {reg.payment_status !== 'approved' && (
                                             <Button
@@ -289,15 +332,38 @@ export default function AthleteDashboard() {
                                             </Button>
                                         )}
 
-                                        {/* Botão para Leaderboard se aprovado */}
+                                        {/* Botões de navegação rápida se aprovado */}
                                         {reg.payment_status === 'approved' && reg.championships?.slug && (
-                                            <Button
-                                                variant="outline"
-                                                className="w-full border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
-                                                onClick={() => navigate(`/${reg.championships.slug}/leaderboard`)}
-                                            >
-                                                Ver Leaderboard
-                                            </Button>
+                                            <>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                        onClick={() => navigate(`/${reg.championships.slug}/heats`)}
+                                                    >
+                                                        📋 Baterias
+                                                    </Button>
+
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                        onClick={() => navigate(`/${reg.championships.slug}/leaderboard`)}
+                                                    >
+                                                        🏆 Ranking
+                                                    </Button>
+                                                </div>
+
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                    onClick={() => navigate(`/${reg.championships.slug}/wods`)}
+                                                >
+                                                    💪 Ver Provas
+                                                </Button>
+                                            </>
                                         )}
                                     </div>
                                 </CardContent>
