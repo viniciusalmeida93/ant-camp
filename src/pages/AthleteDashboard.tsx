@@ -337,31 +337,28 @@ export default function AthleteDashboard() {
                                             <>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <Button
-                                                        variant="outline"
                                                         size="sm"
-                                                        className="border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/heats`)}
                                                     >
-                                                        📋 Baterias
+                                                        Baterias
                                                     </Button>
 
                                                     <Button
-                                                        variant="outline"
                                                         size="sm"
-                                                        className="border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/leaderboard`)}
                                                     >
-                                                        🏆 Ranking
+                                                        Ranking
                                                     </Button>
                                                 </div>
 
                                                 <Button
-                                                    variant="outline"
                                                     size="sm"
-                                                    className="w-full border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors"
+                                                    className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
                                                     onClick={() => navigate(`/${reg.championships.slug}/wods`)}
                                                 >
-                                                    💪 Ver Provas
+                                                    Ver Provas
                                                 </Button>
                                             </>
                                         )}
