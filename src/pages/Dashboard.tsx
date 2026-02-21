@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode, DollarSign, FileText, Calendar } from 'lucide-react';
+import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode, DollarSign, FileText } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +51,6 @@ export default function Dashboard() {
     revenue: 0,
   });
   const [categoryDistribution, setCategoryDistribution] = useState<any[]>([]);
-  const [daysUntilEvent, setDaysUntilEvent] = useState<number>(0);
   const [editRegulationOpen, setEditRegulationOpen] = useState(false);
   const [regulationText, setRegulationText] = useState("");
   const [regulationUrl, setRegulationUrl] = useState("");
@@ -92,21 +91,9 @@ export default function Dashboard() {
       loadScheduleConfig();
       loadWODs();
       loadChampionshipDays();
-      const days = calculateDaysUntilEvent(selectedChampionship.date);
-      setDaysUntilEvent(days);
       loadCategoryDistribution(selectedChampionship.id);
     }
   }, [selectedChampionship]);
-
-  const calculateDaysUntilEvent = (eventDate: string | null) => {
-    if (!eventDate) return 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const event = new Date(eventDate);
-    event.setHours(0, 0, 0, 0);
-    const diffTime = event.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
 
   const loadCategoryDistribution = async (championshipId: string) => {
     try {
@@ -1108,7 +1095,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <StatsCard
               title="Total de Atletas"
               value={stats.athletes}
@@ -1127,20 +1114,6 @@ export default function Dashboard() {
               icon={Dumbbell}
               trend="Ativos"
             />
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Dias para o Evento</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {daysUntilEvent > 0 ? daysUntilEvent : daysUntilEvent === 0 ? 'Hoje!' : 'Passado'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {daysUntilEvent > 0 ? 'dias restantes' : daysUntilEvent === 0 ? 'Acontece hoje' : 'Evento finalizado'}
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Gráfico de Distribuição por Categoria */}
