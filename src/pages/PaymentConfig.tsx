@@ -423,51 +423,105 @@ export default function PaymentConfig() {
 
                     {/* === TAB 1: DASHBOARD FINANCEIRO === */}
                     <TabsContent value="dashboard" className="space-y-6 mt-6">
+                        {/* Cards financeiros */}
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Receita Bruta</CardTitle>
+                                    <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
                                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalGross)}</div>
-                                    <p className="text-xs text-muted-foreground">{stats.approvedCount} pagamentos confirmados</p>
+                                    <div className="text-2xl font-bold">
+                                        {formatCurrency(registrations.reduce((s, r) => s + (r.subtotal_cents || 0), 0))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Todas as inscrições</p>
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Taxas (5%)</CardTitle>
+                                    <CardTitle className="text-sm font-medium">Confirmado</CardTitle>
+                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalGross)}</div>
+                                    <p className="text-xs text-muted-foreground">{stats.approvedCount} pagamentos aprovados</p>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Pendente</CardTitle>
+                                    <Clock className="h-4 w-4 text-yellow-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-yellow-600">
+                                        {formatCurrency(registrations.filter(r => r.payment_status === 'pending').reduce((s, r) => s + (r.subtotal_cents || 0), 0))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{stats.pendingCount} aguardando confirmação</p>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalFees)}</div>
-                                    <p className="text-xs text-muted-foreground">Taxa da plataforma</p>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Líquido</CardTitle>
-                                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{formatCurrency(stats.totalNet)}</div>
-                                    <p className="text-xs text-muted-foreground">Seu total líquido</p>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Status</CardTitle>
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-xs space-y-1">
-                                        <div className="flex justify-between"><span>Aprovados:</span> <span className="font-medium">{stats.approvedCount}</span></div>
-                                        <div className="flex justify-between"><span>Pendentes:</span> <span className="font-medium">{stats.pendingCount}</span></div>
+                                    <div className="text-2xl font-bold">
+                                        {formatCurrency(registrations.length > 0
+                                            ? Math.round(registrations.reduce((s, r) => s + (r.subtotal_cents || 0), 0) / registrations.length)
+                                            : 0)}
                                     </div>
+                                    <p className="text-xs text-muted-foreground">Por atleta</p>
                                 </CardContent>
                             </Card>
                         </div>
 
+                        {/* Métodos de Pagamento */}
+                        {(() => {
+                            const approved = registrations.filter(r => r.payment_status === 'approved');
+                            const methodMap = new Map<string, number>();
+                            approved.forEach(reg => {
+                                const method = reg.payment_method || 'Não informado';
+                                methodMap.set(method, (methodMap.get(method) || 0) + (reg.subtotal_cents || 0));
+                            });
+                            const methods = Array.from(methodMap.entries())
+                                .map(([name, amount]) => ({
+                                    name,
+                                    amount,
+                                    percentage: stats.totalGross > 0 ? Math.round((amount / stats.totalGross) * 100) : 0,
+                                }))
+                                .sort((a, b) => b.amount - a.amount);
+
+                            return methods.length > 0 ? (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Métodos de Pagamento</CardTitle>
+                                        <CardDescription>Distribuição dos pagamentos confirmados</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
+                                            {methods.map((method) => (
+                                                <div key={method.name}>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-sm font-medium capitalize">{method.name}</span>
+                                                        <span className="text-sm text-muted-foreground">
+                                                            {method.percentage}% ({formatCurrency(method.amount)})
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-muted rounded-full h-2">
+                                                        <div
+                                                            className="bg-[#D71C1D] h-2 rounded-full transition-all"
+                                                            style={{ width: `${method.percentage}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ) : null;
+                        })()}
+
+                        {/* Tabela de inscrições */}
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between">
                                 <div>
