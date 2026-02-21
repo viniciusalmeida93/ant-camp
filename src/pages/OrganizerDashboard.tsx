@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign, Globe
+  Trophy, LogOut, Settings, Trash2, Plus, Loader2, Pencil, Users, DollarSign, Globe,
+  CheckCircle, Clock, Calendar
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useChampionship } from "@/contexts/ChampionshipContext";
@@ -42,6 +44,11 @@ export default function OrganizerDashboard() {
     totalChampionships: 0,
     totalAthletes: 0,
     totalRevenue: 0,
+    totalRegistrations: 0,
+    approvedRegistrations: 0,
+    pendingRegistrations: 0,
+    daysUntilEvent: 0,
+    categoryDistribution: [] as any[],
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [championshipToDelete, setChampionshipToDelete] = useState<any>(null);
@@ -140,16 +147,69 @@ export default function OrganizerDashboard() {
         }
       }
 
-      setStats({
+      setStats(prev => ({
+        ...prev,
         totalChampionships: totalChamps,
         totalAthletes,
         totalRevenue,
-      });
+      }));
+
+      // Carregar métricas detalhadas de inscrições
+      if (champIds.length > 0) {
+        await loadRegistrationStats(champIds, champs);
+      }
     } catch (error: any) {
       console.error("Error loading dashboard:", error);
       toast.error("Erro ao carregar dashboard");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRegistrationStats = async (champIds: string[], champs: any[]) => {
+    try {
+      const { data: registrations, error } = await supabase
+        .from('registrations')
+        .select('id, payment_status, subtotal_cents, category_id, categories(id, name)')
+        .in('championship_id', champIds);
+
+      if (error) throw error;
+
+      const total = registrations?.length || 0;
+      const approved = registrations?.filter(r => r.payment_status === 'approved').length || 0;
+      const pending = registrations?.filter(r => r.payment_status === 'pending').length || 0;
+
+      // Distribuição por categoria
+      const catMap = new Map<string, number>();
+      registrations?.forEach(reg => {
+        const catName = (reg.categories as any)?.name;
+        if (catName) catMap.set(catName, (catMap.get(catName) || 0) + 1);
+      });
+      const categoryDistribution = Array.from(catMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+      // Dias até o próximo evento
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const nextEvent = champs
+        .map(c => c.date ? new Date(c.date) : null)
+        .filter((d): d is Date => d !== null && d >= today)
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      const daysUntilEvent = nextEvent
+        ? Math.ceil((nextEvent.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        : -1;
+
+      setStats(prev => ({
+        ...prev,
+        totalRegistrations: total,
+        approvedRegistrations: approved,
+        pendingRegistrations: pending,
+        daysUntilEvent,
+        categoryDistribution,
+      }));
+    } catch (error) {
+      console.error('Erro ao carregar métricas de inscrições:', error);
     }
   };
 
@@ -405,27 +465,100 @@ export default function OrganizerDashboard() {
 
       {/* Main Content */}
       <div className="px-6 py-8 pb-24 max-w-[98%] mx-auto">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <StatsCard
-            title="Total de Campeonatos"
-            value={stats.totalChampionships}
-            icon={Trophy}
-            trend="Ativo"
-          />
-          <StatsCard
-            title="Atletas Inscritos"
-            value={stats.totalAthletes}
-            icon={Users}
-            trend="Confirmados"
-          />
-          <StatsCard
-            title="Receita Total"
-            value={formatCurrency(stats.totalRevenue)}
-            icon={DollarSign}
-            trend="Líquido"
-          />
+        {/* Cards de Métricas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Total Inscritos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total de Inscritos</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalRegistrations}</div>
+              <p className="text-xs text-muted-foreground">Em {stats.totalChampionships} campeonato(s)</p>
+            </CardContent>
+          </Card>
+
+          {/* Confirmados */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Confirmados</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.approvedRegistrations}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.totalRegistrations > 0
+                  ? `${Math.round((stats.approvedRegistrations / stats.totalRegistrations) * 100)}% do total`
+                  : '0% do total'}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Pendentes */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
+              <Clock className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pendingRegistrations}</div>
+              <p className="text-xs text-muted-foreground">Aguardando pagamento</p>
+            </CardContent>
+          </Card>
+
+          {/* Próximo Evento */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Próximo Evento</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats.daysUntilEvent > 0 ? stats.daysUntilEvent : stats.daysUntilEvent === 0 ? 'Hoje!' : 'N/A'}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {stats.daysUntilEvent > 0 ? 'dias restantes' : stats.daysUntilEvent === 0 ? 'Acontece hoje' : 'Nenhum agendado'}
+              </p>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Gráfico de Distribuição por Categoria */}
+        {stats.categoryDistribution.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Distribuição por Categoria</CardTitle>
+              <CardDescription>Inscrições por categoria em todos os campeonatos</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={stats.categoryDistribution}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value, percent }) =>
+                      `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
+                    }
+                    outerRadius={100}
+                    dataKey="value"
+                  >
+                    {stats.categoryDistribution.map((_entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={`hsl(${index * 45}, 70%, 50%)`}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Meus Campeonatos Section */}
         <div className="mb-8">

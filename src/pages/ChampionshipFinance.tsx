@@ -37,7 +37,12 @@ export default function ChampionshipFinance() {
     approvedCount: 0,
     pendingCount: 0,
     cancelledCount: 0,
+    totalRevenue: 0,
+    confirmedRevenue: 0,
+    pendingRevenue: 0,
+    totalRegistrations: 0,
   });
+  const [paymentMethods, setPaymentMethods] = useState<{ name: string; amount: number; count: number; percentage: number }[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -82,6 +87,27 @@ export default function ChampionshipFinance() {
 
       const totalGross = approved.reduce((sum, r) => sum + r.subtotal_cents, 0);
       const totalFees = approved.reduce((sum, r) => sum + r.platform_fee_cents, 0);
+      const confirmedRevenue = totalGross;
+      const pendingRevenue = pending.reduce((sum, r) => sum + r.subtotal_cents, 0);
+      const totalRevenue = (regs || []).reduce((sum, r) => sum + (r.subtotal_cents || 0), 0);
+
+      // Calcular métodos de pagamento
+      const methodMap = new Map<string, { amount: number; count: number }>();
+      approved.forEach(r => {
+        const method = r.payment_method || 'PIX';
+        const label = method.toLowerCase().includes('credit') || method.toLowerCase().includes('card')
+          ? 'Cartão'
+          : 'PIX';
+        const curr = methodMap.get(label) || { amount: 0, count: 0 };
+        methodMap.set(label, { amount: curr.amount + r.subtotal_cents, count: curr.count + 1 });
+      });
+      const methods = Array.from(methodMap.entries()).map(([name, { amount, count }]) => ({
+        name,
+        amount: amount / 100,
+        count,
+        percentage: totalGross > 0 ? Math.round((amount / totalGross) * 100) : 0,
+      }));
+      setPaymentMethods(methods.length > 0 ? methods : [{ name: 'PIX', amount: totalGross / 100, count: approved.length, percentage: 100 }]);
 
       setStats({
         totalGross,
@@ -90,6 +116,10 @@ export default function ChampionshipFinance() {
         approvedCount: approved.length,
         pendingCount: pending.length,
         cancelledCount: cancelled.length,
+        totalRevenue,
+        confirmedRevenue,
+        pendingRevenue,
+        totalRegistrations: regs?.length || 0,
       });
     } catch (error: any) {
       toast.error("Erro ao carregar dados");
@@ -184,7 +214,90 @@ export default function ChampionshipFinance() {
       </div>
 
       <div className="w-full mx-auto px-6 py-6 max-w-[98%]">
-        {/* Stats */}
+        {/* Cards Financeiros Ampliados */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Receita Total */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+              <p className="text-xs text-muted-foreground">Esperado (todas inscrições)</p>
+            </CardContent>
+          </Card>
+
+          {/* Receita Confirmada */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Receita Confirmada</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.confirmedRevenue)}</div>
+              <p className="text-xs text-muted-foreground">Pagamentos aprovados</p>
+            </CardContent>
+          </Card>
+
+          {/* Receita Pendente */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Receita Pendente</CardTitle>
+              <Clock className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{formatCurrency(stats.pendingRevenue)}</div>
+              <p className="text-xs text-muted-foreground">Aguardando confirmação</p>
+            </CardContent>
+          </Card>
+
+          {/* Ticket Médio */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(stats.totalRegistrations > 0 ? Math.round(stats.totalRevenue / stats.totalRegistrations) : 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">Por inscrição</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Métodos de Pagamento */}
+        {paymentMethods.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Métodos de Pagamento</CardTitle>
+              <CardDescription>Distribuição dos pagamentos aprovados por método</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {paymentMethods.map((method) => (
+                  <div key={method.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{method.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {method.percentage}% &mdash; {formatCurrency(Math.round(method.amount * 100))}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${method.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Stats Originais */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="pb-2">
