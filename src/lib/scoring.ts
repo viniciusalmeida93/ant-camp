@@ -140,8 +140,65 @@ export const calculateWODPoints = (
   config: ScoringConfig,
   wodType: string
 ): WODResult[] => {
-  // Ordenar resultados
-  const sorted = [...results].sort((a, b) => compareResults(a, b, wodType));
+  const normalizedType = wodType ? wodType.toLowerCase().trim() : '';
+  let sortDirection: 'asc' | 'desc';
+
+  // Determinar direção baseada no tipo explícito
+  if (normalizedType === 'for-time' || normalizedType === 'tempo' || normalizedType === 'time' || normalizedType === 'for_time') {
+    sortDirection = 'asc'; // MENOR tempo vence
+  } else if (normalizedType === 'amrap' || normalizedType === 'emom') {
+    sortDirection = 'desc'; // MAIOR número de reps vence
+  } else if (normalizedType === 'carga-maxima' || normalizedType === 'tonelagem' || normalizedType === 'carga') {
+    sortDirection = 'desc'; // MAIOR peso vence
+  } else {
+    // Fallback inteligente: se o resultado parece tempo (ex: "10:30"), deveria ser ASC. Caso contrário, DESC por padrão para reps.
+    const hasTimeFormat = results.some(r => r.result && String(r.result).includes(':'));
+    sortDirection = hasTimeFormat ? 'asc' : 'desc';
+  }
+
+  // Ordenar resultados com a direção explícita
+  const sorted = [...results].sort((a, b) => {
+    // Pegar valores base e converter tempo para segundos
+    let aVal = a.result ? (String(a.result).includes(':') ? parseTimeToSeconds(String(a.result)) : parseFloat(String(a.result))) : 0;
+    let bVal = b.result ? (String(b.result).includes(':') ? parseTimeToSeconds(String(b.result)) : parseFloat(String(b.result))) : 0;
+
+    // Fallbacks para NaN
+    if (isNaN(aVal)) aVal = 0;
+    if (isNaN(bVal)) bVal = 0;
+
+    // Colocar DNS e DNF sempre por último (maior "valor" na frente, logo tratamos na lógica de pontos de fato)
+    if (a.status === 'dns' && b.status !== 'dns') return 1;
+    if (a.status !== 'dns' && b.status === 'dns') return -1;
+    if (a.status === 'dnf' && b.status !== 'dnf') return 1;
+    if (a.status !== 'dnf' && b.status === 'dnf') return -1;
+
+    if (aVal !== bVal) {
+      if (sortDirection === 'asc') {
+        return aVal - bVal; // menor primeiro
+      } else {
+        return bVal - aVal; // maior primeiro
+      }
+    }
+
+    // Tiebreak
+    let aTieVal = a.tiebreakValue ? (String(a.tiebreakValue).includes(':') ? parseTimeToSeconds(String(a.tiebreakValue)) : parseFloat(String(a.tiebreakValue))) : 0;
+    let bTieVal = b.tiebreakValue ? (String(b.tiebreakValue).includes(':') ? parseTimeToSeconds(String(b.tiebreakValue)) : parseFloat(String(b.tiebreakValue))) : 0;
+
+    if (isNaN(aTieVal)) aTieVal = 0;
+    if (isNaN(bTieVal)) bTieVal = 0;
+
+    // Regras padrão de Tiebreak: Para For Time, maior Reps vence. Para AMRAP, maior tempo restante vence. Para Carga, menor tempo vence.
+    if (normalizedType === 'for-time' || normalizedType === 'tempo' || normalizedType === 'time') {
+      return bTieVal - aTieVal; // Reps: Maior vence (Descendente)
+    } else if (normalizedType === 'amrap' || normalizedType === 'emom') {
+      return bTieVal - aTieVal; // Tempo Restante: Maior vence (Descendente)
+    } else if (normalizedType === 'carga-maxima' || normalizedType === 'tonelagem' || normalizedType === 'carga') {
+      return aTieVal - bTieVal; // Tempo: Menor vence (Ascendente)
+    }
+
+    // Tiebreak fallback padrão (Maior vence se for numérico puro)
+    return bTieVal - aTieVal;
+  });
 
   // Atribuir posições e pontos com suporte a empates
   // Se dois resultados têm o mesmo valor, ficam na mesma posição
@@ -149,12 +206,21 @@ export const calculateWODPoints = (
   let currentPosition = 1;
 
   return sorted.map((result, index) => {
-    // Verificar se é empate usando a função compareResults
-    // Se compareResults retorna 0, os resultados são iguais
-    const isTie = index > 0 &&
-      result.status === 'completed' &&
-      sorted[index - 1].status === 'completed' &&
-      compareResults(result, sorted[index - 1], wodType) === 0;
+    // Verificar se é empate comparando diretamente os valores normalizados
+    let isTie = false;
+    if (index > 0 && result.status === 'completed' && sorted[index - 1].status === 'completed') {
+      const prev = sorted[index - 1];
+
+      let currVal = result.result ? (String(result.result).includes(':') ? parseTimeToSeconds(String(result.result)) : parseFloat(String(result.result))) : 0;
+      let prevVal = prev.result ? (String(prev.result).includes(':') ? parseTimeToSeconds(String(prev.result)) : parseFloat(String(prev.result))) : 0;
+
+      let currTieVal = result.tiebreakValue ? (String(result.tiebreakValue).includes(':') ? parseTimeToSeconds(String(result.tiebreakValue)) : parseFloat(String(result.tiebreakValue))) : 0;
+      let prevTieVal = prev.tiebreakValue ? (String(prev.tiebreakValue).includes(':') ? parseTimeToSeconds(String(prev.tiebreakValue)) : parseFloat(String(prev.tiebreakValue))) : 0;
+
+      if (currVal === prevVal && currTieVal === prevTieVal) {
+        isTie = true;
+      }
+    }
 
     // Se não é empate, atualizar posição
     if (!isTie) {

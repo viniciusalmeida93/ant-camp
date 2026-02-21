@@ -183,18 +183,20 @@ export default function OrganizerDashboard() {
 
   const handleTogglePublish = async (championship: any) => {
     try {
+      const newStatus = !championship.is_published;
+
       const { error } = await supabase
         .from('championships')
-        .update({ is_published: !championship.is_published })
+        .update({ is_published: newStatus }) // Usando apenas a coluna existente
         .eq('id', championship.id);
 
       if (error) throw error;
 
-      toast.success(championship.is_published ? 'Campeonato despublicado' : 'Campeonato publicado');
+      toast.success(newStatus ? 'Campeonato publicado' : 'Campeonato despublicado');
       loadDashboard();
     } catch (error) {
-      console.error('Error toggling publish:', error);
-      toast.error('Erro ao alterar status do campeonato');
+      console.error('❌ Erro ao salvar:', error);
+      alert('Erro ao atualizar status de publicação');
     }
   };
 

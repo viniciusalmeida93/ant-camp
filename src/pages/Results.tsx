@@ -16,8 +16,6 @@ import { compareResults, calculateWODPoints } from '@/lib/scoring';
 // Função para atualizar order_index baseado no leaderboard atual
 const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
   try {
-    console.log('🔄 Atualizando order_index baseado no leaderboard para categoria:', categoryId);
-
     // 1. Buscar TODOS os resultados publicados da categoria
     const { data: resultsData, error: resultsError } = await supabase
       .from("wod_results")
@@ -37,7 +35,6 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
     if (regsError) throw regsError;
 
     if (!regsData || regsData.length === 0) {
-      console.log('⚠️ Nenhum participante encontrado na categoria');
       return;
     }
 
@@ -167,8 +164,6 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
     });
 
     // 6. Atualizar order_index no banco baseado na nova ordem do leaderboard
-    console.log('💾 Atualizando order_index de', entries.length, 'participantes...');
-
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const newOrderIndex = i + 1; // 1º lugar = 1, 2º lugar = 2, etc.
@@ -178,8 +173,6 @@ const updateOrderIndexFromLeaderboard = async (categoryId: string) => {
         .update({ order_index: newOrderIndex })
         .eq("id", entry.registrationId);
     }
-
-    console.log('✅ order_index atualizado! Agora as baterias serão reorganizadas automaticamente.');
 
   } catch (error) {
     console.error('❌ Erro ao atualizar order_index:', error);
@@ -202,6 +195,9 @@ export default function Results() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWOD, setSelectedWOD] = useState<string>('');
   const [resultInputs, setResultInputs] = useState<Map<string, any>>(new Map());
+  const [isSaved, setIsSaved] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+  const [savingAction, setSavingAction] = useState<'save' | 'publish' | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -216,7 +212,6 @@ export default function Results() {
       // Debug: verificar tipo do WOD selecionado
       const wod = wods.find(w => w.id === selectedWOD);
       if (wod) {
-        console.log('WOD selecionado:', wod.name, 'Tipo:', wod.type);
       }
     }
   }, [selectedCategory, selectedWOD, wods]);
@@ -315,6 +310,12 @@ export default function Results() {
         }
       });
       setResultInputs(inputs);
+
+      const hasPublished = (data || []).some(r => r.is_published);
+      const hasSaved = (data || []).length > 0 && !hasPublished;
+      setIsPublished(!!hasPublished);
+      setIsSaved(!!hasSaved);
+
     } catch (error: any) {
       console.error("Error loading results:", error);
     }
@@ -347,6 +348,8 @@ export default function Results() {
     }
 
     setResultInputs(new Map(resultInputs.set(participantId, updated)));
+    setIsSaved(false);
+    setIsPublished(false);
   };
 
   const handleSave = async (publish: boolean = false) => {
@@ -365,6 +368,7 @@ export default function Results() {
     if (!wod) return;
 
     setSaving(true);
+    setSavingAction(publish ? 'publish' : 'save');
     try {
       // Buscar resultados existentes para deletar
       const { data: existing } = await supabase
@@ -415,8 +419,6 @@ export default function Results() {
 
       // Se não há resultados para inserir, apenas deletar os existentes e finalizar
       if (newResults.length === 0) {
-        console.log('🗑️ Removendo todos os resultados para', selectedCategory, selectedWOD);
-
         // Garantir que todos os resultados foram deletados
         if (existing && existing.length > 0) {
           const { error: finalDeleteError } = await supabase
@@ -429,16 +431,17 @@ export default function Results() {
             console.error("❌ Erro ao deletar resultados:", finalDeleteError);
             throw finalDeleteError;
           }
-          console.log('✅ Resultados deletados:', existing.length);
         }
 
         toast.success("Todos os resultados foram removidos");
+        setIsSaved(false);
+        setIsPublished(false);
+        setSavingAction(null);
         setSaving(false);
         // Recarregar resultados para limpar a interface
         await loadExistingResults();
 
         // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
-        console.log('📢 Disparando evento para atualizar leaderboard...');
         window.dispatchEvent(new CustomEvent('wod_results_updated'));
 
         // Também disparar novamente após um pequeno delay para garantir
@@ -544,18 +547,25 @@ export default function Results() {
       await loadExistingResults();
 
       // Disparar evento IMEDIATAMENTE para atualizar o leaderboard
-      console.log('📢 Disparando evento para atualizar leaderboard após salvar...');
       window.dispatchEvent(new CustomEvent('wod_results_updated'));
 
       // Também disparar novamente após um pequeno delay para garantir
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('wod_results_updated'));
       }, 500);
+
+      if (shouldPublish) {
+        setIsPublished(true);
+        setIsSaved(false);
+      } else {
+        setIsSaved(true);
+      }
     } catch (error: any) {
       console.error("Error saving results:", error);
       toast.error("Erro ao salvar resultados");
     } finally {
       setSaving(false);
+      setSavingAction(null);
     }
   };
 
@@ -792,16 +802,20 @@ export default function Results() {
               onClick={() => handleSave(false)}
               variant="outline"
               className="flex-1 shadow-glow"
-              disabled={saving}
+              disabled={isSaved || isPublished || saving}
             >
-              {saving ? 'Salvando...' : 'Salvar Resultados'}
+              {savingAction === 'save'
+                ? 'Salvando...'
+                : (isSaved || isPublished ? 'Resultados Salvos' : 'Salvar Resultados')}
             </Button>
             <Button
               onClick={() => handleSave(true)}
-              className="flex-1 shadow-glow"
-              disabled={saving}
+              className={`flex-1 shadow-glow text-white ${isPublished ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90 opacity-80 cursor-not-allowed" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+              disabled={isPublished || saving}
             >
-              {saving ? 'Publicando...' : 'Publicar Resultados'}
+              {savingAction === 'publish'
+                ? 'Publicando...'
+                : (isPublished ? 'Resultados Publicados' : 'Publicar Resultados')}
             </Button>
           </div>
         </Card>

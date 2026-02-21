@@ -197,11 +197,11 @@ export default function Leaderboard() {
       if (configData) {
         setEditingConfig({
           id: configData.id,
-          presetType: data.preset_type || 'crossfit-games',
-          pointsTableText: JSON.stringify(data.points_table || {}, null, 2),
-          dnfPoints: data.dnf_points || 0,
-          dnsPoints: data.dns_points || 0,
-          rankingMethod: data.ranking_method || 'simple', // ADDED
+          presetType: configData.preset_type || 'crossfit-games',
+          pointsTableText: JSON.stringify(configData.points_table || {}, null, 2),
+          dnfPoints: configData.dnf_points || 0,
+          dnsPoints: configData.dns_points || 0,
+          rankingMethod: configData.ranking_method || 'simple', // ADDED
         });
       } else {
         // Defaults

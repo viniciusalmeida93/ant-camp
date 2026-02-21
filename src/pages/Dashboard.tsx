@@ -16,6 +16,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChampionship } from '@/contexts/ChampionshipContext';
 import { formatCurrency } from '@/lib/utils';
 
+const minutesToString = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { selectedChampionship, setSelectedChampionship, championships, loadChampionships, loading: contextLoading } = useChampionship();
@@ -60,11 +66,6 @@ export default function Dashboard() {
     registrationDeadline: '',
   });
   const [scheduleConfig, setScheduleConfig] = useState({
-    startTime: '08:00',
-    breakIntervalMinutes: 5,
-    enableBreak: false,
-    breakDurationMinutes: 30,
-    breakAfterWodNumber: 1,
     totalDays: 1,
   });
   const [wods, setWods] = useState<any[]>([]);
@@ -72,11 +73,15 @@ export default function Dashboard() {
   const [dayWods, setDayWods] = useState<Map<number, any[]>>(new Map());
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const autoSeededRef = useRef<Set<string>>(new Set());
   const scaleTriosEnsuredRef = useRef<Set<string>>(new Set());
   const randomResultsEnsuredRef = useRef<Set<string>>(new Set());
   const [totalDaysInput, setTotalDaysInput] = useState('1');
+  const [breakDurationsStr, setBreakDurationsStr] = useState<Map<string, string>>(new Map());
+
+
 
   useEffect(() => {
     if (selectedChampionship) {
@@ -86,6 +91,15 @@ export default function Dashboard() {
       loadChampionshipDays();
     }
   }, [selectedChampionship]);
+
+  // Sync breakDurationsStr when championshipDays changes
+  useEffect(() => {
+    const newMap = new Map();
+    championshipDays.forEach(day => {
+      newMap.set(day.id, minutesToString(day.break_duration_minutes || 0));
+    });
+    setBreakDurationsStr(newMap);
+  }, [championshipDays]);
 
   const loadStats = async () => {
     if (!selectedChampionship) return;
@@ -183,14 +197,10 @@ export default function Dashboard() {
 
       if (data) {
         setScheduleConfig({
-          startTime: '',
-          breakIntervalMinutes: 5,
-          enableBreak: data.enable_break || false,
-          breakDurationMinutes: data.break_duration_minutes || 30,
-          breakAfterWodNumber: data.break_after_wod_number || 1,
           totalDays: data.total_days || 1,
         });
         setTotalDaysInput(String(data.total_days || 1));
+        setConfigSaved(true);
       }
     } catch (error: any) {
       console.error("Error loading schedule config:", error);
@@ -400,71 +410,7 @@ export default function Dashboard() {
     toast.success("Prova removida do dia");
   };
 
-  const handleDayBreakToggle = async (dayId: string, enabled: boolean) => {
-    try {
-      const { error } = await supabase
-        .from("championship_days")
-        .update({ enable_break: enabled })
-        .eq("id", dayId);
 
-      if (error) throw error;
-
-      setChampionshipDays(prev => prev.map(day =>
-        day.id === dayId ? { ...day, enable_break: enabled } : day
-      ));
-
-      toast.success(enabled ? "Pausa ativada para este dia" : "Pausa desativada para este dia");
-    } catch (error: any) {
-      console.error("Error updating day break:", error);
-      toast.error("Erro ao atualizar configuração de pausa");
-    }
-  };
-
-  const handleDayBreakUpdate = async (dayId: string, field: string, value: any) => {
-    try {
-      const { error } = await supabase
-        .from("championship_days")
-        .update({ [field]: value })
-        .eq("id", dayId);
-
-      if (error) throw error;
-
-      setChampionshipDays(prev => prev.map(day =>
-        day.id === dayId ? { ...day, [field]: value } : day
-      ));
-
-      toast.success("Configuração atualizada!");
-    } catch (error: any) {
-      console.error("Error updating day break:", error);
-      toast.error('Erro ao atualizar configuração');
-    }
-  };
-
-  const handleSaveScheduleConfig = async () => {
-    if (!selectedChampionship) return;
-
-    setSavingSchedule(true);
-    try {
-      const { error } = await supabase
-        .from("championships")
-        .update({
-          enable_break: scheduleConfig.enableBreak,
-          break_duration_minutes: scheduleConfig.breakDurationMinutes,
-          break_after_wod_number: scheduleConfig.breakAfterWodNumber,
-          total_days: scheduleConfig.totalDays,
-        })
-        .eq("id", selectedChampionship.id);
-
-      if (error) throw error;
-
-      toast.success("Configuração salva com sucesso!");
-    } catch (error: any) {
-      console.error("Error saving schedule config:", error);
-      toast.error("Erro ao salvar configuração");
-    } finally {
-      setSavingSchedule(false);
-    }
-  };
 
   const generateSlug = (name: string) => {
     return name
@@ -1181,23 +1127,14 @@ export default function Dashboard() {
 
                         setTotalDaysInput(String(normalized));
                         setScheduleConfig(prev => ({ ...prev, totalDays: normalized }));
+                        setConfigSaved(false);
                         await updateDaysCount(normalized);
                       }}
                     />
                   </div>
                 </div>
 
-                <div className="p-4 border rounded-lg bg-muted/30">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1">
-                      <Label className="text-sm font-semibold">Configuração de Pausas</Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Configure pausas específicas para cada dia do evento na seção "Distribuição de Provas por Dia" abaixo.
-                        Cada dia pode ter sua própria pausa com duração e momento personalizados.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -1289,96 +1226,10 @@ export default function Dashboard() {
                           </p>
                         )}
 
-                        <div className="mt-4 pt-4 border-t">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <Switch
-                                checked={day.enable_break || false}
-                                onCheckedChange={(checked) => handleDayBreakToggle(day.id, checked)}
-                              />
-                              <div>
-                                <Label className="cursor-pointer">Ativar Pausa para este Dia</Label>
-                                <p className="text-xs text-muted-foreground">Configure uma pausa específica para este dia</p>
-                              </div>
-                            </div>
-                          </div>
 
-                          {day.enable_break && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                              <div>
-                                <Label htmlFor={`breakDuration-${day.id}`}>Duração da Pausa (minutos)</Label>
-                                <Input
-                                  id={`breakDuration-${day.id}`}
-                                  type="number"
-                                  min="0"
-                                  value={
-                                    day.break_duration_minutes !== null && day.break_duration_minutes !== undefined
-                                      ? day.break_duration_minutes
-                                      : ''
-                                  }
-                                  onChange={(e) => {
-                                    const rawValue = e.target.value;
-                                    if (rawValue === '') {
-                                      handleDayBreakUpdate(day.id, 'break_duration_minutes', null);
-                                      return;
-                                    }
-
-                                    const parsed = parseInt(rawValue, 10);
-                                    if (Number.isNaN(parsed)) {
-                                      return;
-                                    }
-
-                                    handleDayBreakUpdate(day.id, 'break_duration_minutes', parsed);
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`breakAfterWod-${day.id}`}>Após Qual Prova</Label>
-                                <Select
-                                  value={day.break_after_wod_number?.toString() || '1'}
-                                  onValueChange={(value) => handleDayBreakUpdate(day.id, 'break_after_wod_number', parseInt(value))}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {dayWodsList.map((wod, index) => (
-                                      <SelectItem key={wod.id} value={(index + 1).toString()}>
-                                        Após {wod.name} (Prova {index + 1})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  A pausa será aplicada após todas as baterias desta prova
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
                       </Card>
                     );
                   })}
-                </div>
-
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    onClick={handleSaveScheduleConfig}
-                    disabled={savingSchedule || loadingSchedule}
-                    className="flex-1"
-                  >
-                    {savingSchedule || loadingSchedule ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {savingSchedule ? "Salvando..." : "Calculando..."}
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Salvar Configuração
-                      </>
-                    )}
-                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -1389,7 +1240,8 @@ export default function Dashboard() {
         <Card className="p-8 text-center">
           <p className="text-muted-foreground">Selecione um campeonato para ver as estatísticas e gerenciar.</p>
         </Card>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }
