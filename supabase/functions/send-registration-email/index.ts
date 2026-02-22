@@ -71,6 +71,17 @@ serve(async (req) => {
       }).format(cents / 100);
     };
 
+    const paymentMethodLabel = (method: string | null) => {
+      switch ((method || '').toLowerCase()) {
+        case 'pix': return 'PIX';
+        case 'credit_card': return 'Cartão de Crédito';
+        case 'boleto': case 'bank_slip': return 'Boleto';
+        default: return method || 'Não informado';
+      }
+    };
+
+    const methodLabel = paymentMethodLabel(registration.payment_method);
+
     // Preparar lista de membros
     let membersHtml = "";
     if (category.format !== "individual" && registration.team_members) {
@@ -183,7 +194,7 @@ serve(async (req) => {
                     <td align="right"><strong>${formatPrice(registration.subtotal_cents)}</strong></td>
                   </tr>
                   <tr>
-                    <td>Taxa de serviço:</td>
+                    <td>Taxa de serviço (${methodLabel}):</td>
                     <td align="right">${formatPrice(registration.platform_fee_cents)}</td>
                   </tr>
                   <tr style="border-top: 2px solid #DC2626;">
@@ -194,12 +205,15 @@ serve(async (req) => {
               </div>
 
               <!-- Status do Pagamento -->
-              <div style="background-color: ${registration.payment_status === "approved" ? "#d4edda" : "#fff3cd"}; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid ${registration.payment_status === "approved" ? "#28a745" : "#ffc107"};">
-                <p style="margin: 0; color: #495057;">
-                  <strong>Status do Pagamento:</strong> 
-                  <span style="color: ${registration.payment_status === "approved" ? "#155724" : "#856404"};">
+              <div style="background-color: ${registration.payment_status === "approved" ? "#d4edda" : "#fff3cd"}; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid ${registration.payment_status === "approved" ? "#28a745" : "#ffc107"}">
+                <p style="margin: 0 0 6px 0; color: #495057;">
+                  <strong>Status do Pagamento:</strong>
+                  <span style="color: ${registration.payment_status === "approved" ? "#155724" : "#856404"}">
                     ${registration.payment_status === "approved" ? "✅ PAGO" : "⏳ AGUARDANDO PAGAMENTO"}
                   </span>
+                </p>
+                <p style="margin: 0; color: #495057; font-size: 14px;">
+                  <strong>Forma de pagamento:</strong> ${methodLabel}
                 </p>
               </div>
 
