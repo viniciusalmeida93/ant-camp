@@ -58,6 +58,9 @@ export default function PaymentConfig() {
         cancelledCount: 0,
     });
     const [loadingDashboard, setLoadingDashboard] = useState(false);
+    const [batches, setBatches] = useState<any[]>([]);
+    const [activeBatch, setActiveBatch] = useState<any>(null);
+    const [nextBatch, setNextBatch] = useState<any>(null);
 
     // --- States for Settings ---
     const [loadingSettings, setLoadingSettings] = useState(false);
@@ -80,6 +83,7 @@ export default function PaymentConfig() {
         if (selectedChampionship) {
             loadDashboardData();
             loadSettingsData();
+            loadBatches(selectedChampionship.id);
         }
     }, [selectedChampionship]);
 
@@ -121,6 +125,70 @@ export default function PaymentConfig() {
             toast.error("Erro ao carregar dados do dashboard");
         } finally {
             setLoadingDashboard(false);
+        }
+    };
+
+    const loadBatches = async (champId: string) => {
+        try {
+            const { data: batchData, error: batchError } = await supabase
+                .from('registration_batches')
+                .select('*')
+                .eq('championship_id', champId)
+                .order('start_date', { ascending: true });
+
+            if (batchError) throw batchError;
+            if (!batchData || batchData.length === 0) return;
+
+            const { data: regsData } = await supabase
+                .from('registrations')
+                .select('batch_id, payment_status, amount')
+                .eq('championship_id', champId);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const processed = batchData.map(batch => {
+                const batchRegs = (regsData || []).filter(r => r.batch_id === batch.id);
+                const approvedSales = batchRegs.filter(r => r.payment_status === 'approved').length;
+                const revenue = batchRegs
+                    .filter(r => r.payment_status === 'approved')
+                    .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+                const startDate = new Date(batch.start_date);
+                const endDate = new Date(batch.end_date);
+                startDate.setHours(0, 0, 0, 0);
+                endDate.setHours(23, 59, 59, 999);
+
+                let status = 'Futuro';
+                let statusColor: any = 'secondary';
+
+                if (approvedSales >= batch.max_slots) {
+                    status = 'Esgotado';
+                    statusColor = 'destructive';
+                } else if (today >= startDate && today <= endDate) {
+                    status = 'Ativo';
+                    statusColor = 'default';
+                } else if (today > endDate) {
+                    status = 'Expirado';
+                    statusColor = 'secondary';
+                }
+
+                return {
+                    ...batch,
+                    approvedSales,
+                    revenue,
+                    remaining: batch.max_slots - approvedSales,
+                    occupancy: batch.max_slots > 0 ? Math.round((approvedSales / batch.max_slots) * 100) : 0,
+                    status,
+                    statusColor,
+                };
+            });
+
+            setBatches(processed);
+            setActiveBatch(processed.find(b => b.status === 'Ativo') || null);
+            setNextBatch(processed.find(b => b.status === 'Futuro') || null);
+        } catch (error) {
+            console.error('Erro ao carregar lotes:', error);
         }
     };
 
@@ -520,6 +588,155 @@ export default function PaymentConfig() {
                                 </Card>
                             ) : null;
                         })()}
+
+                        {/* Cards Lote Ativo + Próximo */}
+                        {(activeBatch || nextBatch) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                {activeBatch && (
+                                    <Card className="border-primary">
+                                        <CardHeader>
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="text-lg">🎟️ {activeBatch.name}</CardTitle>
+                                                <Badge variant={activeBatch.statusColor}>{activeBatch.status}</Badge>
+                                            </div>
+                                            <CardDescription>
+                                                {new Date(activeBatch.start_date).toLocaleDateString('pt-BR')} até{' '}
+                                                {new Date(activeBatch.end_date).toLocaleDateString('pt-BR')}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-2xl font-bold text-primary">
+                                                        R$ {(activeBatch.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span className="text-sm text-muted-foreground">por atleta</span>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-sm font-medium">Vendas</span>
+                                                        <span className="text-sm text-muted-foreground">
+                                                            {activeBatch.approvedSales}/{activeBatch.max_slots} ({activeBatch.occupancy}%)
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-muted rounded-full h-2.5">
+                                                        <div
+                                                            className="bg-primary h-2.5 rounded-full transition-all"
+                                                            style={{ width: `${activeBatch.occupancy}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Vagas Restantes</p>
+                                                        <p className="text-lg font-bold">{activeBatch.remaining}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Receita Gerada</p>
+                                                        <p className="text-lg font-bold">
+                                                            R$ {activeBatch.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                                {nextBatch && (
+                                    <Card>
+                                        <CardHeader>
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="text-lg">⏳ {nextBatch.name}</CardTitle>
+                                                <Badge variant={nextBatch.statusColor}>{nextBatch.status}</Badge>
+                                            </div>
+                                            <CardDescription>
+                                                Inicia em {new Date(nextBatch.start_date).toLocaleDateString('pt-BR')}
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-2xl font-bold">
+                                                        R$ {(nextBatch.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span className="text-sm text-muted-foreground">por atleta</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Vagas Totais</p>
+                                                        <p className="text-lg font-bold">{nextBatch.max_slots}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Receita Potencial</p>
+                                                        <p className="text-lg font-bold">
+                                                            R$ {((nextBatch.price || 0) * nextBatch.max_slots).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Tabela de Todos os Lotes */}
+                        {batches.length > 0 && (
+                            <Card className="mb-6">
+                                <CardHeader>
+                                    <CardTitle>Resumo de Todos os Lotes</CardTitle>
+                                    <CardDescription>Visão completa de todos os lotes de inscrição</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Lote</TableHead>
+                                                <TableHead>Preço</TableHead>
+                                                <TableHead>Vendas</TableHead>
+                                                <TableHead>Vagas Rest.</TableHead>
+                                                <TableHead>Receita</TableHead>
+                                                <TableHead>Status</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {batches.map((batch) => (
+                                                <TableRow key={batch.id}>
+                                                    <TableCell className="font-medium">
+                                                        {batch.name}
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {new Date(batch.start_date).toLocaleDateString('pt-BR')} –{' '}
+                                                            {new Date(batch.end_date).toLocaleDateString('pt-BR')}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>R$ {(batch.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                                                    <TableCell>
+                                                        {batch.approvedSales}/{batch.max_slots}
+                                                        <div className="text-xs text-muted-foreground">{batch.occupancy}%</div>
+                                                    </TableCell>
+                                                    <TableCell>{batch.remaining}</TableCell>
+                                                    <TableCell>R$ {batch.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                                                    <TableCell><Badge variant={batch.statusColor}>{batch.status}</Badge></TableCell>
+                                                </TableRow>
+                                            ))}
+                                            <TableRow className="bg-muted/50 font-bold">
+                                                <TableCell>TOTAL</TableCell>
+                                                <TableCell>—</TableCell>
+                                                <TableCell>
+                                                    {batches.reduce((s, b) => s + b.approvedSales, 0)}/
+                                                    {batches.reduce((s, b) => s + b.max_slots, 0)}
+                                                </TableCell>
+                                                <TableCell>{batches.reduce((s, b) => s + b.remaining, 0)}</TableCell>
+                                                <TableCell>
+                                                    R$ {batches.reduce((s, b) => s + b.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </TableCell>
+                                                <TableCell>—</TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Tabela de inscrições */}
                         <Card>
