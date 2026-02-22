@@ -36,8 +36,11 @@ import {
     CheckCircle2,
     CreditCard,
     Building,
-    ExternalLink
+    ExternalLink,
+    Send,
+    Mail
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function PaymentConfig() {
     const navigate = useNavigate();
@@ -61,6 +64,8 @@ export default function PaymentConfig() {
     const [batches, setBatches] = useState<any[]>([]);
     const [activeBatch, setActiveBatch] = useState<any>(null);
     const [nextBatch, setNextBatch] = useState<any>(null);
+    const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+    const [sendingRecovery, setSendingRecovery] = useState<Set<string>>(new Set());
 
     // --- States for Settings ---
     const [loadingSettings, setLoadingSettings] = useState(false);
@@ -190,6 +195,41 @@ export default function PaymentConfig() {
         } catch (error) {
             console.error('Erro ao carregar lotes:', error);
         }
+    };
+
+    const sendCartRecovery = async (registrationIds: string[]) => {
+        if (registrationIds.length === 0) return;
+        setSendingRecovery(prev => new Set([...prev, ...registrationIds]));
+        let successCount = 0;
+        let failCount = 0;
+        for (const id of registrationIds) {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const res = await fetch(
+                    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-cart-recovery`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session?.access_token}`,
+                        },
+                        body: JSON.stringify({ registrationId: id }),
+                    }
+                );
+                if (res.ok) successCount++;
+                else failCount++;
+            } catch {
+                failCount++;
+            }
+        }
+        setSendingRecovery(prev => {
+            const next = new Set(prev);
+            registrationIds.forEach(id => next.delete(id));
+            return next;
+        });
+        setSelectedRows(new Set());
+        if (successCount > 0) toast.success(`📧 ${successCount} email(s) de recuperação enviado(s)!`);
+        if (failCount > 0) toast.error(`❌ Falha ao enviar ${failCount} email(s).`);
     };
 
     const applyDashboardFilters = () => {
@@ -745,10 +785,25 @@ export default function PaymentConfig() {
                                     <CardTitle>Inscrições e Pagamentos</CardTitle>
                                     <CardDescription>Gerencie todas as inscrições do campeonato</CardDescription>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={exportToCSV}>
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Exportar CSV
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {selectedRows.size > 0 && (
+                                        <Button
+                                            size="sm"
+                                            variant="default"
+                                            onClick={() => sendCartRecovery(Array.from(selectedRows))}
+                                            disabled={sendingRecovery.size > 0}
+                                        >
+                                            {sendingRecovery.size > 0
+                                                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                : <Mail className="mr-2 h-4 w-4" />}
+                                            Enviar Recuperação ({selectedRows.size})
+                                        </Button>
+                                    )}
+                                    <Button variant="outline" size="sm" onClick={exportToCSV}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Exportar CSV
+                                    </Button>
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex gap-4 mb-6">
@@ -775,25 +830,54 @@ export default function PaymentConfig() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
+                                                <TableHead className="w-10">
+                                                    <Checkbox
+                                                        checked={
+                                                            filteredRegistrations.filter(r => r.payment_status === 'pending').length > 0 &&
+                                                            filteredRegistrations.filter(r => r.payment_status === 'pending').every(r => selectedRows.has(r.id))
+                                                        }
+                                                        onCheckedChange={(checked) => {
+                                                            const pending = filteredRegistrations.filter(r => r.payment_status === 'pending').map(r => r.id);
+                                                            setSelectedRows(checked ? new Set(pending) : new Set());
+                                                        }}
+                                                        aria-label="Selecionar todos pendentes"
+                                                    />
+                                                </TableHead>
                                                 <TableHead>Atleta/Time</TableHead>
                                                 <TableHead>Categoria</TableHead>
                                                 <TableHead>Status</TableHead>
                                                 <TableHead className="text-right">Valor</TableHead>
                                                 <TableHead>Data</TableHead>
+                                                <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {loadingDashboard ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="h-24 text-center">Carregando...</TableCell>
+                                                    <TableCell colSpan={7} className="h-24 text-center">Carregando...</TableCell>
                                                 </TableRow>
                                             ) : filteredRegistrations.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="h-24 text-center">Nenhuma inscrição encontrada</TableCell>
+                                                    <TableCell colSpan={7} className="h-24 text-center">Nenhuma inscrição encontrada</TableCell>
                                                 </TableRow>
                                             ) : (
                                                 filteredRegistrations.map(reg => (
-                                                    <TableRow key={reg.id}>
+                                                    <TableRow key={reg.id} className={selectedRows.has(reg.id) ? 'bg-muted/40' : ''}>
+                                                        <TableCell>
+                                                            {reg.payment_status === 'pending' ? (
+                                                                <Checkbox
+                                                                    checked={selectedRows.has(reg.id)}
+                                                                    onCheckedChange={(checked) => {
+                                                                        setSelectedRows(prev => {
+                                                                            const next = new Set(prev);
+                                                                            checked ? next.add(reg.id) : next.delete(reg.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    aria-label={`Selecionar ${reg.athlete_name}`}
+                                                                />
+                                                            ) : null}
+                                                        </TableCell>
                                                         <TableCell>
                                                             <div className="font-medium">{reg.athlete_name}</div>
                                                             <div className="text-xs text-muted-foreground">{reg.athlete_email}</div>
@@ -802,6 +886,21 @@ export default function PaymentConfig() {
                                                         <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
                                                         <TableCell className="text-right">{formatCurrency(reg.subtotal_cents)}</TableCell>
                                                         <TableCell className="text-muted-foreground">{new Date(reg.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            {reg.payment_status === 'pending' && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    title="Enviar email de recuperação"
+                                                                    disabled={sendingRecovery.has(reg.id)}
+                                                                    onClick={() => sendCartRecovery([reg.id])}
+                                                                >
+                                                                    {sendingRecovery.has(reg.id)
+                                                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                        : <Send className="h-4 w-4" />}
+                                                                </Button>
+                                                            )}
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))
                                             )}
