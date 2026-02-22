@@ -62,16 +62,9 @@ export default function LinkPage() {
         .eq("is_active", true)
         .order("order_index", { ascending: true });
 
-      const finalButtons = [...(linkButtons || [])];
+      const finalButtons = (linkButtons || []).filter(b => b.is_active);
 
-      const hasWodButton = (linkButtons || []).some(button => button.button_type === "wods");
-      if (!hasWodButton) finalButtons.push({ id: "wods-default", label: "Provas", button_type: "wods", is_active: true } as any);
-
-      const hasLeaderboard = finalButtons.some(b => b.button_type === 'leaderboard');
-      if (!hasLeaderboard) finalButtons.push({ id: "leaderboard-default", label: "Leaderboard", button_type: "leaderboard", is_active: true } as any);
-
-      const hasHeats = finalButtons.some(b => b.button_type === 'heats');
-      if (!hasHeats) finalButtons.push({ id: "heats-default", label: "Baterias", button_type: "heats", is_active: true } as any);
+      console.log('🔗 Lotes do Link Page:', finalButtons);
 
       setButtons(finalButtons);
 
@@ -193,17 +186,14 @@ export default function LinkPage() {
             Or just rely on the Organizer to add it? User said "Dashboard... vamos adicionar".
             Let's add a default "Regulamento" button if text exists.
         */}
-        {championship?.regulation_url && (
-          <Button
-            variant="outline"
-            onClick={() => window.open(championship.regulation_url, "_blank")}
-            className="w-full h-12 text-sm font-semibold border-none hover:opacity-90 transition-all justify-between px-4 group shadow-md rounded bg-primary text-white"
-          >
-            Baixar Regulamento (PDF)
-          </Button>
+        {buttons.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">
+            Nenhum link disponível no momento.
+          </p>
         )}
 
-        {championship?.regulation && !buttons.find(b => b.button_type === 'regulation' || b.label.toLowerCase().includes('regras') || b.label.toLowerCase().includes('regulamento')) && (
+        {/* Regulamento em texto (apenas se botão da lista estiver configurado) */}
+        {championship?.regulation && buttons.find(b => b.button_type === 'regulation') && (
           <Button
             variant="outline"
             onClick={() => setIsRegulationOpen(true)}
