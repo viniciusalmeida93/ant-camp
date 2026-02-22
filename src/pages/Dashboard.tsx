@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Target, Dumbbell, Loader2, Trophy, Upload, Clock, Settings, CheckCircle2, Plus, QrCode, DollarSign, FileText } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatsCard } from '@/components/stats/StatsCard';
@@ -106,7 +105,16 @@ export default function Dashboard() {
       if (error) throw error;
 
       const categoryMap = new Map<string, number>();
-      const COLORS = ['#D71C1D', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4'];
+      const COLORS = [
+        'hsl(0, 70%, 50%)',
+        'hsl(210, 70%, 50%)',
+        'hsl(120, 70%, 50%)',
+        'hsl(45, 70%, 50%)',
+        'hsl(280, 70%, 50%)',
+        'hsl(180, 70%, 50%)',
+        'hsl(30, 70%, 50%)',
+        'hsl(300, 70%, 50%)',
+      ];
 
       registrations?.forEach(reg => {
         // @ts-ignore
@@ -1116,7 +1124,7 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Gráfico de Distribuição por Categoria */}
+          {/* Distribuição por Categoria - Barras Horizontais */}
           {categoryDistribution.length > 0 && (
             <Card className="mb-8">
               <CardHeader>
@@ -1126,27 +1134,36 @@ export default function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={350}>
-                  <PieChart>
-                    <Pie
-                      data={categoryDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value, percent }: any) =>
-                        `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
-                      }
-                      outerRadius={100}
-                      dataKey="value"
-                    >
-                      {categoryDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => [`${value} atletas`, 'Total']} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="space-y-4">
+                  {categoryDistribution.map((category, index) => {
+                    const total = categoryDistribution.reduce((sum, cat) => sum + cat.value, 0);
+                    const percentage = Math.round((category.value / total) * 100);
+                    return (
+                      <div key={index} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{category.name}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {category.value} ({percentage}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${percentage}%`, backgroundColor: category.fill }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold">Total de Atletas</span>
+                    <span className="font-bold text-lg">
+                      {categoryDistribution.reduce((sum, cat) => sum + cat.value, 0)}
+                    </span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
