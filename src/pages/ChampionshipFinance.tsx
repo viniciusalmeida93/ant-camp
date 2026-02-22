@@ -45,6 +45,9 @@ export default function ChampionshipFinance() {
     totalRegistrations: 0,
     paymentMethods: [] as any[],
   });
+  const [batches, setBatches] = useState<any[]>([]);
+  const [activeBatch, setActiveBatch] = useState<any>(null);
+  const [nextBatch, setNextBatch] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -125,11 +128,92 @@ export default function ChampionshipFinance() {
         paymentMethods,
       });
 
+      // Carregar lotes
+      await loadBatches(championshipId as string);
+
     } catch (error: any) {
       toast.error("Erro ao carregar dados");
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadBatches = async (champId: string) => {
+    try {
+      console.log('🎟️ Carregando lotes do campeonato...');
+
+      const { data: batchData, error: batchError } = await supabase
+        .from('registration_batches')
+        .select('*')
+        .eq('championship_id', champId)
+        .order('start_date', { ascending: true });
+
+      if (batchError) throw batchError;
+      console.log('  - Total de lotes encontrados:', batchData?.length || 0);
+
+      const { data: batchRegs, error: regError } = await supabase
+        .from('registrations')
+        .select('batch_id, payment_status, amount')
+        .eq('championship_id', champId);
+
+      if (regError) throw regError;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const processedBatches = batchData?.map(batch => {
+        const batchRegistrations = (batchRegs || []).filter(r => r.batch_id === batch.id);
+        const approvedSales = batchRegistrations.filter(r => r.payment_status === 'approved').length;
+        const totalSales = batchRegistrations.length;
+        const revenue = batchRegistrations
+          .filter(r => r.payment_status === 'approved')
+          .reduce((sum, r) => sum + (r.amount || 0), 0);
+
+        const startDate = new Date(batch.start_date);
+        const endDate = new Date(batch.end_date);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+
+        let status = 'Futuro';
+        let statusColor: any = 'secondary';
+
+        if (approvedSales >= batch.max_slots) {
+          status = 'Esgotado';
+          statusColor = 'destructive';
+        } else if (today >= startDate && today <= endDate) {
+          status = 'Ativo';
+          statusColor = 'default';
+        } else if (today > endDate) {
+          status = 'Expirado';
+          statusColor = 'secondary';
+        }
+
+        return {
+          ...batch,
+          approvedSales,
+          totalSales,
+          revenue,
+          remaining: batch.max_slots - approvedSales,
+          occupancy: batch.max_slots > 0 ? Math.round((approvedSales / batch.max_slots) * 100) : 0,
+          status,
+          statusColor,
+        };
+      }) || [];
+
+      const active = processedBatches.find(b => b.status === 'Ativo');
+      const future = processedBatches.find(b => b.status === 'Futuro');
+
+      console.log('  - Lote ativo:', active?.name || 'Nenhum');
+      console.log('  - Próximo lote:', future?.name || 'Nenhum');
+
+      setBatches(processedBatches);
+      setActiveBatch(active || null);
+      setNextBatch(future || null);
+
+      console.log('✅ Lotes carregados com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao carregar lotes:', error);
     }
   };
 
