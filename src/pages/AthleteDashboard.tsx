@@ -325,7 +325,7 @@ export default function AthleteDashboard() {
                                         {/* Botão para Checkout se pendente */}
                                         {reg.payment_status !== 'approved' && (
                                             <Button
-                                                className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md"
+                                                className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md"
                                                 onClick={() => navigate(`/checkout/${reg.id}`)}
                                             >
                                                 Finalizar Inscrição
@@ -338,7 +338,7 @@ export default function AthleteDashboard() {
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <Button
                                                         size="sm"
-                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
+                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/heats`)}
                                                     >
                                                         Baterias
@@ -346,16 +346,16 @@ export default function AthleteDashboard() {
 
                                                     <Button
                                                         size="sm"
-                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
+                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/leaderboard`)}
                                                     >
-                                                        Ranking
+                                                        Leaderboard
                                                     </Button>
                                                 </div>
 
                                                 <Button
                                                     size="sm"
-                                                    className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white font-bold shadow-md transition-colors"
+                                                    className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md transition-colors"
                                                     onClick={() => navigate(`/${reg.championships.slug}/wods`)}
                                                 >
                                                     Ver Provas

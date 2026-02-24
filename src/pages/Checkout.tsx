@@ -381,7 +381,7 @@ export default function Checkout() {
           cardData: paymentMethod === "credit_card" ? {
             holderName: cardData.holderName,
             number: cardData.number.replace(/\s/g, ""),
-            expiryMonth: cardData.expiryMonth,
+            expiryMonth: cardData.expiryMonth.padStart(2, '0'), // Garante 08 em vez de 8
             expiryYear: cardData.expiryYear,
             ccv: cardData.cvv
           } : undefined,
@@ -389,6 +389,7 @@ export default function Checkout() {
             name: cardData.holderName,
             email: registration.athlete_email,
             cpfCnpj: cpfToUse, // Usar o mesmo CPF validado
+            postalCode: cardData.postalCode.replace(/\D/g, ""), // Enviar CEP para o Asaas!
             addressNumber: (cardData.addressNumber && cardData.addressNumber.trim()) || "S/N",
             phone: registration.athlete_phone || registration.athlete_phone // Fallback if mobilePhone exists
           } : undefined,
@@ -752,7 +753,7 @@ export default function Checkout() {
                                   const perInstallment = totalForI / i;
 
                                   return (
-                                    <SelectItem key={i} value={String(i)}>
+                                    <SelectItem key={i} value={String(i)} className="pl-6 border-b border-border/30 last:border-b-0 py-2.5">
                                       {i}x de {formatCurrency(perInstallment)} (Total: {formatCurrency(totalForI)})
                                     </SelectItem>
                                   );

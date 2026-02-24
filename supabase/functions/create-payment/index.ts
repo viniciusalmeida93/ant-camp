@@ -311,13 +311,27 @@ serve(async (req) => {
 
       // Requirement: We need 'subtotal_cents' (Category Price) minus any discount
       const basePrice = registration.subtotal_cents || category.price_cents;
-      const organizerFixedShare = Math.max(0, basePrice - discountCents);
+      let organizerFixedShare = Math.max(0, basePrice - discountCents) / 100;
 
-      console.log(`Split Calculation: Base=${basePrice}, Discount=${discountCents}, Final Share=${organizerFixedShare}`);
+      // Se for parcelado, no asaas o split de valor fixo é abatido em cada parcela da cobrança
+      if (paymentMethod === "CREDIT_CARD" && installments > 1) {
+        organizerFixedShare = Number((organizerFixedShare / installments).toFixed(2));
+      }
+
+      console.log('💳 SPLIT CALCULATION:');
+      console.log('  - Método:', paymentMethod);
+      console.log('  - Parcelas:', installments);
+      console.log('  - Valor base organizador:', basePrice / 100);
+      console.log('  - Split por parcela:', organizerFixedShare);
+      console.log('  - Total organizador receberá:',
+        (paymentMethod === "CREDIT_CARD" && installments > 1)
+          ? `${organizerFixedShare} × ${installments} = ${Number((organizerFixedShare * installments).toFixed(2))}`
+          : organizerFixedShare
+      );
 
       splits.push({
         walletId: walletId,
-        fixedValue: organizerFixedShare / 100,
+        fixedValue: organizerFixedShare,
       });
 
     }
@@ -328,15 +342,28 @@ serve(async (req) => {
     let paymentPayload: any = {
       customer: customerId,
       billingType: paymentMethod,
-      value: totalValue,
       dueDate: new Date().toISOString().split('T')[0],
       description: `Inscrição ${championship.name} - ${category.name}`,
       externalReference: registrationId,
       split: splits
     };
 
-    if (paymentMethod === "CREDIT_CARD") {
+    if (paymentMethod === "CREDIT_CARD" && installments > 1) {
       paymentPayload.installmentCount = installments;
+      paymentPayload.installmentValue = Number((totalValue / installments).toFixed(2));
+      paymentPayload.totalValue = totalValue;
+
+      console.log(`=== METADADOS PARCELAMENTO ===`);
+      console.log(`Registration ID: ${registrationId}`);
+      console.log(`Valor Total: R$ ${totalValue.toFixed(2)}`);
+      console.log(`Parcelas: ${installments}`);
+      console.log(`Valor da Parcela (Calculado): R$ ${paymentPayload.installmentValue.toFixed(2)}`);
+      console.log(`==============================`);
+    } else {
+      paymentPayload.value = totalValue; // Pagamento à vista (Pix, Boleto ou 1x Cartão)
+    }
+
+    if (paymentMethod === "CREDIT_CARD") {
       if (!cardData || !creditCardHolderInfo) throw new Error("Dados do cartão faltando");
       paymentPayload.creditCard = {
         holderName: cardData.holderName,
