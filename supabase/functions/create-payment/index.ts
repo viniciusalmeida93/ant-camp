@@ -150,6 +150,16 @@ serve(async (req) => {
         discountCents = coupon.discount_value;
       }
       discountCents = Math.min(discountCents, basePrice);
+
+      console.log('🎟️ CUPOM APLICADO:');
+      console.log('  - Código:', couponCode);
+      console.log('  - Tipo:', coupon.discount_type); // 'percentage' ou 'fixed'
+      console.log('  - Valor cupom:', coupon.discount_value);
+      console.log('  - Valor base inscrição (centavos):', basePrice);
+      console.log('  - Desconto calculado (centavos):', discountCents);
+      console.log('  - Valor organizador ANTES (centavos):', basePrice);
+      console.log('  - Valor organizador DEPOIS (centavos):', basePrice - discountCents);
+      console.log('  - Usos restantes:', coupon.max_uses !== null ? coupon.max_uses - (coupon.used_count + 1) : 'Ilimitado');
     }
 
     // 3. Determine Total Value (Use requestPriceCents if available as it includes markup)

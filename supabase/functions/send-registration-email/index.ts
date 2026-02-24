@@ -104,141 +104,160 @@ serve(async (req) => {
       `;
     }
 
-    // Template do email
+    // Template do email redesign premium
     const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', Arial, sans-serif; background-color: #0d1216; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #0d1216; padding: 20px; }
+    .card { background-color: #12181d; border: 1px solid #1f2937; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .header { text-align: center; padding: 40px 20px; border-bottom: 1px solid #1f2937; }
+    .success-icon { width: 64px; height: 64px; margin-bottom: 20px; }
+    .title { color: white; font-size: 28px; font-weight: 900; margin: 0; text-transform: uppercase; font-style: italic; }
+    .title-highlight { color: #DC2626; }
+    .subtitle { color: #9ca3af; font-size: 16px; margin-top: 10px; line-height: 1.5; }
+    .content { padding: 30px; }
+    .top-info { background-color: #0a0e11; border: 1px solid #ef4444; border-top-width: 4px; border-radius: 8px; padding: 20px; margin-bottom: 25px; display: table; width: 100%; box-sizing: border-box; }
+    .info-col { display: table-cell; width: 50%; vertical-align: top; }
+    .info-label { color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600; }
+    .info-value { color: white; font-size: 15px; font-weight: 600; margin: 0; }
+    .section-title { color: white; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #1f2937; padding-bottom: 8px; margin-bottom: 15px; margin-top: 30px; font-weight: 700; }
+    .grid-details { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .grid-details td { padding: 10px 0; border-bottom: 1px dashed #1f2937; }
+    .grid-details td:first-child { color: #9ca3af; font-size: 14px; width: 40%; }
+    .grid-details td:last-child { color: white; font-size: 14px; font-weight: 600; text-align: right; }
+    .price-box { background: linear-gradient(to right, #111827, #1f2937); border-radius: 8px; padding: 20px; margin-top: 25px; border-left: 4px solid #3b82f6; }
+    .price-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #d1d5db; }
+    .price-total { display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px solid #374151; font-size: 18px; font-weight: 800; color: white; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; }
+    .badge-success { background-color: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+    .button-container { text-align: center; margin-top: 40px; margin-bottom: 10px; }
+    .primary-button { background-color: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: 700; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 0.5px; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+    .team-member { background-color: rgba(255,255,255,0.03); border: 1px solid #1f2937; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+    .team-member-name { color: white; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .team-member-contact { color: #9ca3af; font-size: 12px; }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          
-          <!-- Header -->
+<body>
+  <div class="container">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <!-- Logo da plataforma opcional aqui -->
+    </div>
+    
+    <div class="card">
+      <div class="header">
+        <img src="https://antcampp-web.vercel.app/static/check-circle.png" alt="Success" style="width: 72px; height: 72px; margin-bottom: 15px; display: inline-block;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/190/190411.png'" />
+        <h1 class="title">INSCRIÇÃO <span class="title-highlight">CONFIRMADA!</span></h1>
+        <p class="subtitle">Parabéns, ${registration.athlete_name}!<br/>Sua vaga está garantida no <strong>${championship.name}</strong>.</p>
+      </div>
+
+      <div class="content">
+        
+        <!-- Info Resumo -->
+        <div class="top-info">
+          <div class="info-col">
+            <div class="info-label">🏆 Campeonato</div>
+            <div class="info-value">${championship.name}</div>
+            
+            <div style="margin-top: 15px;">
+              <div class="info-label">👥 Categoria</div>
+              <div class="info-value">${category.name}</div>
+            </div>
+          </div>
+          <div class="info-col">
+            <div class="info-label">📅 Data do Evento</div>
+            <div class="info-value">${eventDate}</div>
+            
+            <div style="margin-top: 15px;">
+              <div class="info-label">📍 Local</div>
+              <div class="info-value" style="font-size: 13px;">${championship.location}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Detalhes do Pedido</div>
+        
+        <table class="grid-details">
           <tr>
-            <td style="background-color: #051C2C; padding: 40px 30px; text-align: center;">
-              <img src="data:image/webp;base64,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" alt="AntCamp" style="max-width: 200px; height: auto; margin-bottom: 20px;" />
-              <h1 style="margin: 0; color: white; font-size: 28px;">Inscrição Confirmada!</h1>
-              <p style="margin: 10px 0 0 0; color: #f0f0f0; font-size: 16px;">Sua inscrição foi registrada com sucesso</p>
+            <td>Status do Pagamento</td>
+            <td>
+              <span class="badge ${registration.payment_status === 'approved' ? 'badge-success' : ''}">
+                ${registration.payment_status === 'approved' ? '✔ APROVADO' : 'AGUARDANDO'}
+              </span>
             </td>
           </tr>
-
-          <!-- Conteúdo -->
           <tr>
-            <td style="padding: 40px 30px;">
-              
-              <!-- Informações do Evento -->
-              <div style="margin-bottom: 30px;">
-                <h2 style="margin: 0 0 15px 0; color: #333; font-size: 22px; border-bottom: 2px solid #DC2626; padding-bottom: 10px;">
-                  ${championship.name}
-                </h2>
-                <p style="margin: 8px 0; color: #666; font-size: 15px;">
-                  📅 <strong>Data:</strong> ${eventDate}
-                </p>
-                <p style="margin: 8px 0; color: #666; font-size: 15px;">
-                  📍 <strong>Local:</strong> ${championship.location}
-                </p>
-              </div>
-
-              <!-- Informações da Inscrição -->
-              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 15px 0; color: #495057; font-size: 18px;">Detalhes da Inscrição</h3>
-                
-                <p style="margin: 8px 0; color: #495057;">
-                  <strong>Número da Inscrição:</strong><br/>
-                  <span style="font-size: 18px; color: #DC2626; font-family: monospace;">#${registration.id.substring(0, 8).toUpperCase()}</span>
-                </p>
-                
-                <p style="margin: 8px 0; color: #495057;">
-                  <strong>Categoria:</strong> ${category.name}
-                </p>
-                
-                <p style="margin: 8px 0; color: #495057;">
-                  <strong>Formato:</strong> ${category.format === "individual" ? "Individual" : category.format === "duo" ? "Dupla" : category.format === "trio" ? "Trio" : "Time"}
-                </p>
-
-                ${category.format !== "individual" ? `
-                  <p style="margin: 8px 0; color: #495057;">
-                    <strong>Nome do Time:</strong> ${registration.team_name}
-                  </p>
-                ` : ""}
-
-                <p style="margin: 8px 0; color: #495057;">
-                  <strong>Atleta Principal:</strong> ${registration.athlete_name}
-                </p>
-                
-                <p style="margin: 8px 0; color: #495057;">
-                  <strong>Email:</strong> ${registration.athlete_email}
-                </p>
-                
-                ${registration.athlete_phone ? `
-                  <p style="margin: 8px 0; color: #495057;">
-                    <strong>WhatsApp:</strong> ${registration.athlete_phone}
-                  </p>
-                ` : ""}
-              </div>
-
-              ${membersHtml}
-
-              <!-- Valores -->
-              <div style="background-color: #FEE2E2; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 15px 0; color: #DC2626; font-size: 18px;">Valor da Inscrição</h3>
-                
-                <table width="100%" cellpadding="5" cellspacing="0" style="color: #495057;">
-                  <tr>
-                    <td>Subtotal:</td>
-                    <td align="right"><strong>${formatPrice(registration.subtotal_cents)}</strong></td>
-                  </tr>
-                  <tr>
-                    <td>Taxa de serviço (${methodLabel}):</td>
-                    <td align="right">${formatPrice(registration.platform_fee_cents)}</td>
-                  </tr>
-                  <tr style="border-top: 2px solid #DC2626;">
-                    <td style="padding-top: 10px;"><strong>Total:</strong></td>
-                    <td align="right" style="padding-top: 10px;"><strong style="font-size: 20px; color: #DC2626;">${formatPrice(registration.total_cents)}</strong></td>
-                  </tr>
-                </table>
-              </div>
-
-              <!-- Status do Pagamento -->
-              <div style="background-color: ${registration.payment_status === "approved" ? "#d4edda" : "#fff3cd"}; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid ${registration.payment_status === "approved" ? "#28a745" : "#ffc107"}">
-                <p style="margin: 0 0 6px 0; color: #495057;">
-                  <strong>Status do Pagamento:</strong>
-                  <span style="color: ${registration.payment_status === "approved" ? "#155724" : "#856404"}">
-                    ${registration.payment_status === "approved" ? "✅ PAGO" : "⏳ AGUARDANDO PAGAMENTO"}
-                  </span>
-                </p>
-                <p style="margin: 0; color: #495057; font-size: 14px;">
-                  <strong>Forma de pagamento:</strong> ${methodLabel}
-                </p>
-              </div>
-
-              <!-- Check-in -->
-              <!-- Check-in REMOVIDO -->
-
-            </td>
+            <td>Código da Inscrição</td>
+            <td style="font-family: monospace; color: #9ca3af;">#${registration.id.substring(0, 8).toUpperCase()}</td>
           </tr>
-
-          <!-- Footer -->
           <tr>
-            <td style="background-color: #f8f9fa; padding: 30px; text-align: center;">
-              <p style="margin: 0 0 10px 0; color: #6c757d; font-size: 14px;">
-                Dúvidas? Entre em contato com a organização do evento.
-              </p>
-              <p style="margin: 0; color: #adb5bd; font-size: 12px;">
-                Este é um email automático, por favor não responda.
-              </p>
-            </td>
+            <td>Formato</td>
+            <td>${category.format === "individual" ? "Individual" : category.format === "duo" ? "Dupla" : category.format === "trio" ? "Trio" : "Time"}</td>
           </tr>
-
+          ${category.format !== "individual" ? `
+          <tr>
+            <td>Nome do Time</td>
+            <td>${registration.team_name}</td>
+          </tr>
+          ` : ""}
+          <tr>
+            <td>Atleta / Responsável</td>
+            <td>${registration.athlete_name}</td>
+          </tr>
+          <tr>
+            <td>Forma de Pagamento</td>
+            <td>${methodLabel}</td>
+          </tr>
         </table>
-      </td>
-    </tr>
-  </table>
+
+        <!-- Time Se Houver -->
+        ${category.format !== "individual" && registration.team_members ? `
+          <div class="section-title">Integrantes do Time</div>
+          ${(Array.isArray(registration.team_members) ? registration.team_members : [registration.team_members]).map(member => `
+            <div class="team-member">
+              <div class="team-member-name">${member.name}</div>
+              <div class="team-member-contact">${member.email} | ${member.whatsapp}</div>
+            </div>
+          `).join('')}
+        ` : ""}
+
+        <!-- Valores Premium -->
+        <div class="price-box">
+          <div style="width: 100%; display: table;">
+            <div style="display: table-row;">
+              <div style="display: table-cell; color: #9ca3af; font-size: 14px; padding-bottom: 8px;">Valor Inscrição:</div>
+              <div style="display: table-cell; color: white; font-size: 14px; text-align: right; font-weight: 500;">${formatPrice(registration.subtotal_cents)}</div>
+            </div>
+            <div style="display: table-row;">
+              <div style="display: table-cell; color: #9ca3af; font-size: 14px; padding-bottom: 8px;">Taxas da Plataforma:</div>
+              <div style="display: table-cell; color: white; font-size: 14px; text-align: right; font-weight: 500;">${formatPrice(registration.platform_fee_cents)}</div>
+            </div>
+            <div style="display: table-row; border-top: 1px solid #374151;">
+              <div style="display: table-cell; color: white; font-size: 16px; font-weight: 800; padding-top: 15px;">TOTAL EXATO:</div>
+              <div style="display: table-cell; color: #3b82f6; font-size: 20px; font-weight: 900; text-align: right; padding-top: 15px;">${formatPrice(registration.total_cents)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="button-container">
+          <a href="https://antcampp-web.vercel.app/" class="primary-button">Acessar Meu Painel</a>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="footer">
+      Você recebeu este e-mail porque se inscreveu no ${championship.name}.<br/>
+      Dúvidas? Responda a este e-mail para contatar o organizador.<br/><br/>
+      <strong>© ${new Date().getFullYear()} AntCamp</strong>. Todos os direitos reservados.
+    </div>
+  </div>
 </body>
 </html>
     `;
