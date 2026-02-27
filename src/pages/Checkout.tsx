@@ -63,6 +63,16 @@ export default function Checkout() {
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
 
   useEffect(() => {
+    // Escuta mudança de Cupom (PIX/Cartão)
+    if (payment) {
+      // Se tem qualquer UI de pagamento salva/ativa (QrCode/Forms travados) e 
+      // o usuário injetou/removeu desconto (DynamicTotal mexeu matematicamente),
+      // Removemos o cache forçadamente p/ voltar a tela pro form gerador zerado com os Valores Novos.
+      setPayment(null);
+    }
+  }, [discountCents]);
+
+  useEffect(() => {
     loadRegistration();
     const method = searchParams.get("method");
     if (method === "credit_card") {
@@ -116,14 +126,18 @@ export default function Checkout() {
     // Base Calculation: (Subtotal - Discount) + Platform Fee
     // Ensure discount doesn't exceed subtotal
     const subtotalAfterDiscount = Math.max(0, basePrice - discountCents);
-    const targetNet = subtotalAfterDiscount + registration.platform_fee_cents;
+
+    // A Taxa de Serviço visual é sempre (platform_fee + PIX_FEE), e queremos repassar esse custo
+    // para ambos os métodos de pagamento como o valor principal da Taxa de Serviço.
+    const platformFeeCalculated = registration.platform_fee_cents || 0;
+    const targetNet = subtotalAfterDiscount + platformFeeCalculated + PIX_FEE_CENTS;
 
     let totalToCharge = 0;
     let fee = 0;
 
     if (paymentMethod === "pix") {
-      totalToCharge = targetNet + PIX_FEE_CENTS;
-      fee = PIX_FEE_CENTS;
+      totalToCharge = targetNet;
+      fee = 0; // Sem juros no PIX visivelmente extra, pois o 1.99 já está embutido na Taxa de Serviço
     } else if (paymentMethod === "credit_card") {
       // For credit card, the fee depends on the number of installments
       let feePercent = CREDIT_CARD_FEES["1"];
@@ -251,6 +265,8 @@ export default function Checkout() {
       }
 
       // Buscar status do pagamento se já existir um ID
+      // REMOVIDO setPayment(pData) automático para permitir que o usuário escolha
+      // o método de pagamento novamente em caso de inscrição pendente, conforme solicitado.
       if (reg.payment_id) {
         const { data: pData } = await supabase
           .from("payments")
@@ -258,7 +274,7 @@ export default function Checkout() {
           .eq("id", reg.payment_id)
           .maybeSingle();
 
-        if (pData) setPayment(pData);
+        // if (pData) setPayment(pData); // Desativado para forçar tela de checkout
       }
 
       setLoading(false);
@@ -345,6 +361,20 @@ export default function Checkout() {
         setProcessing(false);
         return;
       }
+
+      console.log('🔍 VALIDAÇÃO PRÉ-PAGAMENTO (FRONTEND):');
+      console.log('  ═══════════════════════════════════════');
+      console.log('  📝 Dados que serão enviados ao backend:');
+      console.log('  - Valor base categoria:', basePrice);
+      console.log('  - Desconto cupom:', discountCents);
+      console.log('  - Valor líquido (base - desconto):', Math.max(0, basePrice - discountCents));
+      console.log('  - Taxa AntCamp:', registration?.platform_fee_cents || 0);
+      console.log('  - Taxa Asaas:', processingFee);
+      console.log('  - TOTAL FINAL:', dynamicTotal);
+      console.log('  - Parcelas selecionadas:', installments);
+      console.log('  - Valor por parcela:', dynamicTotal / installments);
+      console.log('  - Cupom aplicado:', appliedCoupon?.code || 'nenhum');
+      console.log('  ═══════════════════════════════════════');
 
       console.log("Calling create-payment with:", {
         registrationId: registration.id,
@@ -454,7 +484,28 @@ export default function Checkout() {
             await loadRegistration();
           }, 2000);
         } else {
-          if (data.payment) {
+          // Asaas returns data.pix directly from create-payment since our recent changes
+          if (data.pix || data.paymentId) {
+            const paymentData = {
+              id: data.paymentId,
+              asaas_payment_id: data.paymentId,
+              status: data.status || "PENDING",
+              payment_url: data.invoiceUrl || null,
+              pix_qr_code: data.pix?.encodedImage || null,
+              pix_copy_paste: data.pix?.payload || null,
+              payment_method: "pix",
+              amount_cents: dynamicTotal,
+              platform_fee_cents: registration?.platform_fee_cents || 0,
+            };
+            setPayment(paymentData);
+            if (registration) {
+              setRegistration({
+                ...registration,
+                payment_id: data.paymentId,
+                payment_status: "pending",
+              });
+            }
+          } else if (data.payment) {
             const paymentData = {
               id: data.payment.id,
               asaas_payment_id: data.payment.asaasPaymentId,
@@ -516,24 +567,29 @@ export default function Checkout() {
 
     setIsValidatingCoupon(true);
     try {
+      console.log('🎟️ VALIDANDO CUPOM:');
+      console.log('  - Código digitado:', couponCode.toUpperCase().trim());
+      console.log('  - Championship ID da inscrição:', registration.championships?.id);
+      console.log('  - Nome do campeonato:', registration.championships?.name);
+
       const { data, error } = await supabase
         .from("coupons")
         .select("*")
         .eq("code", couponCode.toUpperCase().trim())
-        .eq("championship_id", registration.championships.id) // Ensure coupon belongs to this championship
+        .eq("championship_id", registration.championships?.id) // Ensure coupon belongs to this championship
         .eq("is_active", true)
         .maybeSingle();
 
-      console.log("Coupon validation:", {
-        code: couponCode,
-        champId: registration.championships.id,
-        found: !!data,
-        error
-      });
+      console.log('📋 Resultado da busca:', data);
+      console.log('❌ Erro (se houver):', error);
 
       if (error) throw error;
 
       if (!data) {
+        console.error('⚠️ CUPOM NÃO ENCONTRADO COM:');
+        console.error('  - code buscado:', couponCode.toUpperCase().trim());
+        console.error('  - championship_id buscado:', registration.championships?.id);
+        console.error('  - is_active:', true);
         toast.error("Cupom inválido ou não encontrado para este campeonato");
         return;
       }
@@ -568,7 +624,9 @@ export default function Checkout() {
 
       setAppliedCoupon(data);
       setDiscountCents(discount);
+
       toast.success("Cupom aplicado com sucesso!");
+      // O UseEffect acima lidará com resetar a UI para Gerar novo Pix se apropriado.
     } catch (error) {
       console.error("Error validating coupon:", error);
       toast.error("Erro ao validar cupom");
@@ -581,6 +639,8 @@ export default function Checkout() {
     setAppliedCoupon(null);
     setCouponCode("");
     setDiscountCents(0);
+    setPayment(null); // CRITICAL: Reset PIX QR Code when removing coupon
+
     toast.info("Cupom removido");
   };
 
@@ -744,7 +804,8 @@ export default function Checkout() {
                               </SelectTrigger>
                               <SelectContent className="bg-card border-border">
                                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => {
-                                  const targetNet = (registration?.subtotal_cents || 0) + (registration?.platform_fee_cents || 0);
+                                  const subtotalAfterDiscount = Math.max(0, basePrice - discountCents);
+                                  const targetNet = subtotalAfterDiscount + (registration?.platform_fee_cents || 0) + PIX_FEE_CENTS;
                                   let feePercent = CREDIT_CARD_FEES["1"];
                                   if (i >= 2 && i <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
                                   if (i >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
@@ -1074,12 +1135,11 @@ export default function Checkout() {
                       </span>
                     </div>
 
-                    {/* 3. Credit Card Surcharge (Interest/Processing) */}
                     {paymentMethod === 'credit_card' && (
                       <div className="flex justify-between items-center text-sm animate-in fade-in slide-in-from-top-1 duration-300">
                         <span className="text-muted-foreground font-medium">Acréscimo Cartão:</span>
                         <span className="font-semibold text-foreground">
-                          {formatCurrency(Math.max(0, dynamicTotal - (Math.max(0, basePrice - discountCents) + (registration?.platform_fee_cents || 0) + PIX_FEE_CENTS)))}
+                          {formatCurrency(processingFee)}
                         </span>
                       </div>
                     )}
@@ -1089,20 +1149,7 @@ export default function Checkout() {
                     <div className="flex justify-between items-center text-sm text-green-600">
                       <span className="font-medium flex items-center gap-1"><Ticket className="w-3 h-3" /> Desconto do Cupom:</span>
                       <span className="font-bold">
-                        - {(() => {
-                          // Calculate Gross Total again to find the difference
-                          const grossTargetNet = basePrice + registration.platform_fee_cents;
-                          let grossTotal = 0;
-                          if (paymentMethod === "pix") {
-                            grossTotal = grossTargetNet + PIX_FEE_CENTS;
-                          } else {
-                            let feePercent = CREDIT_CARD_FEES["1"];
-                            if (installments >= 2 && installments <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
-                            if (installments >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
-                            grossTotal = Math.ceil((grossTargetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
-                          }
-                          return formatCurrency(grossTotal - dynamicTotal);
-                        })()}
+                        - {formatCurrency(discountCents)}
                       </span>
                     </div>
                   )}

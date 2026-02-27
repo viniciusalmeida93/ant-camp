@@ -16,6 +16,7 @@ export function PublicHeader() {
     const navigate = useNavigate();
     const [session, setSession] = useState<any>(null);
     const [profile, setProfile] = useState<any>(null);
+    const [roles, setRoles] = useState<any[]>([]);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,12 +41,18 @@ export function PublicHeader() {
     }, []);
 
     const fetchProfile = async (userId: string) => {
-        const { data } = await supabase
+        const { data: profileData } = await supabase
             .from("profiles")
             .select("*")
             .eq("id", userId)
             .maybeSingle();
-        if (data) setProfile(data);
+        if (profileData) setProfile(profileData);
+
+        const { data: rolesData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userId);
+        if (rolesData) setRoles(rolesData);
     };
 
     const handleLogout = async () => {
@@ -76,9 +83,11 @@ export function PublicHeader() {
                         <>
                             {/* Desktop View: Explicit Text Links */}
                             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-                                <Link to="/dashboard" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
-                                    Área do Organizador
-                                </Link>
+                                {roles?.some(r => r.role === 'organizer' || r.role === 'super_admin') && (
+                                    <Link to="/dashboard" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
+                                        Área do Organizador
+                                    </Link>
+                                )}
                                 <Link to="/athlete-dashboard" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
                                     Área do Atleta
                                 </Link>
@@ -114,9 +123,11 @@ export function PublicHeader() {
                                         </DropdownMenuLabel>
                                         <DropdownMenuSeparator className="bg-[#1e293b]" />
 
-                                        <DropdownMenuItem onClick={() => navigate("/dashboard")} className="focus:bg-[#1e293b] focus:text-white cursor-pointer">
-                                            <span>Área do Organizador</span>
-                                        </DropdownMenuItem>
+                                        {roles?.some(r => r.role === 'organizer' || r.role === 'super_admin') && (
+                                            <DropdownMenuItem onClick={() => navigate("/dashboard")} className="focus:bg-[#1e293b] focus:text-white cursor-pointer">
+                                                <span>Área do Organizador</span>
+                                            </DropdownMenuItem>
+                                        )}
 
                                         <DropdownMenuItem onClick={() => navigate("/athlete-dashboard")} className="focus:bg-[#1e293b] focus:text-white cursor-pointer">
                                             <span>Área do Atleta</span>

@@ -44,3 +44,9 @@ tmp/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# AntCamp Sensitive
+/docs/CONFIGURACOES_CRITICAS.md
+/backups/
+.temp_creds
+*.backup.ts

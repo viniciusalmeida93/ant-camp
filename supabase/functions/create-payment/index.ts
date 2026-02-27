@@ -155,11 +155,14 @@ serve(async (req) => {
       console.log('  - Código:', couponCode);
       console.log('  - Tipo:', coupon.discount_type); // 'percentage' ou 'fixed'
       console.log('  - Valor cupom:', coupon.discount_value);
-      console.log('  - Valor base inscrição (centavos):', basePrice);
-      console.log('  - Desconto calculado (centavos):', discountCents);
-      console.log('  - Valor organizador ANTES (centavos):', basePrice);
-      console.log('  - Valor organizador DEPOIS (centavos):', basePrice - discountCents);
       console.log('  - Usos restantes:', coupon.max_uses !== null ? coupon.max_uses - (coupon.used_count + 1) : 'Ilimitado');
+
+      console.log('🎟️ ANÁLISE DE DESCONTO:');
+      console.log('  - Valor base inscrição:', basePrice / 100);
+      console.log('  - Desconto aplicado:', discountCents / 100);
+      console.log('  - Valor organizador:', (basePrice - discountCents) / 100);
+      console.log('  - É inscrição gratuita?', (basePrice - discountCents) === 0);
+      console.log('  - Split será enviado?', (basePrice - discountCents) > 0);
     }
 
     // 3. Determine Total Value (Use requestPriceCents if available as it includes markup)
@@ -319,30 +322,36 @@ serve(async (req) => {
       // So the logic is: SPLIT FIXED VALUE = CATEGORY_PRICE (subtotal) to ORGANIZER.
       // The rest stays with Master (which covers fees + platform fee).
 
-      // Requirement: We need 'subtotal_cents' (Category Price) minus any discount
       const basePrice = registration.subtotal_cents || category.price_cents;
-      let organizerFixedShare = Math.max(0, basePrice - discountCents) / 100;
+      const organizerAmount = Math.max(0, basePrice - discountCents);
 
-      // Se for parcelado, no asaas o split de valor fixo é abatido em cada parcela da cobrança
-      if (paymentMethod === "CREDIT_CARD" && installments > 1) {
-        organizerFixedShare = Number((organizerFixedShare / installments).toFixed(2));
+      console.log('💰 CÁLCULO DE DESCONTO:');
+      console.log('  - Base price (cents):', basePrice);
+      console.log('  - Discount (cents):', discountCents);
+      console.log('  - Organizador receberá (cents):', organizerAmount);
+
+      if (organizerAmount > 0 && walletId) {
+        // Só adiciona split se organizador receber algo
+        let organizerFixedShare = organizerAmount / 100;
+
+        if (paymentMethod === "CREDIT_CARD" && installments > 1) {
+          organizerFixedShare = Number((organizerFixedShare / installments).toFixed(2));
+        }
+
+        splits.push({
+          walletId: walletId,
+          fixedValue: organizerFixedShare
+        });
+
+        console.log('🔀 CÁLCULO DE SPLIT:');
+        console.log('  - Valor organizador total:', organizerAmount / 100);
+        console.log('  - Parcelas:', installments > 1 ? installments : 1);
+        console.log('  - Split por parcela:', organizerFixedShare);
+        console.log('  - Total split (verificação):', organizerFixedShare * (installments > 1 ? installments : 1));
+
+      } else {
+        console.log('⚠️ Split NÃO enviado (inscrição gratuita ou organizador = 0)');
       }
-
-      console.log('💳 SPLIT CALCULATION:');
-      console.log('  - Método:', paymentMethod);
-      console.log('  - Parcelas:', installments);
-      console.log('  - Valor base organizador:', basePrice / 100);
-      console.log('  - Split por parcela:', organizerFixedShare);
-      console.log('  - Total organizador receberá:',
-        (paymentMethod === "CREDIT_CARD" && installments > 1)
-          ? `${organizerFixedShare} × ${installments} = ${Number((organizerFixedShare * installments).toFixed(2))}`
-          : organizerFixedShare
-      );
-
-      splits.push({
-        walletId: walletId,
-        fixedValue: organizerFixedShare,
-      });
 
     }
 
@@ -355,8 +364,15 @@ serve(async (req) => {
       dueDate: new Date().toISOString().split('T')[0],
       description: `Inscrição ${championship.name} - ${category.name}`,
       externalReference: registrationId,
-      split: splits
     };
+
+    // IMPORTANTE: Só adiciona split se houver algo pra dividir
+    if (splits.length > 0) {
+      paymentPayload.split = splits;
+      console.log('✅ Pagamento COM split');
+    } else {
+      console.log('✅ Pagamento SEM split (100% AntCamp)');
+    }
 
     if (paymentMethod === "CREDIT_CARD" && installments > 1) {
       paymentPayload.installmentCount = installments;
@@ -395,7 +411,10 @@ serve(async (req) => {
       paymentPayload.creditCardHolderInfo = creditCardHolderInfo;
     }
 
-    console.log("Creating payment with payload:", JSON.stringify(paymentPayload));
+    console.log('📤 PAYLOAD ENVIADO PRO ASAAS:');
+    console.log('  - value:', paymentPayload.value || paymentPayload.totalValue);
+    console.log('  - installmentCount:', paymentPayload.installmentCount || 1);
+    console.log('  - splits:', JSON.stringify(paymentPayload.split || [], null, 2));
 
     const paymentRes = await fetch(`${baseUrl}/payments`, {
       method: "POST",
@@ -455,6 +474,8 @@ serve(async (req) => {
         .update({
           payment_id: savedPayment.id,
           payment_status: 'approved',
+          payment_method: paymentMethod.toLowerCase(),
+          installments: installments,
           paid_at: new Date().toISOString(),
           total_cents: totalCents
         })
@@ -465,6 +486,8 @@ serve(async (req) => {
         .update({
           payment_id: savedPayment.id,
           payment_status: 'pending', // Explicitly set to pending when payment is created
+          payment_method: paymentMethod.toLowerCase(),
+          installments: installments,
           total_cents: totalCents, // Update the total to reflect the markup charged
           coupon_id: couponId,
           discount_cents: discountCents

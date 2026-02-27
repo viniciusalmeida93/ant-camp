@@ -18,9 +18,13 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const webhookData = await req.json();
-    console.log("Webhook received:", JSON.stringify(webhookData));
-
     const { event, payment } = webhookData;
+
+    console.log('🔔 WEBHOOK RECEBIDO DO ASAAS:');
+    console.log('  - Event:', event);
+    console.log('  - Payment ID:', payment?.id);
+    console.log('  - Status:', payment?.status);
+    console.log('  - External Reference:', payment?.externalReference);
 
     if (!payment || !payment.id) {
       return new Response(JSON.stringify({ message: "Ignored: No payment data" }), { status: 200, headers: corsHeaders });
@@ -91,6 +95,10 @@ serve(async (req) => {
     }
 
     if (shouldUpdate) {
+      console.log('📝 ATUALIZANDO BANCO:');
+      console.log('  - Tabela: payments');
+      console.log('  - Status antigo → novo:', paymentRecord.status, '→', newStatus);
+
       // Update payment status
       await supabase
         .from("payments")
@@ -116,7 +124,8 @@ serve(async (req) => {
       if (registrationStatus === 'approved' && paymentRecord.registrations?.payment_status !== 'approved') {
         // Logic to send confirmation email
         try {
-          await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
+          console.log('📧 ENVIANDO EMAIL:');
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -124,8 +133,10 @@ serve(async (req) => {
             },
             body: JSON.stringify({ registrationId: paymentRecord.registration_id })
           });
+          console.log('  - Disparou email?', emailResponse.ok ? 'SIM' : 'NÃO');
         } catch (e) {
           console.error("Failed to trigger email function:", e);
+          console.log('  - Disparou email?', 'NÃO (Erro)');
         }
       }
     }

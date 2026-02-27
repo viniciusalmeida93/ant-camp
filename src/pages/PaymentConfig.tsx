@@ -848,17 +848,19 @@ export default function PaymentConfig() {
                                                 <TableHead>Status</TableHead>
                                                 <TableHead className="text-right">Valor</TableHead>
                                                 <TableHead>Data</TableHead>
+                                                <TableHead>Método</TableHead>
+                                                <TableHead>Parcelas</TableHead>
                                                 <TableHead className="text-right">Ações</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {loadingDashboard ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={7} className="h-24 text-center">Carregando...</TableCell>
+                                                    <TableCell colSpan={9} className="h-24 text-center">Carregando...</TableCell>
                                                 </TableRow>
                                             ) : filteredRegistrations.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={7} className="h-24 text-center">Nenhuma inscrição encontrada</TableCell>
+                                                    <TableCell colSpan={9} className="h-24 text-center">Nenhuma inscrição encontrada</TableCell>
                                                 </TableRow>
                                             ) : (
                                                 filteredRegistrations.map(reg => (
@@ -886,6 +888,19 @@ export default function PaymentConfig() {
                                                         <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
                                                         <TableCell className="text-right">{formatCurrency(reg.subtotal_cents)}</TableCell>
                                                         <TableCell className="text-muted-foreground">{new Date(reg.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                                                        <TableCell>
+                                                            {reg.payment_method === 'pix' && '💳 PIX'}
+                                                            {reg.payment_method === 'credit_card' && '💳 Cartão'}
+                                                            {reg.payment_method === 'boleto' && '📄 Boleto'}
+                                                            {reg.payment_method === 'cash' && '💵 Dinheiro'}
+                                                            {reg.payment_method === 'free' && '🎁 Cortesia'}
+                                                            {!reg.payment_method && '-'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {reg.payment_method === 'credit_card'
+                                                                ? `${reg.installments || 1}x`
+                                                                : '-'}
+                                                        </TableCell>
                                                         <TableCell className="text-right">
                                                             {reg.payment_status === 'pending' && (
                                                                 <Button
