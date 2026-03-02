@@ -2124,7 +2124,9 @@ export default function HeatsNew() {
 
             if (!hasReturnToPast) {
               shouldResetDay = true;
+              console.log(`📅 MUDANÇA DE DIA DETECTADA (Heat ${heat.heat_number}): Reseting logic timeline to Day ${thisDayNumber}`);
             } else {
+              console.log(`📅 MUDANÇA DE DIA DETECTADA (Heat ${heat.heat_number}), but later heats return to Day ${currentDayNumber}. Keeping continuous timeline.`);
             }
           }
         }

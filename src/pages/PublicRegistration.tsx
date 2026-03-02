@@ -641,6 +641,29 @@ export default function PublicRegistration() {
 
     setSubmitting(true);
     try {
+      // ─── Verificação de Inscrição Duplicada ───────────────────────────────────
+      const memberEmails = members.map(m => m.email.toLowerCase().trim()).filter(Boolean);
+
+      for (const memberEmail of memberEmails) {
+        const { data: existingReg } = await supabase
+          .from('registrations')
+          .select('id, athlete_name, payment_status')
+          .eq('championship_id', championship.id)
+          .eq('category_id', selectedCategory.id)
+          .or(`athlete_email.eq.${memberEmail},team_members.cs.[{"email":"${memberEmail}"}]`)
+          .not('payment_status', 'eq', 'refunded')
+          .maybeSingle();
+
+        if (existingReg) {
+          toast.error(
+            `O email ${memberEmail} já possui uma inscrição nesta categoria. Não é permitido se inscrever duas vezes.`
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       const subtotalCents = computeCategoryPrice(selectedCategory);
 
       let platformFeeCents = 0;

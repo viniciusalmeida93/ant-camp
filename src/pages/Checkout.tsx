@@ -278,6 +278,11 @@ export default function Checkout() {
       }
 
       setLoading(false);
+
+      // Auto-redirect se já estiver aprovado ao carregar a página
+      if (reg.payment_status === 'approved') {
+        navigate(`/inscricao-confirmada/${registrationId}`);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Erro ao carregar dados da inscrição");
@@ -480,9 +485,20 @@ export default function Checkout() {
       // Verificar se foi sucesso
       if (data?.success) {
         if (paymentMethod === "credit_card") {
-          setTimeout(async () => {
-            await loadRegistration();
-          }, 2000);
+          if (data.status === 'CONFIRMED' || data.status === 'RECEIVED' || data.status === 'approved') {
+            toast.success("Pagamento aprovado!");
+            navigate(`/inscricao-confirmada/${registrationId}`);
+          } else if (data.status === 'AWAITING_RISK_ANALYSIS') {
+            toast.info("Pagamento em análise de risco. Aguarde alguns minutos.");
+            setTimeout(async () => {
+              await loadRegistration();
+            }, 2000);
+          } else {
+            toast.info("Processando pagamento...");
+            setTimeout(async () => {
+              await loadRegistration();
+            }, 2000);
+          }
         } else {
           // Asaas returns data.pix directly from create-payment since our recent changes
           if (data.pix || data.paymentId) {
@@ -924,11 +940,41 @@ export default function Checkout() {
                     </Card>
                   )}
 
+                  <div className="pt-4 border-t border-dashed">
+                    <div className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
+                      <p className="font-semibold text-muted-foreground uppercase tracking-wider mb-2">Resumo da Auditoria AntCamp</p>
+                      <div className="flex justify-between">
+                        <span>Base (Categoria):</span>
+                        <span>{formatCurrency(basePrice / 100)}</span>
+                      </div>
+                      {discountCents > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span>Desconto:</span>
+                          <span>-{formatCurrency(discountCents / 100)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Taxa de Serviço:</span>
+                        <span>{formatCurrency((registration?.platform_fee_cents + PIX_FEE_CENTS) / 100)}</span>
+                      </div>
+                      {processingFee > 0 && (
+                        <div className="flex justify-between">
+                          <span>Processamento ({paymentMethod === 'credit_card' ? 'Cartão' : 'PIX'}):</span>
+                          <span>{formatCurrency(processingFee / 100)}</span>
+                        </div>
+                      )}
+                      <div className="pt-2 mt-2 border-t flex justify-between font-bold text-sm">
+                        <span>TOTAL A PAGAR:</span>
+                        <span className="text-primary">{formatCurrency(dynamicTotal / 100)}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <Button
                     onClick={handlePayment}
-                    disabled={processing}
+                    disabled={processing || !hasAsaasIntegration}
                     size="lg"
-                    className="w-full h-14 text-lg font-bold shadow-lg"
+                    className="w-full text-lg h-14 bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                   >
                     {processing ? (
                       <>

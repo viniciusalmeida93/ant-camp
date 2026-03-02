@@ -30,31 +30,62 @@ serve(async (req) => {
       return new Response(JSON.stringify({ message: "Ignored: No payment data" }), { status: 200, headers: corsHeaders });
     }
 
-    // Find payment by Asaas ID
-    const { data: paymentRecord, error: findError } = await supabase
+    // Find payment by Asaas ID or External Reference
+    let paymentRecord;
+    let registrationRecord;
+
+    const { data: byAsaasId, error: findError } = await supabase
       .from("payments")
       .select("*, registrations(*)")
       .eq("asaas_payment_id", payment.id)
       .maybeSingle();
 
     if (findError) {
-      console.error("Error finding payment:", findError);
-      return new Response(JSON.stringify({ error: "Database error" }), { status: 500, headers: corsHeaders });
+      console.error("Error finding payment by Asaas ID:", findError);
     }
 
-    if (!paymentRecord) {
-      console.warn("Payment not found in database:", payment.id);
-      // Return 200 to acknowledge webhook (otherwise Asaas keeps retrying)
-      return new Response(JSON.stringify({ message: "Payment not found locally, ignored." }), {
+    if (byAsaasId) {
+      paymentRecord = byAsaasId;
+      registrationRecord = byAsaasId.registrations;
+    } else if (payment.externalReference) {
+      // Tenta buscar o pagamento mais recente daquela inscrição
+      const { data: byRef } = await supabase
+        .from("payments")
+        .select("*, registrations(*)")
+        .eq("registration_id", payment.externalReference)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (byRef) {
+        paymentRecord = byRef;
+        registrationRecord = byRef.registrations;
+      } else {
+        // Se ainda não achou pagamento, tenta ao menos achar a inscrição para atualizar
+        const { data: regOnly } = await supabase
+          .from("registrations")
+          .select("*")
+          .eq("id", payment.externalReference)
+          .maybeSingle();
+
+        if (regOnly) {
+          registrationRecord = regOnly;
+        }
+      }
+    }
+
+    if (!paymentRecord && !registrationRecord) {
+      console.warn("Payment and Registration not found locally:", payment.id, payment.externalReference);
+      return new Response(JSON.stringify({ message: "Registration not found locally, ignored." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle different webhook events
-    let newStatus = paymentRecord.status;
-    let registrationStatus = paymentRecord.registrations?.payment_status;
-    let paidAt = paymentRecord.approved_at;
+    let newStatus = paymentRecord ? paymentRecord.status : "pending";
+    let registrationStatus = registrationRecord ? registrationRecord.payment_status : "pending";
+    let paidAt = paymentRecord ? paymentRecord.approved_at : null;
 
     let shouldUpdate = false;
 
@@ -96,47 +127,51 @@ serve(async (req) => {
 
     if (shouldUpdate) {
       console.log('📝 ATUALIZANDO BANCO:');
-      console.log('  - Tabela: payments');
-      console.log('  - Status antigo → novo:', paymentRecord.status, '→', newStatus);
 
-      // Update payment status
-      await supabase
-        .from("payments")
-        .update({
-          status: newStatus,
-          approved_at: paidAt,
-          metadata: { ...paymentRecord.metadata, lastWebhookEvent: event, webhookPayload: webhookData },
-        })
-        .eq("id", paymentRecord.id);
+      if (paymentRecord) {
+        console.log('  - Status pagamento antigo → novo:', paymentRecord.status, '→', newStatus);
+        // Update payment status
+        await supabase
+          .from("payments")
+          .update({
+            status: newStatus,
+            asaas_payment_id: payment.id, // Garante que vinculou
+            approved_at: paidAt,
+            metadata: { ...(paymentRecord.metadata || {}), lastWebhookEvent: event, webhookPayload: webhookData },
+          })
+          .eq("id", paymentRecord.id);
+      }
 
-      // Update registration status
-      await supabase
-        .from("registrations")
-        .update({
-          payment_status: registrationStatus,
-          paid_at: paidAt
-        })
-        .eq("id", paymentRecord.registration_id);
+      if (registrationRecord) {
+        // Update registration status
+        await supabase
+          .from("registrations")
+          .update({
+            payment_status: registrationStatus,
+            paid_at: paidAt
+          })
+          .eq("id", registrationRecord.id);
 
-      console.log(`Updated Payment ${paymentRecord.id} and Registration ${paymentRecord.registration_id} to status: ${registrationStatus}`);
+        console.log(`Updated Registration ${registrationRecord.id} to status: ${registrationStatus}`);
 
-      // If approved, trigger email logic (optional, call another function or let triggers handle it)
-      if (registrationStatus === 'approved' && paymentRecord.registrations?.payment_status !== 'approved') {
-        // Logic to send confirmation email
-        try {
-          console.log('📧 ENVIANDO EMAIL:');
-          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseKey}`
-            },
-            body: JSON.stringify({ registrationId: paymentRecord.registration_id })
-          });
-          console.log('  - Disparou email?', emailResponse.ok ? 'SIM' : 'NÃO');
-        } catch (e) {
-          console.error("Failed to trigger email function:", e);
-          console.log('  - Disparou email?', 'NÃO (Erro)');
+        // If approved, trigger email logic (optional, call another function or let triggers handle it)
+        if (registrationStatus === 'approved' && registrationRecord.payment_status !== 'approved') {
+          // Logic to send confirmation email
+          try {
+            console.log('📧 ENVIANDO EMAIL:');
+            const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-registration-email`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`
+              },
+              body: JSON.stringify({ registrationId: registrationRecord.id })
+            });
+            console.log('  - Disparou email?', emailResponse.ok ? 'SIM' : 'NÃO');
+          } catch (e) {
+            console.error("Failed to trigger email function:", e);
+            console.log('  - Disparou email?', 'NÃO (Erro)');
+          }
         }
       }
     }
