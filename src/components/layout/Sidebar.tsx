@@ -1,9 +1,10 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket } from 'lucide-react';
+import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { useChampionship } from '@/contexts/ChampionshipContext';
 
 const navItems = [
   { path: '/app', label: 'Dashboard', icon: Trophy },
@@ -21,6 +22,7 @@ const navItems = [
 export const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { selectedChampionship } = useChampionship();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +73,17 @@ export const Sidebar = () => {
   ] : [];
 
   const finalItems = [...filteredNavItems, ...superAdminItems];
+
+  if (selectedChampionship && isOrganizer) {
+    // Insere o Link Page logo antes de configurações ou no final da lista principal
+    // Para simplificar, adicionamos no final dos itens normais de campeonato
+    const insertIndex = finalItems.length - superAdminItems.length;
+    finalItems.splice(insertIndex, 0, {
+      path: `/championships/${selectedChampionship.id}/links`,
+      label: 'Link Page',
+      icon: Globe
+    });
+  }
 
   if (loading) return null;
 

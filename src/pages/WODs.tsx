@@ -323,14 +323,14 @@ export default function WODs() {
           .eq("id", update.id);
 
         if (error) {
-          console.error(`Erro ao atualizar order_num do WOD ${update.id}:`, error);
+          console.error(`Erro ao atualizar order_num do Evento ${update.id}:`, error);
         }
       }
 
-      toast.success("Ordem dos WODs atualizada!");
+      toast.success("Ordem dos Eventos atualizada!");
     } catch (error: any) {
-      console.error("Erro ao atualizar ordem dos WODs:", error);
-      toast.error("Erro ao salvar nova ordem dos WODs");
+      console.error("Erro ao atualizar ordem dos Eventos:", error);
+      toast.error("Erro ao salvar nova ordem dos Eventos");
       // Reverter para ordem original em caso de erro
       await loadWODs();
     }
@@ -507,17 +507,17 @@ export default function WODs() {
 
           // Carregar valores reais do banco
           // IMPORTANTE: Se há uma variação salva no banco, sempre carregar valores reais
-          // Se description/notes são null, usar valores padrão do WOD para garantir texto editável
+          // Se description/notes são null, usar valores padrão do Evento para garantir texto editável
           let descriptionValue = '';
           let notesValue = '';
 
           // Se há uma variação salva no banco para esta categoria, sempre carregar valores reais
-          // Prioridade: valor do banco > valor padrão do WOD > string vazia
+          // Prioridade: valor do banco > valor padrão do Evento > string vazia
           if (variation.description !== null && variation.description !== undefined) {
             // Valor real salvo no banco - usar diretamente
             descriptionValue = variation.description;
           } else {
-            // Se null mas há variação salva, usar valor padrão do WOD (garantir texto editável)
+            // Se null mas há variação salva, usar valor padrão do Evento (garantir texto editável)
             descriptionValue = baseWod?.description || '';
           }
 
@@ -525,7 +525,7 @@ export default function WODs() {
             // Valor real salvo no banco - usar diretamente
             notesValue = variation.notes;
           } else {
-            // Se null mas há variação salva, usar valor padrão do WOD (garantir texto editável)
+            // Se null mas há variação salva, usar valor padrão do Evento (garantir texto editável)
             notesValue = baseWod?.notes || '';
           }
 
@@ -597,7 +597,7 @@ export default function WODs() {
       const validTypes = ['tempo', 'reps', 'carga', 'amrap', 'emom'];
       if (!validTypes.includes(databaseType)) {
         console.error('Tipo inválido após mapeamento:', databaseType, 'Tipo original:', wodType);
-        throw new Error(`Tipo de WOD inválido: ${databaseType}. Tipos permitidos: ${validTypes.join(', ')}`);
+        throw new Error(`Tipo de Evento inválido: ${databaseType}. Tipos permitidos: ${validTypes.join(', ')}`);
       }
 
       console.log('Tipo do frontend:', wodType);
@@ -617,13 +617,13 @@ export default function WODs() {
       const wodDescription = formData.get('description') as string;
 
       if (!wodName || wodName.trim() === '') {
-        toast.error("Nome do WOD é obrigatório");
+        toast.error("Nome do Evento é obrigatório");
         setSaving(false);
         return;
       }
 
       if (!wodDescription || wodDescription.trim() === '') {
-        toast.error("Descrição do WOD é obrigatória");
+        toast.error("Descrição do Evento é obrigatória");
         setSaving(false);
         return;
       }
@@ -686,7 +686,7 @@ export default function WODs() {
             .eq("id", editingWOD.id);
 
           if (publishError) throw publishError;
-          toast.success("WOD atualizado e publicado com sucesso!");
+          toast.success("Evento atualizado e publicado com sucesso!");
         } else {
           // Garantir que WODs salvos sem publicar tenham is_published = false
           const { error: unpublishError } = await supabase
@@ -696,7 +696,7 @@ export default function WODs() {
             .eq("id", editingWOD.id);
 
           if (unpublishError) throw unpublishError;
-          toast.success("WOD atualizado com sucesso! (Não publicado ainda)");
+          toast.success("Evento atualizado com sucesso! (Não publicado ainda)");
         }
       } else {
         const { data: newWod, error } = await supabase
@@ -714,9 +714,9 @@ export default function WODs() {
           });
         }
         if (publish) {
-          toast.success("WOD criado e publicado com sucesso!");
+          toast.success("Evento criado e publicado com sucesso!");
         } else {
-          toast.success("WOD criado com sucesso! (Não publicado ainda)");
+          toast.success("Evento criado com sucesso! (Não publicado ainda)");
         }
       }
 
@@ -914,7 +914,7 @@ export default function WODs() {
   };
 
   const handleDelete = async (wodId: string) => {
-    if (!confirm("Tem certeza que deseja excluir este WOD?")) return;
+    if (!confirm("Tem certeza que deseja excluir este Evento?")) return;
 
     try {
       const { error } = await supabase.from("wods").delete().eq("id", wodId);

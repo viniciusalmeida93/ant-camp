@@ -564,11 +564,11 @@ export default function CreateWOD() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Label htmlFor="name">Nome do WOD *</Label>
+                <Label htmlFor="name">Nome do Evento *</Label>
                 <Input id="name" name="name" defaultValue={currentValues.name} required />
               </div>
               <div>
-                <Label htmlFor="type">Tipo de WOD *</Label>
+                <Label htmlFor="type">Tipo de Evento *</Label>
                 <Select value={wodType} onValueChange={setWodType} required>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -597,7 +597,7 @@ export default function CreateWOD() {
             </div>
 
             <div>
-              <Label htmlFor="description">Descrição do WOD *</Label>
+              <Label htmlFor="description">Descrição do Evento *</Label>
               <Textarea id="description" name="description" defaultValue={currentValues.description} rows={5} required placeholder="Descreva o WOD aqui..." />
             </div>
 
@@ -626,7 +626,7 @@ export default function CreateWOD() {
               />
               <div className="grid gap-1.5 leading-none">
                 <Label htmlFor="applyAll" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Aplicar este WOD para todas as categorias
+                  Aplicar este Evento para todas as categorias
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   Se marcado, a descrição e notas serão copiadas para todas as outras categorias.

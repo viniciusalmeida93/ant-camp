@@ -843,15 +843,6 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 items-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-[200px] justify-start"
-                    onClick={() => navigate(`/championships/${selectedChampionship.id}/links`)}
-                  >
-                    <QrCode className="w-4 h-4 mr-2" />
-                    Links Públicos
-                  </Button>
                   <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
                     <DialogTrigger asChild>
                       <Button
@@ -862,6 +853,7 @@ export default function Dashboard() {
                           setEditInfoData({
                             name: selectedChampionship.name || '',
                             date: selectedChampionship.date ? selectedChampionship.date.split('T')[0] : '',
+                            location: selectedChampionship.location || '',
                             description: selectedChampionship.description || '',
                             address: selectedChampionship.address || '',
                             city: selectedChampionship.city || '',
