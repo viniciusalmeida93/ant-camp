@@ -810,7 +810,7 @@ export default function Results() {
             </Button>
             <Button
               onClick={() => handleSave(true)}
-              className={`flex-1 shadow-glow text-white ${isPublished ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90 opacity-80 cursor-not-allowed" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+              className={`flex-1 shadow-glow text-white ${isPublished ? "bg-primary hover:bg-primary/90 opacity-80 cursor-not-allowed" : "bg-primary hover:bg-primary/90"}`}
               disabled={isPublished || saving}
             >
               {savingAction === 'publish'

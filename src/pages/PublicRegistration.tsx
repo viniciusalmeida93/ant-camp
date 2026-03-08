@@ -1196,7 +1196,7 @@ export default function PublicRegistration() {
                       <h3 className="text-base font-semibold text-foreground truncate pr-2">
                         {cat.name}
                       </h3>
-                      <p className="text-xs text-muted-foreground mt-1 text-[#D71C1D]">
+                      <p className="text-xs text-muted-foreground mt-1 text-primary">
                         + Taxa de Serviço {formatCurrency(
                           (platformFeeConfig.type === 'percentage'
                             ? Math.round(price * (platformFeeConfig.value / 100))

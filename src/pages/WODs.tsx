@@ -1061,7 +1061,7 @@ export default function WODs() {
       {/* Floating Action Button */}
       <button
         onClick={handleOpenCreate}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50 animation-fade-in"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors z-50 animation-fade-in"
         aria-label="Criar novo Evento"
       >
         <Plus className="w-6 h-6" />

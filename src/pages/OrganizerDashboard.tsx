@@ -507,7 +507,7 @@ export default function OrganizerDashboard() {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogTrigger asChild>
           <button
-            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors z-50"
             aria-label="Criar novo campeonato"
           >
             <Plus className="w-6 h-6" />
@@ -632,7 +632,7 @@ export default function OrganizerDashboard() {
               </Button>
               <Button
                 type="submit"
-                className="flex-1 bg-[#D71C1D] hover:bg-[#d11f2d] text-white"
+                className="flex-1 bg-primary hover:bg-primary/90 text-white"
                 disabled={creating}
               >
                 {creating ? (
@@ -664,7 +664,7 @@ export default function OrganizerDashboard() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteChampionship}
-              className="bg-[#D71C1D] hover:bg-[#d11f2d] text-white"
+              className="bg-primary hover:bg-primary/90 text-white"
             >
               Excluir
             </AlertDialogAction>

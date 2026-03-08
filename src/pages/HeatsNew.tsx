@@ -3988,13 +3988,13 @@ export default function HeatsNew() {
                       onChange={(e) => handleTimeInputChange(e.target.value, setTransitionTimeStr, setAppliedTransition, setSuccessTransition)}
                       className=""
                     />
-                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-[#D71C1D] pointer-events-none" />
+                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-primary pointer-events-none" />
                   </div>
                   <Button
                     onClick={() => handleApplyTransition()}
                     size="sm"
                     disabled={successTransition}
-                    className={`text-white ${successTransition ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+                    className={`text-white ${successTransition ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}`}
                   >
                     {successTransition ? "APLICADO" : "APLICAR"}
                   </Button>
@@ -4017,13 +4017,13 @@ export default function HeatsNew() {
                       onChange={(e) => handleTimeInputChange(e.target.value, setCategoryIntervalStr, setAppliedCategoryInterval, setSuccessCategoryInterval)}
                       className=""
                     />
-                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-[#D71C1D] pointer-events-none" />
+                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-primary pointer-events-none" />
                   </div>
                   <Button
                     onClick={() => handleApplyCategoryInterval()}
                     size="sm"
                     disabled={successCategoryInterval}
-                    className={`text-white ${successCategoryInterval ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+                    className={`text-white ${successCategoryInterval ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}`}
                   >
                     {successCategoryInterval ? "APLICADO" : "APLICAR"}
                   </Button>
@@ -4046,13 +4046,13 @@ export default function HeatsNew() {
                       onChange={(e) => handleTimeInputChange(e.target.value, setWodIntervalStr, setAppliedWodInterval, setSuccessWodInterval)}
                       className=""
                     />
-                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-[#D71C1D] pointer-events-none" />
+                    <Clock className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-primary pointer-events-none" />
                   </div>
                   <Button
                     onClick={() => handleApplyWodInterval()}
                     size="sm"
                     disabled={successWodInterval}
-                    className={`text-white ${successWodInterval ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+                    className={`text-white ${successWodInterval ? "bg-primary hover:bg-primary/90" : "bg-primary hover:bg-primary/90"}`}
                   >
                     {successWodInterval ? "APLICADO" : "APLICAR"}
                   </Button>
@@ -4588,7 +4588,7 @@ export default function HeatsNew() {
       {/* Floating Action Button */}
       <button
         onClick={handleOpenCreateHeat}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors z-50"
         aria-label="Adicionar bateria"
       >
         <Plus className="w-6 h-6" />

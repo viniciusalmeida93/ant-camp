@@ -171,7 +171,7 @@ export default function SuperAdminOrganizers() {
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
                 <DialogTrigger asChild>
                     <Button
-                        className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-2xl bg-[#D71C1D] hover:bg-[#b01617] text-white p-0 flex items-center justify-center z-50 transition-transform hover:scale-110 active:scale-95"
+                        className="fixed bottom-8 right-8 h-14 w-14 rounded-full shadow-2xl bg-primary hover:bg-primary/90 text-white p-0 flex items-center justify-center z-50 transition-transform hover:scale-110 active:scale-95"
                         aria-label="Cadastrar Novo Organizador"
                     >
                         <Plus className="w-6 h-6" />
@@ -231,7 +231,7 @@ export default function SuperAdminOrganizers() {
                             </Button>
                             <Button
                                 type="submit"
-                                className="bg-[#D71C1D] hover:bg-[#b01617] text-white"
+                                className="bg-primary hover:bg-primary/90 text-white"
                                 disabled={creatingOrganizer}
                             >
                                 {creatingOrganizer ? (

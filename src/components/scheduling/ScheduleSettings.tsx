@@ -276,7 +276,7 @@ export function ScheduleSettings({ championshipId, days, onUpdate }: ScheduleSet
                     <Button
                         onClick={handleSaveDayConfig}
                         disabled={loading || !isDirty}
-                        className={`text-white ${!isDirty ? "bg-[#D71C1D] hover:bg-[#D71C1D]/90 opacity-80" : "bg-[#D71C1D] hover:bg-[#D71C1D]/90"}`}
+                        className={`text-white ${!isDirty ? "bg-primary hover:bg-primary/90 opacity-80" : "bg-primary hover:bg-primary/90"}`}
                     >
                         {loading ? "APLICANDO..." : !isDirty ? "APLICADO" : "APLICAR"}
                     </Button>

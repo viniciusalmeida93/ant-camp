@@ -1,0 +1,226 @@
+{
+  "main": {
+    "id": "2ac4f457ad0ef18a",
+    "type": "split",
+    "children": [
+      {
+        "id": "69e3acd5fc17c6c2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "46a1c332d39652cd",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "🚀 Roadmap de Melhorias.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "🚀 Roadmap de Melhorias"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "430f5aac902ec914",
+    "type": "split",
+    "children": [
+      {
+        "id": "a476b3e735520ed3",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b406c939a8aba63d",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "96e635a3dc4068cc",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "2484b7df49faacab",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "a085f2dc0e171299",
+    "type": "split",
+    "children": [
+      {
+        "id": "f6895b6342eb8344",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9046b86cd4e31cf6",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Páginas/Atleta/Dashboard do Atleta.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos para Dashboard do Atleta"
+            }
+          },
+          {
+            "id": "2f903253e595a5f8",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Páginas/Atleta/Dashboard do Atleta.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída para Dashboard do Atleta"
+            }
+          },
+          {
+            "id": "91650b6606b34480",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "dd144d5bdc435da7",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "a9504396fe090fe8",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Páginas/Atleta/Dashboard do Atleta.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário de Dashboard do Atleta"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false
+    }
+  },
+  "active": "46a1c332d39652cd",
+  "lastOpenFiles": [
+    "🚀 Roadmap de Melhorias.md.6ebac2774819f4bf97ac33904c317ddf.tmp",
+    "Integrações/Emails.md.0c130df3c4bbc17848c44c08df39acdf.tmp",
+    "Integrações/Emails.md",
+    "🗺️ AntCamp — Canvas do Sistema.canvas",
+    "🚀 Roadmap de Melhorias.md",
+    "🎨 Design System.md.84422e453a1696da46411e0a6ea8c3ab.tmp",
+    "🎨 Design System.md",
+    "Roles e Permissões.md",
+    "Padrões de UX.md",
+    "Dívida Técnica/Inconsistências Arquiteturais.md",
+    "Dívida Técnica/Funcionalidades Incompletas.md.64206e3edd2fc6e4218c072da9d5cdc0.tmp",
+    "Dívida Técnica/Funcionalidades Incompletas.md",
+    "Dívida Técnica/Dívida de Código.md",
+    "Dívida Técnica/Problemas de Segurança.md",
+    "Fluxos/Sistema de Pontuação.md",
+    "🚀 Roadmap de Melhorias.md.eafe2691e8039545af7e616980fa49a7.tmp",
+    "Fluxos/Sistema de Baterias.md",
+    "Fluxos/Fluxo de Inscrição.md",
+    "🚀 Roadmap de Melhorias.md.827fcd193264878d9f64bf15a7e80021.tmp",
+    "Fluxos/Fluxo de Pagamento.md",
+    "Funcionalidades — Organizador.md",
+    "Funcionalidades — Super Admin.md",
+    "Integrações/Edge Functions.md",
+    "🚀 Roadmap de Melhorias.md.70c484a2a84fb7f8fe0abe0435cf89c3.tmp",
+    "Integrações/Serviços Externos.md",
+    "Modelo de Dados/Entidades Principais.md",
+    "Modelo de Dados/Entidades Principais.md.2447a8f3ea84bc4f9abbf108ce432f25.tmp",
+    "Modelo de Dados/Entidades Legado e Config.md",
+    "Modelo de Dados/Entidades de Pagamento.md",
+    "Modelo de Dados/Entidades de Competição.md",
+    "Páginas/Atleta/Dashboard do Atleta.md",
+    "Páginas/Público/WODs Públicos.md",
+    "Páginas/Público/TV Display.md",
+    "Páginas/Público/Login e Cadastro.md",
+    "🚀 Roadmap de Melhorias.md.551761c1bea970472ba48740f8a09d36.tmp",
+    "🚀 Roadmap de Melhorias.md.5046bc03e01b89dfebd5db70aa72ff7b.tmp",
+    "Páginas/Organizador/Configurações do Campeonato.md.2f982f3f174a654b7e82e006287b8b65.tmp"
+  ]
+}

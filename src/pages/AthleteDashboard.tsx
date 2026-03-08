@@ -304,7 +304,7 @@ export default function AthleteDashboard() {
 
                                     {/* Category & Athlete/Team */}
                                     <div className="text-muted-foreground text-sm font-medium mb-4">
-                                        <p className="line-clamp-1 text-[#D71C1D] font-semibold">{reg.categories?.name}</p>
+                                        <p className="line-clamp-1 text-primary font-semibold">{reg.categories?.name}</p>
                                         <p className="line-clamp-1 text-xs opacity-80">{reg.team_name || reg.athlete_name}</p>
                                     </div>
 
@@ -331,7 +331,7 @@ export default function AthleteDashboard() {
                                         {/* Botão para Checkout se pendente */}
                                         {reg.payment_status !== 'approved' && (
                                             <Button
-                                                className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md"
+                                                className="w-full bg-primary hover:bg-primary/90 text-white  shadow-md"
                                                 onClick={() => navigate(`/checkout/${reg.id}`)}
                                             >
                                                 Finalizar Inscrição
@@ -344,7 +344,7 @@ export default function AthleteDashboard() {
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <Button
                                                         size="sm"
-                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md transition-colors"
+                                                        className="bg-primary hover:bg-primary/90 text-white  shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/heats`)}
                                                     >
                                                         Baterias
@@ -352,7 +352,7 @@ export default function AthleteDashboard() {
 
                                                     <Button
                                                         size="sm"
-                                                        className="bg-[#D71C1D] hover:bg-[#b01617] text-white shadow-md transition-colors"
+                                                        className="bg-primary hover:bg-primary/90 text-white shadow-md transition-colors"
                                                         onClick={() => navigate(`/${reg.championships.slug}/leaderboard`)}
                                                     >
                                                         Leaderboard
@@ -361,7 +361,7 @@ export default function AthleteDashboard() {
 
                                                 <Button
                                                     size="sm"
-                                                    className="w-full bg-[#D71C1D] hover:bg-[#b01617] text-white  shadow-md transition-colors"
+                                                    className="w-full bg-primary hover:bg-primary/90 text-white  shadow-md transition-colors"
                                                     onClick={() => navigate(`/${reg.championships.slug}/wods`)}
                                                 >
                                                     Ver Provas

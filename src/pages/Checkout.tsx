@@ -1265,7 +1265,7 @@ export default function Checkout() {
                         <Button
                           onClick={handleApplyCoupon}
                           disabled={isValidatingCoupon || !couponCode}
-                          className="rounded-l-none h-10 bg-[#D71C1D] hover:bg-[#b51718] text-white flex gap-2 font-bold shadow-sm transition-all active:scale-95"
+                          className="rounded-l-none h-10 bg-primary hover:bg-primary/90 text-white flex gap-2 font-bold shadow-sm transition-all active:scale-95"
                         >
                           {isValidatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ticket className="w-4 h-4" />}
                           Aplicar

@@ -84,14 +84,14 @@ export function PublicHeader() {
                             {/* Desktop View: Explicit Text Links */}
                             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
                                 {roles?.some(r => r.role === 'organizer' || r.role === 'super_admin') && (
-                                    <Link to="/dashboard" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
+                                    <Link to="/dashboard" className="flex items-center gap-2 transition-colors hover:text-primary">
                                         Área do Organizador
                                     </Link>
                                 )}
-                                <Link to="/athlete-dashboard" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
+                                <Link to="/athlete-dashboard" className="flex items-center gap-2 transition-colors hover:text-primary">
                                     Área do Atleta
                                 </Link>
-                                <a href="mailto:contato@antcamp.com.br" className="flex items-center gap-2 transition-colors hover:text-[#D71C1D]">
+                                <a href="mailto:contato@antcamp.com.br" className="flex items-center gap-2 transition-colors hover:text-primary">
                                     Contato
                                 </a>
                                 <Button
@@ -150,7 +150,7 @@ export function PublicHeader() {
                         </>
                     ) : (
                         <div className="flex items-center gap-4">
-                            <a href="mailto:contato@antcamp.com.br" className="text-sm font-medium hover:text-[#D71C1D] transition-colors hidden md:block">
+                            <a href="mailto:contato@antcamp.com.br" className="text-sm font-medium hover:text-primary transition-colors hidden md:block">
                                 Contato
                             </a>
                             <Button

@@ -654,7 +654,7 @@ export default function CreateWOD() {
 
               <Button
                 type="button"
-                className="flex-1 bg-[#D71C1D] hover:bg-[#d11f2d] text-white"
+                className="flex-1 bg-primary hover:bg-primary/90 text-white"
                 onClick={() => handleSubmit(true, true)}
                 disabled={saving}
               >
@@ -678,7 +678,7 @@ export default function CreateWOD() {
           const currentCat = selectedCategoryId || '';
           navigate(`/wods/new?categoryId=${currentCat}`);
         }}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#D71C1D] text-white flex items-center justify-center shadow-lg hover:bg-[#d11f2d] transition-colors z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors z-50"
         title="Criar Novo Evento"
       >
         <Plus className="w-6 h-6" />

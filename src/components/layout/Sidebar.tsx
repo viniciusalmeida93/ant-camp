@@ -133,7 +133,7 @@ export const Sidebar = () => {
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-sm transition-all duration-200 text-sm",
                       isActive
-                        ? "bg-[#D71C1D] text-white font-semibold"
+                        ? "bg-primary text-white font-semibold"
                         : "hover:bg-[#1F3342] text-[#D9D9D9] hover:text-[#FAFAFA]"
                     )}
                   >
