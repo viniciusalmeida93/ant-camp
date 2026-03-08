@@ -86,7 +86,6 @@ const App = () => (
             <Route path="/asaas-integration" element={<AsaasIntegration />} />
             <Route path="/test-asaas-connections" element={<TestAsaasConnections />} />
             <Route path="/assign-roles" element={<AssignRoles />} />
-            <Route path="/assign-roles" element={<AssignRoles />} />
 
             {/* App routes with sidebar */}
             <Route path="*" element={
