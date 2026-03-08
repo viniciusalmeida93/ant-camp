@@ -29,15 +29,22 @@ export default function Auth() {
   const [resetEmail, setResetEmail] = useState("");
   const [sendingReset, setSendingReset] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     // Check if user is already logged in and redirect based on role
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Redirection logic...
-        checkRoleAndRedirect(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Redirection logic...
+          await checkRoleAndRedirect(session.user.id);
+        } else {
+          setIsCheckingSession(false);
+        }
+      } catch (error) {
+        setIsCheckingSession(false);
       }
     };
     checkSession();
@@ -208,6 +215,14 @@ export default function Auth() {
       setSendingReset(false);
     }
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
