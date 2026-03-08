@@ -16,6 +16,7 @@ export default function AthleteDashboard() {
     const [registrations, setRegistrations] = useState<any[]>([]);
     const [profileOpen, setProfileOpen] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [fullName, setFullName] = useState<string | null>(null);
     const [isOrganizer, setIsOrganizer] = useState(false);
 
     useEffect(() => {
@@ -58,11 +59,14 @@ export default function AthleteDashboard() {
     const loadProfileStats = async (userId: string) => {
         const { data } = await supabase
             .from("profiles")
-            .select("avatar_url")
+            .select("avatar_url, full_name")
             .eq("id", userId)
             .single();
 
-        if (data) setAvatarUrl(data.avatar_url);
+        if (data) {
+            setAvatarUrl(data.avatar_url);
+            setFullName(data.full_name);
+        }
     };
 
     const loadRegistrations = async (currentUser: any) => {
@@ -201,7 +205,9 @@ export default function AthleteDashboard() {
                                 </div>
                             </div>
                             <div className="min-w-0">
-                                <h1 className="text-xl font-bold truncate">Área do Atleta</h1>
+                                <h1 className="text-xl font-bold truncate">
+                                    {fullName ? `Olá, ${fullName.split(' ')[0]}` : "Área do Atleta"}
+                                </h1>
                                 <p className="text-sm text-gray-400 truncate">
                                     Bem-vindo, {user?.email}
                                 </p>
