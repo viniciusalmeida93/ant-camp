@@ -153,15 +153,15 @@ async function sendRecoveryEmail(supabase: any, resendApiKey: string, registrati
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #001D2E;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #001D2E; padding: 20px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #002438; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
 
           <!-- Header -->
           <tr>
-            <td style="background-color: #DC2626; padding: 40px 30px; text-align: center;">
+            <td style="background-color: #D71C1D; padding: 40px 30px; text-align: center;">
               <h1 style="margin: 0; color: white; font-size: 28px;">⏰ Não Perca Sua Vaga!</h1>
               <p style="margin: 10px 0 0 0; color: #f0f0f0; font-size: 16px;">Sua inscrição está quase completa</p>
             </td>
@@ -170,33 +170,33 @@ async function sendRecoveryEmail(supabase: any, resendApiKey: string, registrati
           <!-- Conteúdo -->
           <tr>
             <td style="padding: 40px 30px;">
-              <p style="margin: 0 0 20px 0; color: #333; font-size: 16px;">
+              <p style="margin: 0 0 20px 0; color: #FFFFFF; font-size: 16px;">
                 Olá <strong>${registration.athlete_name}</strong>,
               </p>
-              <p style="margin: 0 0 20px 0; color: #666; font-size: 15px;">
+              <p style="margin: 0 0 20px 0; color: #CBD5E1; font-size: 15px;">
                 Você iniciou sua inscrição para o <strong>${championship.name}</strong> mas ainda não finalizou o pagamento.
               </p>
-              <p style="margin: 0 0 30px 0; color: #666; font-size: 15px;">
+              <p style="margin: 0 0 30px 0; color: #CBD5E1; font-size: 15px;">
                 As vagas são limitadas — complete agora e garanta sua participação!
               </p>
 
               <!-- Detalhes -->
-              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 15px 0; color: #495057; font-size: 18px;">Detalhes da Inscrição</h3>
-                <p style="margin: 8px 0; color: #495057;"><strong>Campeonato:</strong> ${championship.name}</p>
-                <p style="margin: 8px 0; color: #495057;"><strong>Categoria:</strong> ${category.name}</p>
-                ${category.format !== "individual" ? `<p style="margin: 8px 0; color: #495057;"><strong>Time:</strong> ${registration.team_name}</p>` : ""}
+              <div style="background-color: #00334E; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #FFFFFF; font-size: 18px;">Detalhes da Inscrição</h3>
+                <p style="margin: 8px 0; color: #CBD5E1;"><strong>Campeonato:</strong> ${championship.name}</p>
+                <p style="margin: 8px 0; color: #CBD5E1;"><strong>Categoria:</strong> ${category.name}</p>
+                ${category.format !== "individual" ? `<p style="margin: 8px 0; color: #CBD5E1;"><strong>Time:</strong> ${registration.team_name}</p>` : ""}
               </div>
 
               <!-- Valores -->
-              <div style="background-color: #FEE2E2; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 15px 0; color: #DC2626; font-size: 18px;">Valor da Inscrição</h3>
-                <table width="100%" cellpadding="5" cellspacing="0" style="color: #495057;">
+              <div style="background-color: rgba(215, 28, 29, 0.1); border: 1px solid rgba(215, 28, 29, 0.2); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #D71C1D; font-size: 18px;">Valor da Inscrição</h3>
+                <table width="100%" cellpadding="5" cellspacing="0" style="color: #CBD5E1;">
                   <tr><td>Subtotal:</td><td align="right"><strong>${formatPrice(registration.subtotal_cents)}</strong></td></tr>
                   <tr><td>Taxa de serviço:</td><td align="right">${formatPrice(registration.platform_fee_cents)}</td></tr>
-                  <tr style="border-top: 2px solid #DC2626;">
-                    <td style="padding-top: 10px;"><strong>Total:</strong></td>
-                    <td align="right" style="padding-top: 10px;"><strong style="font-size: 20px; color: #DC2626;">${formatPrice(registration.total_cents)}</strong></td>
+                  <tr>
+                    <td style="padding-top: 10px; border-top: 2px solid rgba(215, 28, 29, 0.3); color: #FFFFFF;"><strong>Total:</strong></td>
+                    <td align="right" style="padding-top: 10px; border-top: 2px solid rgba(215, 28, 29, 0.3);"><strong style="font-size: 20px; color: #D71C1D;">${formatPrice(registration.total_cents)}</strong></td>
                   </tr>
                 </table>
               </div>
@@ -204,11 +204,11 @@ async function sendRecoveryEmail(supabase: any, resendApiKey: string, registrati
               <!-- CTA -->
               <div style="text-align: center; margin: 30px 0;">
                 <a href="${appUrl}/checkout/${registration.id}"
-                   style="display: inline-block; background-color: #DC2626; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;">
+                   style="display: inline-block; background-color: #D71C1D; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;">
                   🚀 Finalizar Pagamento Agora
                 </a>
               </div>
-              <p style="margin: 20px 0 0 0; color: #999; font-size: 13px; text-align: center;">
+              <p style="margin: 20px 0 0 0; color: #94A3B8; font-size: 13px; text-align: center;">
                 ⚡ Vagas limitadas! Complete antes que esgotem.
               </p>
             </td>
@@ -216,9 +216,9 @@ async function sendRecoveryEmail(supabase: any, resendApiKey: string, registrati
 
           <!-- Footer -->
           <tr>
-            <td style="background-color: #f8f9fa; padding: 30px; text-align: center;">
-              <p style="margin: 0 0 10px 0; color: #6c757d; font-size: 14px;">Dúvidas? Entre em contato com a organização do evento.</p>
-              <p style="margin: 0; color: #adb5bd; font-size: 12px;">Este é um email automático, por favor não responda.</p>
+            <td style="background-color: #001D2E; padding: 30px; text-align: center;">
+              <p style="margin: 0 0 10px 0; color: #94A3B8; font-size: 14px;">Dúvidas? Entre em contato com a organização do evento.</p>
+              <p style="margin: 0; color: #64748B; font-size: 12px;">Este é um email automático, por favor não responda.</p>
             </td>
           </tr>
 
