@@ -107,8 +107,7 @@ export default function AthleteDashboard() {
     };
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        navigate("/auth");
+        navigate("/logout");
     };
 
     const getStatusColor = (status: string) => {

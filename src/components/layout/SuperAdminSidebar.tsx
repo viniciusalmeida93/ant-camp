@@ -29,8 +29,7 @@ export const SuperAdminSidebar = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        navigate("/auth");
+        navigate("/logout");
     };
 
     return (

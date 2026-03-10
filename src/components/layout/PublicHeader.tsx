@@ -56,8 +56,7 @@ export function PublicHeader() {
     };
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        navigate("/");
+        navigate("/logout");
     };
 
     return (

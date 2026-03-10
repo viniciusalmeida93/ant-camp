@@ -160,8 +160,7 @@ export default function SuperAdminDashboard() {
 
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
+    navigate("/logout");
   };
 
   // 2. Effects (Called AFTER functions are defined)
