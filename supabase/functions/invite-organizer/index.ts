@@ -36,28 +36,52 @@ serve(async (req) => {
     const { email, fullName, password: providedPassword }: InviteData = await req.json();
     const finalPassword = providedPassword || Math.random().toString(36).slice(-10) + "A1!";
 
-    // 1. Create User via Auth Admin
-    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      password: finalPassword,
-      user_metadata: { full_name: fullName },
-      email_confirm: true
-    });
+    // 1. Check if user already exists
+    const { data: existingUserObj, error: existError } = await supabase.auth.admin.listUsers();
 
-    if (createError) {
-      console.error("Error creating user:", createError);
-      throw createError;
+    let user = null;
+    let existingUser = existingUserObj?.users?.find(u => u.email === email);
+
+    if (existingUser) {
+      // User exists (likely an athlete). Update their password and use their ID.
+      const { data: updatedUserData, error: updateError } = await supabase.auth.admin.updateUserById(
+        existingUser.id,
+        { password: finalPassword }
+      );
+
+      if (updateError) {
+        console.error("Error updating existing user password:", updateError);
+        throw updateError;
+      }
+      user = updatedUserData.user;
+      console.log("Updated existing user:", user.id);
+
+    } else {
+      // Create new user via Auth Admin
+      const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password: finalPassword,
+        user_metadata: { full_name: fullName },
+        email_confirm: true
+      });
+
+      if (createError) {
+        console.error("Error creating user:", createError);
+        throw createError;
+      }
+      user = userData.user;
+      console.log("Created new user:", user.id);
     }
 
-    const user = userData.user;
+    if (!user) throw new Error("Failed to resolve user object");
 
     // 2. Assign Organizer Role
     const { error: roleError } = await supabase
       .from("user_roles")
-      .insert({
+      .upsert({
         user_id: user.id,
         role: 'organizer'
-      });
+      }, { onConflict: 'user_id' });
 
     if (roleError) {
       console.error("Error assigning role:", roleError);
