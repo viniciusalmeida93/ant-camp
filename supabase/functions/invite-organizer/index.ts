@@ -87,6 +87,19 @@ serve(async (req) => {
       console.error("Error assigning role:", roleError);
     }
 
+    // 2.5 Ensure Profile exists (so it shows up in get_organizer_stats INNER JOIN)
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        email: email,
+        full_name: fullName
+      }, { onConflict: 'id' });
+
+    if (profileError) {
+      console.error("Error ensuring profile:", profileError);
+    }
+
     // 3. Build HTML Email
     const appUrl = Deno.env.get("APP_URL") || "https://antcamp.com.br";
     const emailHtml = `
