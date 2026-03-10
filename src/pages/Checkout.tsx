@@ -128,15 +128,15 @@ export default function Checkout() {
     const subtotalAfterDiscount = Math.max(0, basePrice - discountCents);
 
     // A Taxa de Serviço visual é sempre (platform_fee + PIX_FEE), e queremos repassar esse custo
-    // para ambos os métodos de pagamento como o valor principal da Taxa de Serviço.
+    // para ambos os métodos de pagamento separadamente.
     const platformFeeCalculated = registration.platform_fee_cents || 0;
-    const targetNet = subtotalAfterDiscount + platformFeeCalculated + PIX_FEE_CENTS;
+    const platformFixedCharges = platformFeeCalculated + PIX_FEE_CENTS;
 
     let totalToCharge = 0;
     let fee = 0;
 
     if (paymentMethod === "pix") {
-      totalToCharge = targetNet;
+      totalToCharge = subtotalAfterDiscount + platformFixedCharges;
       fee = 0; // Sem juros no PIX visivelmente extra, pois o 1.99 já está embutido na Taxa de Serviço
     } else if (paymentMethod === "credit_card") {
       // For credit card, the fee depends on the number of installments
@@ -144,9 +144,17 @@ export default function Checkout() {
       if (installments >= 2 && installments <= 6) feePercent = CREDIT_CARD_FEES["2-6"];
       if (installments >= 7) feePercent = CREDIT_CARD_FEES["7-12"];
 
-      // Formula: Total = (Target + Fixed) / (1 - Percent)
-      totalToCharge = Math.ceil((targetNet + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
-      fee = totalToCharge - targetNet;
+      // Nova Matemática: A taxa de cartão incide apenas sobre o valor líquido (subtotalAfterDiscount).
+      // A taxa fixa da plataforma não infla a porcentagem.
+      const subtotalWithCardFee = Math.ceil((subtotalAfterDiscount + ASAAS_FIXED_FEE_CENTS) / (1 - feePercent));
+      const creditCardAddon = subtotalWithCardFee - subtotalAfterDiscount;
+
+      // Total final = Subtotal c/ Taxa de Cartão + Taxa Fixa de Serviço da Plataforma
+      totalToCharge = subtotalWithCardFee + platformFixedCharges;
+
+      // O "fee" exibido no frontend é apenas o juros do cartão, pois a plataforma
+      // já é exibida na linha de "Taxa de Serviço".
+      fee = creditCardAddon;
     }
 
     setDynamicTotal(totalToCharge);
