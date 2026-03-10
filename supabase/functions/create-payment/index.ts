@@ -485,7 +485,7 @@ serve(async (req) => {
         .from("registrations")
         .update({
           payment_id: savedPayment.id,
-          payment_status: 'pending', // Explicitly set to pending when payment is created
+          payment_status: 'processing', // Explicitly set to processing when payment is created
           payment_method: paymentMethod.toLowerCase(),
           installments: installments,
           total_cents: totalCents, // Update the total to reflect the markup charged
