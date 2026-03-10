@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Plus } from "lucide-react";
+import { Loader2, Plus, Mail, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -31,13 +31,25 @@ interface OrganizerStats {
 export default function SuperAdminOrganizers() {
     const [loading, setLoading] = useState(true);
     const [organizers, setOrganizers] = useState<OrganizerStats[]>([]);
+
+    // Create state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [creatingOrganizer, setCreatingOrganizer] = useState(false);
-
-    // Form states
     const [newOrgName, setNewOrgName] = useState("");
     const [newOrgEmail, setNewOrgEmail] = useState("");
     const [newOrgPassword, setNewOrgPassword] = useState("");
+
+    // Edit state
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingOrganizer, setEditingOrganizer] = useState(false);
+    const [editOrgName, setEditOrgName] = useState("");
+    const [editOrgEmail, setEditOrgEmail] = useState("");
+    const [editOrgPassword, setEditOrgPassword] = useState("");
+    const [selectedOrg, setSelectedOrg] = useState<OrganizerStats | null>(null);
+
+    // Delete state
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deletingOrganizer, setDeletingOrganizer] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -46,7 +58,7 @@ export default function SuperAdminOrganizers() {
     const loadData = async () => {
         setLoading(true);
         try {
-            // @ts-ignore - RPC might not be in types yet
+            // @ts-ignore
             const { data: organizerData, error: orgError } = await supabase.rpc("get_organizer_stats" as any);
 
             if (orgError) {
@@ -96,6 +108,95 @@ export default function SuperAdminOrganizers() {
         }
     };
 
+    const handleEditClick = (org: OrganizerStats) => {
+        setSelectedOrg(org);
+        setEditOrgName(org.organizer_name || "");
+        setEditOrgEmail(org.organizer_email);
+        setEditOrgPassword(""); // left blank intentionally
+        setIsEditModalOpen(true);
+    };
+
+    const submitEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedOrg || !editOrgName || !editOrgEmail) {
+            toast.error("Preencha nome e email");
+            return;
+        }
+
+        setEditingOrganizer(true);
+        try {
+            const { error } = await supabase.functions.invoke("edit-organizer", {
+                body: {
+                    userId: selectedOrg.organizer_id,
+                    email: editOrgEmail,
+                    fullName: editOrgName,
+                    password: editOrgPassword // Optional
+                }
+            });
+
+            if (error) throw error;
+
+            toast.success("Organizador editado com sucesso!");
+            setIsEditModalOpen(false);
+            loadData();
+        } catch (error: any) {
+            console.error("Error editing organizer:", error);
+            toast.error("Erro ao editar organizador: " + (error.message || "Erro desconhecido"));
+        } finally {
+            setEditingOrganizer(false);
+        }
+    };
+
+    const handleDeleteClick = (org: OrganizerStats) => {
+        setSelectedOrg(org);
+        setIsDeleteModalOpen(true);
+    };
+
+    const submitDelete = async () => {
+        if (!selectedOrg) return;
+
+        setDeletingOrganizer(true);
+        try {
+            const { error } = await supabase.functions.invoke("delete-organizer", {
+                body: {
+                    userId: selectedOrg.organizer_id
+                }
+            });
+
+            if (error) throw error;
+
+            toast.success("Organizador removido com sucesso!");
+            setIsDeleteModalOpen(false);
+            loadData();
+        } catch (error: any) {
+            console.error("Error deleting organizer:", error);
+            toast.error("Erro ao remover organizador: " + (error.message || "Erro desconhecido"));
+        } finally {
+            setDeletingOrganizer(false);
+        }
+    };
+
+    const handleResendInvite = async (org: OrganizerStats) => {
+        if (!confirm(`Deseja gerar nova senha e enviar por e-mail para ${org.organizer_name || org.organizer_email}?`)) return;
+
+        toast.info("Processando reenvio de convite...");
+        try {
+            const { error } = await supabase.functions.invoke("resend-organizer-invite", {
+                body: {
+                    userId: org.organizer_id,
+                    email: org.organizer_email,
+                    fullName: org.organizer_name || "Organizador"
+                }
+            });
+
+            if (error) throw error;
+            toast.success("Credenciais reenviadas com sucesso!");
+        } catch (error: any) {
+            console.error("Error resending invite:", error);
+            toast.error("Erro ao reenviar credenciais: " + (error.message || "Erro desconhecido"));
+        }
+    };
+
 
     if (loading) {
         return (
@@ -139,6 +240,7 @@ export default function SuperAdminOrganizers() {
                                         <TableHead>Inscrições</TableHead>
                                         <TableHead>Pagamentos</TableHead>
                                         <TableHead className="text-right">Faturamento Total</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -157,6 +259,37 @@ export default function SuperAdminOrganizers() {
                                             </TableCell>
                                             <TableCell className="text-right font-medium">
                                                 {formatCurrency(org.total_revenue_cents)}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        title="✉️ Reenviar Acesso"
+                                                        className="h-8 w-8"
+                                                        onClick={() => handleResendInvite(org)}
+                                                    >
+                                                        <Mail className="w-4 h-4 text-blue-600" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        title="Editar"
+                                                        className="h-8 w-8"
+                                                        onClick={() => handleEditClick(org)}
+                                                    >
+                                                        <Edit className="w-4 h-4 text-slate-400" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        title="Excluir"
+                                                        className="h-8 w-8 hover:text-red-600"
+                                                        onClick={() => handleDeleteClick(org)}
+                                                    >
+                                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -245,6 +378,119 @@ export default function SuperAdminOrganizers() {
                             </Button>
                         </div>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Modal */}
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Organizador</DialogTitle>
+                        <DialogDescription>
+                            Atualize os dados de {selectedOrg?.organizer_name}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={submitEdit} className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-name">Nome Completo</Label>
+                            <Input
+                                id="edit-name"
+                                value={editOrgName}
+                                onChange={(e) => setEditOrgName(e.target.value)}
+                                placeholder="Ex: João Silva"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-email">Email</Label>
+                            <Input
+                                id="edit-email"
+                                type="email"
+                                value={editOrgEmail}
+                                onChange={(e) => setEditOrgEmail(e.target.value)}
+                                placeholder="organizador@email.com"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-password">Nova Senha</Label>
+                            <Input
+                                id="edit-password"
+                                type="text"
+                                value={editOrgPassword}
+                                onChange={(e) => setEditOrgPassword(e.target.value)}
+                                placeholder="Deixe em branco para manter a atual"
+                                minLength={6}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Preencha apenas se desejar forçar a troca de senha.
+                            </p>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setIsEditModalOpen(false)}
+                                disabled={editingOrganizer}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="bg-primary hover:bg-primary/90 text-white"
+                                disabled={editingOrganizer}
+                            >
+                                {editingOrganizer ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Salvando...
+                                    </>
+                                ) : (
+                                    "Salvar Alterações"
+                                )}
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Modal */}
+            <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Remover Organizador</DialogTitle>
+                        <DialogDescription>
+                            Tem certeza que deseja remover <strong>{selectedOrg?.organizer_name}</strong>?
+                            Esta ação excluirá o usuário de forma permanente e não pode ser desfeita.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-2 pt-6">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setIsDeleteModalOpen(false)}
+                            disabled={deletingOrganizer}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={submitDelete}
+                            disabled={deletingOrganizer}
+                        >
+                            {deletingOrganizer ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Removendo...
+                                </>
+                            ) : (
+                                "Remover Permanentemente"
+                            )}
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

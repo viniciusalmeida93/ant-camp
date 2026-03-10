@@ -1,1 +1,33 @@
 project_id = "jxuhmqctiyeheamhviob"
+[functions.edit-organizer]
+enabled = true
+verify_jwt = true
+import_map = "./functions/edit-organizer/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/edit-organizer/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/edit-organizer/*.html" ]
+
+[functions.delete-organizer]
+enabled = true
+verify_jwt = true
+import_map = "./functions/delete-organizer/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/delete-organizer/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/delete-organizer/*.html" ]
+
+[functions.resend-organizer-invite]
+enabled = true
+verify_jwt = true
+import_map = "./functions/resend-organizer-invite/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/resend-organizer-invite/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/resend-organizer-invite/*.html" ]
