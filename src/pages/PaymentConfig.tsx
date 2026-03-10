@@ -863,61 +863,67 @@ export default function PaymentConfig() {
                                                     <TableCell colSpan={9} className="h-24 text-center">Nenhuma inscrição encontrada</TableCell>
                                                 </TableRow>
                                             ) : (
-                                                filteredRegistrations.map(reg => (
-                                                    <TableRow key={reg.id} className={selectedRows.has(reg.id) ? 'bg-muted/40' : ''}>
-                                                        <TableCell>
-                                                            {reg.payment_status === 'pending' ? (
-                                                                <Checkbox
-                                                                    checked={selectedRows.has(reg.id)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        setSelectedRows(prev => {
-                                                                            const next = new Set(prev);
-                                                                            checked ? next.add(reg.id) : next.delete(reg.id);
-                                                                            return next;
-                                                                        });
-                                                                    }}
-                                                                    aria-label={`Selecionar ${reg.athlete_name}`}
-                                                                />
-                                                            ) : null}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="font-medium">{reg.athlete_name}</div>
-                                                            <div className="text-xs text-muted-foreground">{reg.athlete_email}</div>
-                                                        </TableCell>
-                                                        <TableCell>{reg.categories?.name}</TableCell>
-                                                        <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
-                                                        <TableCell className="text-right">{formatCurrency(reg.subtotal_cents)}</TableCell>
-                                                        <TableCell className="text-muted-foreground">{new Date(reg.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                                                        <TableCell>
-                                                            {reg.payment_method === 'pix' && '💳 PIX'}
-                                                            {reg.payment_method === 'credit_card' && '💳 Cartão'}
-                                                            {reg.payment_method === 'boleto' && '📄 Boleto'}
-                                                            {reg.payment_method === 'cash' && '💵 Dinheiro'}
-                                                            {reg.payment_method === 'free' && '🎁 Cortesia'}
-                                                            {!reg.payment_method && '-'}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {reg.payment_method === 'credit_card'
-                                                                ? `${reg.installments || 1}x`
-                                                                : '-'}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            {reg.payment_status === 'pending' && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    title="Enviar email de recuperação"
-                                                                    disabled={sendingRecovery.has(reg.id)}
-                                                                    onClick={() => sendCartRecovery([reg.id])}
-                                                                >
-                                                                    {sendingRecovery.has(reg.id)
-                                                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                                        : <Send className="h-4 w-4" />}
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
+                                                filteredRegistrations.map(reg => {
+                                                    const paymentRecord = reg.payments && reg.payments.length > 0 ? reg.payments[0] : null;
+                                                    const method = reg.payment_method || (paymentRecord?.billing_type?.toLowerCase()) || null;
+                                                    const installments = reg.installments || paymentRecord?.installment_count || 1;
+
+                                                    return (
+                                                        <TableRow key={reg.id} className={selectedRows.has(reg.id) ? 'bg-muted/40' : ''}>
+                                                            <TableCell>
+                                                                {reg.payment_status === 'pending' ? (
+                                                                    <Checkbox
+                                                                        checked={selectedRows.has(reg.id)}
+                                                                        onCheckedChange={(checked) => {
+                                                                            setSelectedRows(prev => {
+                                                                                const next = new Set(prev);
+                                                                                checked ? next.add(reg.id) : next.delete(reg.id);
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        aria-label={`Selecionar ${reg.athlete_name}`}
+                                                                    />
+                                                                ) : null}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="font-medium">{reg.athlete_name}</div>
+                                                                <div className="text-xs text-muted-foreground">{reg.athlete_email}</div>
+                                                            </TableCell>
+                                                            <TableCell>{reg.categories?.name}</TableCell>
+                                                            <TableCell>{getStatusBadge(reg.payment_status)}</TableCell>
+                                                            <TableCell className="text-right">{formatCurrency(reg.subtotal_cents)}</TableCell>
+                                                            <TableCell className="text-muted-foreground">{new Date(reg.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                                                            <TableCell>
+                                                                {method === 'pix' && '💳 PIX'}
+                                                                {method === 'credit_card' && '💳 Cartão'}
+                                                                {method === 'boleto' && '📄 Boleto'}
+                                                                {method === 'cash' && '💵 Dinheiro'}
+                                                                {method === 'free' && '🎁 Cortesia'}
+                                                                {!method && '-'}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {method === 'credit_card'
+                                                                    ? `${installments}x`
+                                                                    : '-'}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {reg.payment_status === 'pending' && (
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        title="Enviar email de recuperação"
+                                                                        disabled={sendingRecovery.has(reg.id)}
+                                                                        onClick={() => sendCartRecovery([reg.id])}
+                                                                    >
+                                                                        {sendingRecovery.has(reg.id)
+                                                                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                                            : <Send className="h-4 w-4" />}
+                                                                    </Button>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })
                                             )}
                                         </TableBody>
                                     </Table>

@@ -113,6 +113,10 @@ serve(async (req) => {
         shouldUpdate = true;
         break;
       case "PAYMENT_DELETED":
+        newStatus = "cancelled";
+        registrationStatus = "cancelled";
+        shouldUpdate = true;
+        break;
       case "PAYMENT_REFUNDED":
         newStatus = "refunded";
         registrationStatus = "refunded";
