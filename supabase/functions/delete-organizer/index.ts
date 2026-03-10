@@ -19,6 +19,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Service role key bypasses RLS
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { userId }: DeleteData = await req.json();
@@ -27,6 +28,27 @@ serve(async (req) => {
       throw new Error("userId is required");
     }
 
+    // 1. Apagar roles
+    const { error: rolesError } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId);
+
+    if (rolesError) {
+      console.warn("Could not delete roles, might not exist:", rolesError);
+    }
+
+    // 2. Apagar profiles
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.warn("Could not delete profile, might not exist:", profileError);
+    }
+
+    // 3. Excluir o usuário do auth
     const { error } = await supabase.auth.admin.deleteUser(userId);
 
     if (error) {
