@@ -9,7 +9,15 @@ export default function Logout() {
     useEffect(() => {
         const performLogout = async () => {
             try {
-                // 1. Limpar dados específicos do App e Supabase primeiro
+                // 1. Tentar fazer logout no Supabase PRIMEIRO (ele precisa do token para isso)
+                const { error } = await supabase.auth.signOut();
+                if (error) {
+                    console.error("Supabase signOut error, forcing local clear", error);
+                }
+            } catch (error) {
+                console.error("Error during sign out:", error);
+            } finally {
+                // 2. Limpeza agressiva local como fallback e complemento
                 localStorage.removeItem('selectedChampionship');
 
                 Object.keys(localStorage).forEach(key => {
@@ -18,19 +26,8 @@ export default function Logout() {
                     }
                 });
 
-                // 2. Tentar fazer logout no Supabase
-                const { error } = await supabase.auth.signOut();
-                if (error) throw error;
-
-            } catch (error) {
-                console.error("Error signing out:", error);
-            } finally {
-                // 4. Force reload para garantir que status de memória mudem
-                // Usando window.location.href para forçar recarregamento real da página
-                // Isso mata qualquer estado React residual
-                setTimeout(() => {
-                    window.location.href = "/auth";
-                }, 100);
+                // 3. Redirecionar forçando reload real
+                window.location.href = "/auth";
             }
         };
 
