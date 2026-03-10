@@ -571,13 +571,13 @@ export default function Checkout() {
   const copyPixCode = () => {
     const codeToCopy = payment?.pix_copy_paste || "";
     if (codeToCopy) {
-      // IMPORTANTE: Remover TODOS os espaços do código PIX
-      const cleanCode = codeToCopy.replace(/\s+/g, '');
-      console.log("Código PIX original:", codeToCopy);
-      console.log("Código PIX limpo:", cleanCode);
+      // IMPORTANTE: Remover apenas espaços no início e fim. Remover espaços no meio
+      // corrompe o código PIX TLV se o nome do recebedor tiver espaços. 
+      const cleanCode = codeToCopy.trim();
+      console.log("Código PIX copiado:", cleanCode);
       navigator.clipboard.writeText(cleanCode);
       setCopied(true);
-      toast.success("Código PIX copiado (sem espaços)!");
+      toast.success("Código PIX copiado!");
       setTimeout(() => setCopied(false), 3000);
     } else {
       toast.error("Código PIX não disponível");
@@ -1025,7 +1025,7 @@ export default function Checkout() {
                           </div>
                         );
                       } else if (payment.pix_copy_paste) {
-                        const cleanPixCode = payment.pix_copy_paste.replace(/\s+/g, '');
+                        const cleanPixCode = payment.pix_copy_paste.trim();
                         return (
                           <div className="bg-white p-6 rounded-2xl border-2 border-primary/10 shadow-sm">
                             <img
@@ -1046,7 +1046,7 @@ export default function Checkout() {
                         </Label>
                         <div className="flex gap-2">
                           <Input
-                            value={payment.pix_copy_paste.replace(/\s+/g, '')}
+                            value={payment.pix_copy_paste.trim()}
                             readOnly
                             className="font-mono text-xs h-12 bg-muted/20 border-border focus-visible:ring-primary"
                           />
