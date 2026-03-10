@@ -307,7 +307,9 @@ export default function PublicRegistration() {
 
   const computeCategoryPrice = (category: any) => {
     const activeBatch = getActiveBatch(category);
-    return activeBatch ? activeBatch.price_cents : category.price_cents;
+    const basePrice = activeBatch ? activeBatch.price_cents : category.price_cents;
+    const teamSize = computeTeamSize(category);
+    return basePrice * teamSize;
   };
 
   // Kept for consistency if we decide to show navigation buttons
