@@ -98,8 +98,9 @@ serve(async (req) => {
         shouldUpdate = true;
         break;
       case "PAYMENT_CREATED":
-        newStatus = "pending";
-        registrationStatus = "pending";
+        // WARNING: Avoid race condition where PAYMENT_CREATED arrives AFTER PAYMENT_RECEIVED
+        if (newStatus !== "approved") newStatus = "pending";
+        if (registrationStatus !== "approved") registrationStatus = "pending";
         shouldUpdate = true;
         break;
       case "PAYMENT_AWAITING_RISK_ANALYSIS":

@@ -93,6 +93,7 @@ export default function SuperAdminOrganizers() {
             });
 
             if (error) throw error;
+            if (data?.error) throw new Error(data.error);
 
             toast.success("Organizador criado e e-mail enviado com sucesso!");
             setIsCreateModalOpen(false);
@@ -125,7 +126,7 @@ export default function SuperAdminOrganizers() {
 
         setEditingOrganizer(true);
         try {
-            const { error } = await supabase.functions.invoke("edit-organizer", {
+            const { data, error } = await supabase.functions.invoke("edit-organizer", {
                 body: {
                     userId: selectedOrg.organizer_id,
                     email: editOrgEmail,
@@ -135,6 +136,7 @@ export default function SuperAdminOrganizers() {
             });
 
             if (error) throw error;
+            if (data?.error) throw new Error(data.error);
 
             toast.success("Organizador editado com sucesso!");
             setIsEditModalOpen(false);
@@ -157,13 +159,14 @@ export default function SuperAdminOrganizers() {
 
         setDeletingOrganizer(true);
         try {
-            const { error } = await supabase.functions.invoke("delete-organizer", {
+            const { data, error } = await supabase.functions.invoke("delete-organizer", {
                 body: {
                     userId: selectedOrg.organizer_id
                 }
             });
 
             if (error) throw error;
+            if (data?.error) throw new Error(data.error);
 
             toast.success("Organizador removido com sucesso!");
             setIsDeleteModalOpen(false);
@@ -181,7 +184,7 @@ export default function SuperAdminOrganizers() {
 
         toast.info("Processando reenvio de convite...");
         try {
-            const { error } = await supabase.functions.invoke("resend-organizer-invite", {
+            const { data, error } = await supabase.functions.invoke("resend-organizer-invite", {
                 body: {
                     userId: org.organizer_id,
                     email: org.organizer_email,
@@ -190,6 +193,7 @@ export default function SuperAdminOrganizers() {
             });
 
             if (error) throw error;
+            if (data?.error) throw new Error(data.error);
             toast.success("Credenciais reenviadas com sucesso!");
         } catch (error: any) {
             console.error("Error resending invite:", error);
