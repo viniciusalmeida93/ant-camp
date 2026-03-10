@@ -182,21 +182,27 @@ function SortableRegistrationItem({
         <div className="flex gap-1 shrink-0 justify-end sm:justify-start flex-wrap">
           {/* Payment Status Dropdown */}
           <div className="flex items-center gap-2 mr-2">
-            <Select value={reg.payment_status} onValueChange={onUpdatePaymentStatus}>
-              <SelectTrigger className={`h-8 w-[130px] text-xs ${reg.payment_status === 'approved' ? 'bg-green-500/10 text-green-700 border-green-200' :
-                reg.payment_status === 'processing' ? 'bg-orange-500/10 text-orange-700 border-orange-200' :
-                  reg.payment_status === 'cancelled' ? 'bg-red-500/10 text-red-700 border-red-200' :
-                    'bg-yellow-500/10 text-yellow-700 border-yellow-200'
-                }`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending" className="text-yellow-700">Pendente</SelectItem>
-                <SelectItem value="processing" className="text-orange-700">Processando</SelectItem>
-                <SelectItem value="approved" className="text-green-700">Aprovado</SelectItem>
-                <SelectItem value="cancelled" className="text-red-700">Cancelar</SelectItem>
-              </SelectContent>
-            </Select>
+            {reg.payment_status === 'courtesy' ? (
+              <span className="inline-flex h-8 items-center justify-center rounded-md border border-amber-200 bg-amber-500/10 px-3 text-xs font-medium text-amber-700 select-none">
+                Cortesia
+              </span>
+            ) : (
+              <Select value={reg.payment_status || 'pending'} onValueChange={onUpdatePaymentStatus}>
+                <SelectTrigger className={`h-8 w-[130px] text-xs ${(reg.payment_status || 'pending') === 'approved' ? 'bg-green-500/10 text-green-700 border-green-200' :
+                  (reg.payment_status || 'pending') === 'processing' ? 'bg-orange-500/10 text-orange-700 border-orange-200' :
+                    (reg.payment_status || 'pending') === 'cancelled' ? 'bg-red-500/10 text-red-700 border-red-200' :
+                      'bg-yellow-500/10 text-yellow-700 border-yellow-200'
+                  }`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending" className="text-yellow-700">Pendente</SelectItem>
+                  <SelectItem value="processing" className="text-orange-700">Processando</SelectItem>
+                  <SelectItem value="approved" className="text-green-700">Aprovado</SelectItem>
+                  <SelectItem value="cancelled" className="text-red-700">Cancelar</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
 

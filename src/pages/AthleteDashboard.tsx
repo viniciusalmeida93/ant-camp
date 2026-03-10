@@ -17,6 +17,7 @@ export default function AthleteDashboard() {
     const [profileOpen, setProfileOpen] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [fullName, setFullName] = useState<string | null>(null);
+    const [phone, setPhone] = useState<string | null>(null);
     const [isOrganizer, setIsOrganizer] = useState(false);
 
     useEffect(() => {
@@ -43,29 +44,20 @@ export default function AthleteDashboard() {
 
         if (roles?.some(r => r.role === 'organizer' || r.role === 'super_admin')) {
             setIsOrganizer(true);
-        } else {
-            // Fallback para organizadores legados
-            const { count } = await supabase
-                .from("championships")
-                .select("id", { count: "exact", head: true })
-                .eq("organizer_id", userId);
-
-            if (count && count > 0) {
-                setIsOrganizer(true);
-            }
         }
     };
 
     const loadProfileStats = async (userId: string) => {
         const { data } = await supabase
             .from("profiles")
-            .select("avatar_url, full_name")
+            .select("avatar_url, full_name, phone")
             .eq("id", userId)
             .single();
 
         if (data) {
             setAvatarUrl(data.avatar_url);
             setFullName(data.full_name);
+            setPhone(data.phone);
         }
     };
 
@@ -208,22 +200,34 @@ export default function AthleteDashboard() {
                                 <h1 className="text-xl font-bold truncate">
                                     {fullName ? `Olá, ${fullName.split(' ')[0]}` : "Área do Atleta"}
                                 </h1>
-                                <p className="text-sm text-gray-400 truncate">
-                                    Bem-vindo, {user?.email}
-                                </p>
+                                <div className="text-sm text-gray-400 truncate flex flex-col md:flex-row md:items-center md:gap-2">
+                                    <span>Bem-vindo, {user?.email}</span>
+                                    {phone && (
+                                        <>
+                                            <span className="hidden md:inline">•</span>
+                                            <span>{phone}</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        <div className="flex gap-2 w-full sm:w-auto justify-start sm:justify-end">
+                        <div className="flex gap-2 w-full sm:w-auto items-center justify-start sm:justify-end">
                             {isOrganizer && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-white hover:text-white hover:bg-white/10"
+                                    className="text-white hover:text-white hover:bg-white/10 mr-2"
                                     onClick={() => navigate("/dashboard")}
                                 >
                                     <span className="hidden md:inline">Área do Organizador</span>
                                 </Button>
                             )}
+                            <a
+                                href="mailto:contato@antcamp.com.br"
+                                className="text-sm font-medium text-white hover:text-white/80 transition-colors mr-2"
+                            >
+                                Contato
+                            </a>
                             <Button
                                 variant="outline"
                                 size="sm"

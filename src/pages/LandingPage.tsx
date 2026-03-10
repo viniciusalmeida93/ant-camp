@@ -11,17 +11,11 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
-            <span className="text-sm sm:text-base font-semibold">CrossFit Competition</span>
+            <span className="text-sm sm:text-base font-semibold">AntCamp</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="outline" size="sm" asChild className="sm:hidden">
+            <Button size="sm" asChild>
               <Link to="/auth">Entrar</Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-              <Link to="/auth">Entrar</Link>
-            </Button>
-            <Button size="sm" asChild className="hidden sm:inline-flex">
-              <Link to="/setup">Checklist</Link>
             </Button>
           </div>
         </div>
@@ -35,16 +29,16 @@ export default function LandingPage() {
             <span className="hidden sm:inline">Plataforma Profissional de Gestão de Campeonatos</span>
             <span className="sm:hidden">Gestão de Campeonatos</span>
           </Badge>
-          
+
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent px-2">
             Gerencie Campeonatos de CrossFit com Excelência
           </h1>
-          
+
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-6 sm:mb-8 max-w-2xl mx-auto px-4">
-            Lance resultados, gere baterias automáticas e compartilhe leaderboards em tempo real. 
+            Lance resultados, gere baterias automáticas e compartilhe leaderboards em tempo real.
             Tudo em uma plataforma profissional e fácil de usar.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
             <Button size="lg" asChild className="text-base sm:text-lg px-6 sm:px-8 w-full sm:w-auto">
               <Link to="/setup">Ver Checklist de Produção</Link>
@@ -53,7 +47,7 @@ export default function LandingPage() {
               <Link to="/auth">Entrar</Link>
             </Button>
           </div>
-          
+
           <p className="text-xs sm:text-sm text-muted-foreground mt-4 px-4">
             Sem necessidade de cartão de crédito • Teste grátis por 14 dias
           </p>
@@ -66,7 +60,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-4">Como Funciona</h2>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground">Simples, rápido e profissional</p>
         </div>
-        
+
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
           <Card className="border-2">
             <CardHeader>
@@ -79,7 +73,7 @@ export default function LandingPage() {
               </CardDescription>
             </CardHeader>
           </Card>
-          
+
           <Card className="border-2">
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -91,7 +85,7 @@ export default function LandingPage() {
               </CardDescription>
             </CardHeader>
           </Card>
-          
+
           <Card className="border-2">
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -112,7 +106,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-4">Recursos Premium</h2>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground">Tudo que você precisa em uma única plataforma</p>
         </div>
-        
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto">
           {[
             "Baterias automáticas por ranking",
@@ -144,7 +138,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-4">Planos Flexíveis</h2>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground">Escolha o melhor plano para você</p>
         </div>
-        
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
           <Card>
             <CardHeader>
@@ -169,7 +163,7 @@ export default function LandingPage() {
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card className="border-primary border-2 relative">
             <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">Mais Popular</Badge>
             <CardHeader>
@@ -194,7 +188,7 @@ export default function LandingPage() {
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Pay Per Event</CardTitle>

@@ -380,15 +380,21 @@ export default function OrganizerDashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto justify-start sm:justify-end">
+            <div className="flex gap-2 w-full sm:w-auto items-center justify-start sm:justify-end">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white hover:text-white hover:bg-white/10"
+                className="text-white hover:text-white hover:bg-white/10 mr-2"
                 onClick={() => navigate("/athlete-dashboard")}
               >
                 Área do Atleta
               </Button>
+              <a
+                href="mailto:contato@antcamp.com.br"
+                className="text-sm font-medium text-white hover:text-white/80 transition-colors mr-2 hidden md:block"
+              >
+                Contato
+              </a>
               <Button
                 variant="outline"
                 size="sm"

@@ -191,33 +191,33 @@ export default function Checkout() {
 
       if (regError) throw regError;
 
+      const athleteCount = reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0
+        ? reg.team_members.length
+        : 1;
+
       // Encontrar o nome do lote se houver
       let batchName = "";
+      let unitPrice = reg.subtotal_cents / athleteCount; // fallback genérico se não acharmos nenhum batch/preço na categoria
+
       if (reg.categories?.has_batches && reg.categories?.batches) {
-        const matchingBatch = reg.categories.batches.find((b: any) => b.price_cents === reg.subtotal_cents);
+        const matchingBatch = reg.categories.batches.find((b: any) =>
+          b.price_cents * athleteCount === reg.subtotal_cents ||
+          b.price_cents === reg.subtotal_cents
+        );
         if (matchingBatch) {
           batchName = matchingBatch.name;
+          unitPrice = matchingBatch.price_cents;
         }
+      } else if (reg.categories?.price_cents !== undefined) {
+        unitPrice = reg.categories.price_cents;
       }
 
       setRegistration({ ...reg, batch_name: batchName });
 
       // PRICE REFRESH LOGIC:
-      // Use category price if no active batch logic is complex, or use existing logic if simpler.
-      // Since user complained about "value not updating", we prioritize the latest Category Price.
-      // If batch exists, ideally we'd check batches. Simplified: use reg.subtotal_cents unless category price differs significantly and user wants update? 
-      // Actually, if reg is old, reg.subtotal_cents is old.
-      // Robust fix: Always use current category.price_cents unless batches are involved.
-      let currentBasePrice = reg.subtotal_cents;
-
-      if (reg.categories?.price_cents !== undefined) {
-        // If category has batches, it's safer to trust the registration snapshotted price 
-        // UNLESS we implement full batch logic here. 
-        // But user might have just changed the Category Price (without batches).
-        if (!reg.categories.has_batches) {
-          currentBasePrice = reg.categories.price_cents;
-        }
-      }
+      // O valor base no checkout sempre deve refletir a Quantidade de Atletas da equipe * Preço do lote atual/categoria
+      // Isso previne perdas financeiras se o subtotal salvo estiver "seco" sem multiplicar pelos membros
+      let currentBasePrice = unitPrice * athleteCount;
 
       setBasePrice(currentBasePrice);
 

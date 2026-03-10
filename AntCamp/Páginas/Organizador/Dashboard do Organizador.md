@@ -12,7 +12,7 @@ Página inicial da área do organizador. Exibe uma visão geral do campeonato at
 - Seletor de campeonato (caso o organizador tenha mais de um)
 - Nome do campeonato, data e local
 - Botões de ação rápida:
-  - **Links Públicos** — acessa as páginas públicas do campeonato
+  
   - **Editar Informações** — acessa as configurações do campeonato
   - **Regulamento** — acessa o regulamento do evento
 

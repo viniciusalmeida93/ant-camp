@@ -33,6 +33,17 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Helper: converte time_cap ("MM:SS" ou "MM") em minutos. Fallback: 15 min.
+const parseTimeCap = (timeCap?: string | null): number => {
+  if (!timeCap) return 15;
+  if (timeCap.includes(':')) {
+    const [mm, ss] = timeCap.split(':').map(Number);
+    return mm + Math.ceil((ss || 0) / 60);
+  }
+  const parsed = parseInt(timeCap, 10);
+  return isNaN(parsed) || parsed <= 0 ? 15 : parsed;
+};
+
 export default function Heats() {
   const navigate = useNavigate();
   const { selectedChampionship } = useChampionship();
@@ -599,17 +610,17 @@ export default function Heats() {
                 // Pegar a última bateria do dia
                 const lastHeat = sameDayHeats[sameDayHeats.length - 1];
                 const lastHeatTime = new Date(lastHeat.scheduled_time);
-                const lastWodDuration = (lastHeat.wods as any)?.estimated_duration_minutes || 15;
+                const lastWodDuration = parseTimeCap((lastHeat.wods as any)?.time_cap);
 
                 // Buscar variação de categoria se existir para a última bateria
                 const { data: lastVariationData } = await supabase
                   .from("wod_category_variations")
-                  .select("estimated_duration_minutes")
+                  .select("time_cap")
                   .eq("wod_id", lastHeat.wod_id)
                   .eq("category_id", lastHeat.category_id)
                   .maybeSingle();
 
-                const finalLastWodDuration = lastVariationData?.estimated_duration_minutes || lastWodDuration;
+                const finalLastWodDuration = parseTimeCap(lastVariationData?.time_cap) || lastWodDuration;
 
                 currentTime = new Date(lastHeatTime.getTime() + (finalLastWodDuration * 60000) + (breakInterval * 60000));
               } else {
@@ -649,17 +660,17 @@ export default function Heats() {
               let lastWodId: string | null = null;
 
               for (const heat of sortedDayHeats) {
-                const wodDuration = (heat.wods as any)?.estimated_duration_minutes || 15;
+                const wodDuration = parseTimeCap((heat.wods as any)?.time_cap);
 
                 // Buscar variação de categoria se existir
                 const { data: variationData } = await supabase
                   .from("wod_category_variations")
-                  .select("estimated_duration_minutes")
+                  .select("time_cap")
                   .eq("wod_id", heat.wod_id)
                   .eq("category_id", heat.category_id)
                   .maybeSingle();
 
-                const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
+                const finalWodDuration = parseTimeCap(variationData?.time_cap) || wodDuration;
 
                 // Se mudou de WOD, aplicar intervalo entre provas
                 if (lastWodId !== null && lastWodId !== heat.wod_id) {
@@ -778,23 +789,23 @@ export default function Heats() {
           // Buscar duração do WOD
           const { data: wodData } = await supabase
             .from("wods")
-            .select("estimated_duration_minutes")
+            .select("time_cap")
             .eq("id", selectedWOD)
             .single();
 
-          const wodDuration = wodData?.estimated_duration_minutes || 15;
+          const wodDuration = parseTimeCap(wodData?.time_cap);
           const breakInterval = targetDay.break_interval_minutes || 5;
           const wodInterval = targetDay.wod_interval_minutes || 10;
 
           // Buscar variação de categoria se existir
           const { data: variationData } = await supabase
             .from("wod_category_variations")
-            .select("estimated_duration_minutes")
+            .select("time_cap")
             .eq("wod_id", selectedWOD)
             .eq("category_id", selectedCategory)
             .maybeSingle();
 
-          const finalWodDuration = variationData?.estimated_duration_minutes || wodDuration;
+          const finalWodDuration = parseTimeCap(variationData?.time_cap) || wodDuration;
 
           // Buscar TODAS as baterias do mesmo dia para calcular o horário inicial correto
           const { data: allDayHeats } = await supabase
@@ -819,7 +830,7 @@ export default function Heats() {
             // Se já existem baterias neste dia, começar após a última
             const lastHeat = sameDayHeats[sameDayHeats.length - 1];
             const lastHeatTime = new Date(lastHeat.scheduled_time);
-            const lastWodDuration = lastHeat.wods?.estimated_duration_minutes || 15;
+            const lastWodDuration = parseTimeCap(lastHeat.wods?.time_cap);
 
             // Verificar se a última bateria é de um WOD diferente
             const lastHeatWodId = lastHeat.wod_id || lastHeat.wods?.id;

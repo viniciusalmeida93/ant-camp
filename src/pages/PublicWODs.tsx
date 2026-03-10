@@ -267,11 +267,11 @@ export default function PublicWODs() {
                     </Badge>
                   </div>
 
-                  {(activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes) && (
+                  {(activeVariation?.time_cap || activeWod.time_cap) && (
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-medium">Time Cap:</span>
                       <span>
-                        {activeVariation?.estimated_duration_minutes || activeWod.estimated_duration_minutes} min
+                        {activeVariation?.time_cap || activeWod.time_cap}
                       </span>
                     </div>
                   )}

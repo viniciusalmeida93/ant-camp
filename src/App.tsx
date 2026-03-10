@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
@@ -22,6 +22,7 @@ import RegistrationForm from "./pages/RegistrationForm";
 import Scoring from "./pages/Scoring";
 import Results from "./pages/Results";
 import HeatsNew from "./pages/HeatsNew";
+import Waitlist from "./pages/Waitlist";
 import Leaderboard from "./pages/Leaderboard";
 import TVDisplay from "./pages/TVDisplay";
 import NotFound from "./pages/NotFound";
@@ -41,11 +42,11 @@ import SuperAdminFees from "./pages/SuperAdminFees";
 import SuperAdminOrganizers from "./pages/SuperAdminOrganizers";
 import SuperAdminChampionships from "./pages/SuperAdminChampionships";
 import SuperAdminSettings from "./pages/SuperAdminSettings";
-import AssignRoles from "./pages/AssignRoles";
 import AthleteDashboard from "./pages/AthleteDashboard";
 import PaymentConfig from "./pages/PaymentConfig";
 import Coupons from "./pages/Coupons";
 import RegistrationSuccess from "./pages/RegistrationSuccess";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ChampionshipProvider } from "./contexts/ChampionshipContext";
 
 const queryClient = new QueryClient();
@@ -59,7 +60,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Public routes without navbar */}
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<Navigate to="/auth" replace />} />
+            <Route path="/landing-page" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/setup" element={<Setup />} />
@@ -74,50 +76,52 @@ const App = () => (
             <Route path="/:slug/wods" element={<PublicWODs />} />
 
             {/* Organizer dashboard */}
-            <Route path="/dashboard" element={<OrganizerDashboard />} />
-            <Route path="/athlete-dashboard" element={<AthleteDashboard />} />
+            <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['organizer', 'super_admin']}><OrganizerDashboard /></ProtectedRoute>} />
+            <Route path="/athlete-dashboard" element={<ProtectedRoute><AthleteDashboard /></ProtectedRoute>} />
             {/* Super Admin Routes */}
-            <Route path="/super-admin" element={<SuperAdminLayout />}>
+            <Route path="/super-admin" element={<ProtectedRoute allowedRoles={['super_admin']}><SuperAdminLayout /></ProtectedRoute>}>
               <Route index element={<SuperAdminDashboard />} />
               <Route path="fees" element={<SuperAdminFees />} />
               <Route path="organizers" element={<SuperAdminOrganizers />} />
               <Route path="championships" element={<SuperAdminChampionships />} />
               <Route path="settings" element={<SuperAdminSettings />} />
             </Route>
-            <Route path="/asaas-integration" element={<AsaasIntegration />} />
-            <Route path="/test-asaas-connections" element={<TestAsaasConnections />} />
-            <Route path="/assign-roles" element={<AssignRoles />} />
+            <Route path="/asaas-integration" element={<ProtectedRoute allowedRoles={['organizer', 'super_admin']}><AsaasIntegration /></ProtectedRoute>} />
+            <Route path="/test-asaas-connections" element={<ProtectedRoute allowedRoles={['super_admin']}><TestAsaasConnections /></ProtectedRoute>} />
 
             {/* App routes with sidebar */}
             <Route path="*" element={
-              <div className="min-h-screen bg-background flex">
-                <Sidebar />
-                <main className="flex-1 lg:ml-64">
-                  <Routes>
-                    <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
-                    <Route path="/championships/:championshipId/finance" element={<ChampionshipFinance />} />
-                    <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
-                    <Route path="/app" element={<Dashboard />} />
-                    <Route path="/categories" element={<Categories />} />
-                    <Route path="/categories/new" element={<CategoryForm />} />
-                    <Route path="/categories/:id/edit" element={<CategoryForm />} />
-                    <Route path="/wods" element={<WODs />} />
-                    <Route path="/wods/new" element={<CreateWOD />} />
-                    <Route path="/wods/:id/edit" element={<CreateWOD />} />
-                    <Route path="/registrations" element={<Registrations />} />
-                    <Route path="/registrations/new" element={<RegistrationForm />} />
-                    <Route path="/registrations/:id/edit" element={<RegistrationForm />} />
-                    <Route path="/bulk-import" element={<BulkImport />} />
-                    <Route path="/scoring" element={<Scoring />} />
-                    <Route path="/results" element={<Results />} />
-                    <Route path="/heats" element={<HeatsNew />} />
-                    <Route path="/leaderboard" element={<Leaderboard />} />
-                    <Route path="/payments" element={<PaymentConfig />} />
-                    <Route path="/coupons" element={<Coupons />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </main>
-              </div>
+              <ProtectedRoute allowedRoles={['organizer', 'super_admin']}>
+                <div className="min-h-screen bg-background flex">
+                  <Sidebar />
+                  <main className="flex-1 lg:ml-64">
+                    <Routes>
+                      <Route path="/championships/:championshipId/settings" element={<ChampionshipSettings />} />
+                      <Route path="/championships/:championshipId/finance" element={<ChampionshipFinance />} />
+                      <Route path="/championships/:championshipId/links" element={<LinkPageConfig />} />
+                      <Route path="/app" element={<Dashboard />} />
+                      <Route path="/categories" element={<Categories />} />
+                      <Route path="/categories/new" element={<CategoryForm />} />
+                      <Route path="/categories/:id/edit" element={<CategoryForm />} />
+                      <Route path="/wods" element={<WODs />} />
+                      <Route path="/wods/new" element={<CreateWOD />} />
+                      <Route path="/wods/:id/edit" element={<CreateWOD />} />
+                      <Route path="/registrations" element={<Registrations />} />
+                      <Route path="/registrations/new" element={<RegistrationForm />} />
+                      <Route path="/registrations/:id/edit" element={<RegistrationForm />} />
+                      <Route path="/bulk-import" element={<BulkImport />} />
+                      <Route path="/waitlist" element={<Waitlist />} />
+                      <Route path="/scoring" element={<Scoring />} />
+                      <Route path="/results" element={<Results />} />
+                      <Route path="/heats" element={<HeatsNew />} />
+                      <Route path="/leaderboard" element={<Leaderboard />} />
+                      <Route path="/payments" element={<PaymentConfig />} />
+                      <Route path="/coupons" element={<Coupons />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                </div>
+              </ProtectedRoute>
             } />
           </Routes>
         </BrowserRouter>

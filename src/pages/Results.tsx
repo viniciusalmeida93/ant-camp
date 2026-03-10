@@ -595,7 +595,7 @@ export default function Results() {
   const participants = selectedCategory ? getParticipants() : [];
   const selectedWODData = wods.find(w => w.id === selectedWOD);
   const selectedVariation = selectedCategory && selectedWOD ? wodVariations[selectedWOD]?.[selectedCategory] : null;
-  const displayTimeCapMinutes = selectedVariation?.estimated_duration_minutes || selectedWODData?.estimated_duration_minutes;
+  const displayTimeCapMinutes = selectedVariation?.time_cap || selectedWODData?.time_cap;
   const displayDescription = selectedVariation?.description || selectedWODData?.description;
   const displayNotes = selectedVariation?.notes || selectedWODData?.notes;
 

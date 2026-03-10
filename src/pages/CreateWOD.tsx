@@ -159,7 +159,7 @@ export default function CreateWOD() {
       }
     } catch (error: any) {
       console.error("Error loading WOD:", error);
-      toast.error("Erro ao carregar WOD");
+      toast.error("Erro ao carregar Evento");
       navigate('/wods');
     } finally {
       setLoading(false);
@@ -248,7 +248,7 @@ export default function CreateWOD() {
             Voltar
           </Button>
           <h1 className="text-3xl font-bold mb-2">Criar Novo Evento</h1>
-          <p className="text-muted-foreground">Selecione a categoria para começar a criar o WOD.</p>
+          <p className="text-muted-foreground">Selecione a categoria para começar a criar o Evento.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -321,7 +321,6 @@ export default function CreateWOD() {
         description: description,
         time_cap: timeCap,
         notes: notes,
-        estimated_duration_minutes: estimatedDuration,
         is_published: publish
       };
 
@@ -340,7 +339,6 @@ export default function CreateWOD() {
           delete updateData.description;
           delete updateData.notes;
           delete updateData.time_cap;
-          delete updateData.estimated_duration_minutes;
         }
 
         const { error } = await supabase
@@ -382,7 +380,6 @@ export default function CreateWOD() {
             category_id: cat.id,
             description: description,
             notes: notes,
-            estimated_duration_minutes: estimatedDuration,
             time_cap: timeCap,
             display_name: null
           });
@@ -394,7 +391,6 @@ export default function CreateWOD() {
           category_id: selectedCategoryId,
           description: description,
           notes: notes,
-          estimated_duration_minutes: estimatedDuration,
           time_cap: timeCap,
           display_name: displayName || null
         });
@@ -470,9 +466,9 @@ export default function CreateWOD() {
       });
 
       if (publish) {
-        toast.success("WOD salvo e publicado com sucesso!");
+        toast.success("Evento salvo e publicado com sucesso!");
       } else {
-        toast.success("WOD salvo com sucesso!");
+        toast.success("Evento salvo com sucesso!");
       }
 
       if (navigateBack) {
@@ -480,8 +476,8 @@ export default function CreateWOD() {
       }
 
     } catch (error: any) {
-      console.error("Error saving WOD", error);
-      toast.error("Erro ao salvar WOD");
+      console.error("Error saving Evento", error);
+      toast.error("Erro ao salvar Evento");
     } finally {
       setSaving(false);
     }
@@ -509,7 +505,7 @@ export default function CreateWOD() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Event Filter */}
           <div>
-            <Label className="mb-2 block font-semibold">Evento (WOD)</Label>
+            <Label className="mb-2 block font-semibold">Evento</Label>
             <Select
               value={id || "new"}
               onValueChange={(value) => {
@@ -598,7 +594,7 @@ export default function CreateWOD() {
 
             <div>
               <Label htmlFor="description">Descrição do Evento *</Label>
-              <Textarea id="description" name="description" defaultValue={currentValues.description} rows={5} required placeholder="Descreva o WOD aqui..." />
+              <Textarea id="description" name="description" defaultValue={currentValues.description} rows={5} required placeholder="Descreva o evento aqui..." />
             </div>
 
             <div>

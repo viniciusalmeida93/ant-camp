@@ -167,8 +167,11 @@ export default function Dashboard() {
       );
 
       const registrations = registrationsResult.data || [];
+      const validRegistrations = registrations.filter((r: any) =>
+        ['approved', 'paid', 'courtesy'].includes(r.payment_status)
+      );
 
-      const totalAthletes = registrations.reduce((acc: number, registration: any) => {
+      const totalAthletes = validRegistrations.reduce((acc: number, registration: any) => {
         if (!registration.team_name) {
           return acc + 1;
         }
@@ -203,11 +206,9 @@ export default function Dashboard() {
         }
       }, 0);
 
-      const teams = registrations.filter((registration: any) => registration.team_name).length;
+      const teams = validRegistrations.filter((registration: any) => registration.team_name).length;
 
-      const revenue = registrations
-        .filter((r: any) => r.payment_status === 'approved')
-        .reduce((sum: number, r: any) => sum + (r.subtotal_cents || 0), 0);
+      const revenue = validRegistrations.reduce((sum: number, r: any) => sum + (r.subtotal_cents || 0), 0);
 
       setStats({
         categories: categoriesResult.count || 0,

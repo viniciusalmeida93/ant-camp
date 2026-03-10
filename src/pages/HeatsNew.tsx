@@ -36,6 +36,17 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Helper: converte time_cap ("MM:SS" ou "MM") em minutos. Fallback: 15 min.
+const parseTimeCap = (timeCap?: string | null): number => {
+  if (!timeCap) return 15;
+  if (timeCap.includes(':')) {
+    const [mm, ss] = timeCap.split(':').map(Number);
+    return mm + Math.ceil((ss || 0) / 60);
+  }
+  const parsed = parseInt(timeCap, 10);
+  return isNaN(parsed) || parsed <= 0 ? 15 : parsed;
+};
+
 export default function HeatsNew() {
   const navigate = useNavigate();
   const { selectedChampionship } = useChampionship();
@@ -215,12 +226,33 @@ export default function HeatsNew() {
       if (regsResult.error) throw regsResult.error;
 
       setCategories(catsResult.data || []);
-      setWODs(wodsResult.data || []);
-      setRegistrations(regsResult.data || []);
-      setCategories(catsResult.data || []);
-      setWODs(wodsResult.data || []);
       setRegistrations(regsResult.data || []);
       setChampionshipDays(daysResult.data || []);
+
+      const allWods = wodsResult.data || [];
+      const publishedWods = allWods.filter(w => w.is_published);
+      const unpublishedWodIds = allWods.filter(w => !w.is_published).map(w => w.id);
+
+      setWODs(publishedWods);
+
+      // Limpeza automática: se houver WODs despublicados com baterias, deletamos e recalculamos
+      if (unpublishedWodIds.length > 0) {
+        const { data: heatsToDelete } = await supabase
+          .from("heats")
+          .select("id")
+          .in("wod_id", unpublishedWodIds);
+
+        if (heatsToDelete && heatsToDelete.length > 0) {
+          const ids = heatsToDelete.map(h => h.id);
+          await supabase.from("heat_entries").delete().in("heat_id", ids);
+          await supabase.from("heats").delete().in("id", ids);
+          // Aguarda o state fluir para refazer os cálculos sem elas
+          setTimeout(() => {
+            calculateAllHeatsSchedule();
+            loadHeats();
+          }, 1500);
+        }
+      }
 
       // Carregar variações de WOD por categoria (segundo passo, após ter os WODs)
       if (wodsResult.data && wodsResult.data.length > 0) {
@@ -713,7 +745,7 @@ export default function HeatsNew() {
             }
 
             // Avançar tempo (time_cap + transição)
-            const timecapMinutes = wod.estimated_duration_minutes || 10;
+            const timecapMinutes = parseTimeCap(wod?.time_cap);
             currentTime = new Date(currentTime.getTime() + (timecapMinutes * 60000) + (transitionTime * 60000));
 
             globalHeatNumber++;
@@ -1716,7 +1748,8 @@ export default function HeatsNew() {
                 if (dayConfig && dayConfig.enable_break) {
                   // Verificar se a pausa é após O NÚMERO DE ORDEM deste wod nesse dia
                   if (Number(dayConfig.break_after_wod_number) === Number(prevWodInfo.orderNumInDay)) {
-                    intervaloMinutos += (dayConfig.break_duration_minutes || 0);
+                    // DESCARTAR O INTERVALO ENTRE PROVAS, APENAS APLICAR A PAUSA
+                    intervaloMinutos = (dayConfig.break_duration_minutes || 0);
                   }
                 }
               }
@@ -2009,7 +2042,7 @@ export default function HeatsNew() {
 
       const { data: wodsData } = await supabase
         .from("wods")
-        .select("id, estimated_duration_minutes, time_cap")
+        .select("id, time_cap")
         .in("id", relevantWodIds);
 
       const wodsMap = new Map((wodsData || []).map(w => [w.id, w]));
@@ -2153,7 +2186,8 @@ export default function HeatsNew() {
           nextStartTime = new Date(lastHeatEndTime.getTime());
 
           if (heat.wod_id !== previousWodId) {
-            nextStartTime = new Date(nextStartTime.getTime() + (currentWodInterval * 60000));
+            let appliedInterval = currentWodInterval;
+
             const prevWodInfo = wodDayMap.get(previousWodId);
             if (prevWodInfo) {
               const dayConfig = currentDays.find(d => d.id === prevWodInfo.dayId);
@@ -2172,12 +2206,13 @@ export default function HeatsNew() {
 
               if (shouldApplyPause) {
                 if (!pausasAplicadas.has(pausaKey)) {
-                  nextStartTime = new Date(nextStartTime.getTime() + ((dayConfig.break_duration_minutes || 0) * 60000));
+                  // DESCARTA O INTERVALO ENTRE PROVAS E APLICA SOMENTE A PAUSA
+                  appliedInterval = (dayConfig.break_duration_minutes || 0);
                   pausasAplicadas.add(pausaKey);
-                } else {
                 }
               }
             }
+            nextStartTime = new Date(nextStartTime.getTime() + (appliedInterval * 60000));
           } else if (heat.category_id !== previousCategoryId) {
             nextStartTime = new Date(nextStartTime.getTime() + (currentCategoryInterval * 60000));
           } else {
@@ -3688,14 +3723,6 @@ export default function HeatsNew() {
                         variant="outline"
                       >
                         {generating ? 'Gerando...' : 'Gerar Baterias'}
-                      </Button>
-                      <Button
-                        onClick={handleUpdateHeats}
-                        className="flex-1"
-                        disabled={generating}
-                        variant="secondary"
-                      >
-                        {generating ? 'Atualizando...' : 'Atualizar Baterias'}
                       </Button>
                     </div>
                   </div>

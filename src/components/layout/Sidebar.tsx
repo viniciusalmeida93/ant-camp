@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket, Globe } from 'lucide-react';
+import { Trophy, Users, Dumbbell, ClipboardList, Settings, Calculator, Award, Grid, Menu, X, CreditCard, Ticket, Globe, Clock, LogOut, Phone, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,11 +12,12 @@ const navItems = [
   { path: '/categories', label: 'Categorias', icon: Users },
   { path: '/wods', label: 'Eventos', icon: Dumbbell },
   { path: '/registrations', label: 'Inscrições', icon: ClipboardList },
+  { path: '/waitlist', label: 'Fila de Espera', icon: Clock },
   { path: '/heats', label: 'Baterias', icon: Grid },
   { path: '/results', label: 'Resultados', icon: Calculator },
   { path: '/leaderboard', label: 'Leaderboard', icon: Award },
-  { path: '/payments', label: 'Pagamento', icon: CreditCard },
   { path: '/coupons', label: 'Cupons', icon: Ticket },
+  { path: '/payments', label: 'Pagamentos', icon: CreditCard },
 ];
 
 export const Sidebar = () => {
@@ -38,16 +39,6 @@ export const Sidebar = () => {
 
         if (data) {
           setRoles(data.map(r => r.role));
-        }
-
-        // Fallback para organizadores legados (dono de algum campeonato)
-        const { count } = await supabase
-          .from('championships')
-          .select('id', { count: 'exact', head: true })
-          .eq('organizer_id', session.user.id);
-
-        if (count && count > 0 && !roles.includes('organizer')) {
-          setRoles(prev => [...prev, 'organizer']);
         }
       }
       setLoading(false);
@@ -75,8 +66,6 @@ export const Sidebar = () => {
   const finalItems = [...filteredNavItems, ...superAdminItems];
 
   if (selectedChampionship && isOrganizer) {
-    // Insere o Link Page logo antes de configurações ou no final da lista principal
-    // Para simplificar, adicionamos no final dos itens normais de campeonato
     const insertIndex = finalItems.length - superAdminItems.length;
     finalItems.splice(insertIndex, 0, {
       path: `/championships/${selectedChampionship.id}/links`,

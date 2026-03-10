@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +19,7 @@ export default function RegistrationForm() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isCourtesy, setIsCourtesy] = useState(true);
     const [category, setCategory] = useState<any>(null);
     const [formData, setFormData] = useState({
         teamName: '',
@@ -111,9 +113,9 @@ export default function RegistrationForm() {
                 athlete_name: athleteName,
                 team_name: category.format !== 'individual' ? formData.teamName : null,
                 box_name: formData.boxName,
-                status: 'approved',
-                payment_status: 'approved',
-                paid_at: new Date().toISOString(),
+                status: isCourtesy ? 'approved' : 'pending',
+                payment_status: isCourtesy ? 'courtesy' : 'pending',
+                paid_at: isCourtesy ? new Date().toISOString() : null,
                 total_cents: category.price_cents,
                 subtotal_cents: category.price_cents,
                 platform_fee_cents: 0,
@@ -175,10 +177,22 @@ export default function RegistrationForm() {
                     Voltar para Inscrições
                 </Button>
                 <h1 className="text-4xl font-bold mb-2">Nova Inscrição</h1>
-                <p className="text-muted-foreground">
-                    Preencha os dados da inscrição para {category.name}
-                </p>
             </div>
+
+            <div className="flex items-center gap-3 mb-4 p-4 rounded-lg border border-border/50 bg-muted/30">
+                <Checkbox
+                    id="is-courtesy"
+                    checked={isCourtesy}
+                    onCheckedChange={(v) => setIsCourtesy(!!v)}
+                />
+                <div>
+                    <Label htmlFor="is-courtesy" className="font-semibold cursor-pointer">Inscrição de Cortesia</Label>
+                    <p className="text-xs text-muted-foreground">Quando marcado, a inscrição é aprovada automaticamente sem cobrança. Sem esse campo, a inscrição fica pendente de pagamento.</p>
+                </div>
+            </div>
+            <p className="text-muted-foreground mb-4">
+                Preencha os dados da inscrição para {category.name}
+            </p>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="p-4 bg-primary/10 rounded-lg">
@@ -344,6 +358,6 @@ export default function RegistrationForm() {
                     </Button>
                 </div>
             </form>
-        </div>
+        </div >
     );
 }

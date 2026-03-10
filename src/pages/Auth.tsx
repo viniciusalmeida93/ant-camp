@@ -80,18 +80,8 @@ export default function Auth() {
       return;
     }
 
-    // Fallback/Legacy check: if they have a championship but no role yet (should be rare after migration)
-    const { count } = await supabase
-      .from("championships")
-      .select("id", { count: "exact", head: true })
-      .eq("organizer_id", userId);
-
-    if (count && count > 0) {
-      navigate("/dashboard");
-    } else {
-      // Default to athlete dashboard
-      navigate("/athlete-dashboard");
-    }
+    // Default to athlete dashboard
+    navigate("/athlete-dashboard");
   };
 
   const handleSignIn = async (e: React.FormEvent) => {

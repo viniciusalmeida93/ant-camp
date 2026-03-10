@@ -72,7 +72,7 @@ function SortableWODItem({ wod, onEdit, onDelete, onTogglePublish, categoryId, v
   let displayName = wod.name;
   let displayDescription = wod.description;
   let displayNotes = wod.notes;
-  let displayDuration = wod.estimated_duration_minutes;
+  let displayDuration = null;
 
   // Override data if variation exists
   if (categoryId && variations && variations[wod.id]) {
@@ -84,8 +84,6 @@ function SortableWODItem({ wod, onEdit, onDelete, onTogglePublish, categoryId, v
     if (v.description) displayDescription = v.description;
     // @ts-ignore
     if (v.notes) displayNotes = v.notes;
-    // @ts-ignore
-    if (v.estimated_duration_minutes) displayDuration = v.estimated_duration_minutes;
   }
 
   return (
@@ -535,10 +533,7 @@ export default function WODs() {
             displayName: variation.display_name || '',
             description: descriptionValue, // Sempre string (não null) para poder editar
             notes: notesValue, // Sempre string (não null) para poder editar
-            estimatedDuration:
-              variation.estimated_duration_minutes !== null && variation.estimated_duration_minutes !== undefined
-                ? String(variation.estimated_duration_minutes)
-                : (baseWod?.estimated_duration_minutes ? String(baseWod.estimated_duration_minutes) : ''),
+            estimatedDuration: '',
           };
 
           categoriesWithData.push(variation.category_id);
@@ -605,12 +600,7 @@ export default function WODs() {
 
       const timeCap = formData.get('timeCap') as string;
 
-      // Calcular duração estimada baseada no time_cap
-      let estimatedDuration = 15; // Padrão
-      if (timeCap && timeCap.includes(':')) {
-        const [minutes, seconds] = timeCap.split(':').map(Number);
-        estimatedDuration = minutes + Math.ceil(seconds / 60) + 2; // time_cap + 2min de transição
-      }
+      // time_cap é o campo definitivo de duração — estimated_duration_minutes foi removido
 
       // Validações antes de prosseguir
       const wodName = formData.get('name') as string;
@@ -640,9 +630,6 @@ export default function WODs() {
         return;
       }
 
-      // Garantir que estimatedDuration seja válido (baseEstimatedDuration para variações)
-      const baseEstimatedDuration = estimatedDuration > 0 ? estimatedDuration : 15;
-
       const wodData = {
         championship_id: selectedChampionship.id,
         name: formData.get('name') as string,
@@ -651,7 +638,6 @@ export default function WODs() {
         time_cap: timeCap?.trim() || null,
         tiebreaker: null, // Removed
         notes: formData.get('notes') as string || null,
-        estimated_duration_minutes: estimatedDuration,
         order_num: editingWOD ? editingWOD.order_num : maxOrder + 1,
         // @ts-ignore
         is_published: publish, // Definir se está publicado ou não
@@ -744,62 +730,25 @@ export default function WODs() {
             // Se applyAll está desativado, só criar se houver dados personalizados
             if (!hasData && !applyAll) return null;
 
-            // Calcular duração estimada para esta variação
-            let parsedVariationDuration = NaN;
-            if (variation?.estimatedDuration?.trim()) {
-              const parsed = parseInt(variation.estimatedDuration.trim(), 10);
-              if (!isNaN(parsed) && parsed > 0) {
-                parsedVariationDuration = parsed;
-              }
-            }
-
-            // Usar duração da variação se válida, senão usar a base
-            const estimatedDurationMinutes = Number.isFinite(parsedVariationDuration) && parsedVariationDuration > 0
-              ? parsedVariationDuration
-              : baseEstimatedDuration;
-
-            // Quando applyAll está ativo, usar os valores da variação (que foram copiados do padrão)
-            // Os valores em categoryVariations já foram copiados como strings reais quando o botão foi clicado
+            // Calcular description e notes da variação
             const form = formRef.current;
             const formData = form ? new FormData(form) : null;
             const baseDescription = formData?.get('description') as string || '';
             const baseNotes = formData?.get('notes') as string || '';
 
-            // Obter valores da variação (que foram copiados quando applyAll foi ativado)
-            let finalDescription = '';
-            let finalNotes = '';
+            const finalDescription = applyAll
+              ? (variation?.description || baseDescription || null)
+              : (variation?.description?.trim() || null);
+            const finalNotes = applyAll
+              ? (variation?.notes || baseNotes || null)
+              : (variation?.notes?.trim() || null);
 
-            if (applyAll) {
-              // Quando applyAll está ativo, SEMPRE usar os valores que foram copiados para categoryVariations
-              // Se os valores em categoryVariations estão vazios, usar os valores padrão do formulário
-              // Isso garante que sempre há valores reais para salvar
-              finalDescription = variation?.description || baseDescription;
-              finalNotes = variation?.notes || baseNotes;
-
-              // Garantir que sejam sempre strings não-vazias quando applyAll está ativo
-              if (!finalDescription || finalDescription.trim() === '') {
-                finalDescription = baseDescription;
-              }
-              if (!finalNotes || finalNotes.trim() === '') {
-                finalNotes = baseNotes;
-              }
-            } else {
-              // Quando applyAll não está ativo, só salvar se houver dados personalizados
-              finalDescription = variation?.description?.trim() || '';
-              finalNotes = variation?.notes?.trim() || '';
-            }
-
-            // Quando applyAll está ativo, SEMPRE salvar valores reais (não null, não vazio)
-            // Isso permite que sejam editáveis ao recarregar
             return {
               wod_id: wodId,
               category_id: cat.id,
               display_name: variation?.displayName?.trim() || null,
-              description: applyAll ? (finalDescription || null) : (finalDescription || null),
-              notes: applyAll ? (finalNotes || null) : (finalNotes || null),
-              estimated_duration_minutes: estimatedDurationMinutes > 0
-                ? estimatedDurationMinutes
-                : (baseEstimatedDuration > 0 ? baseEstimatedDuration : null),
+              description: finalDescription,
+              notes: finalNotes,
             };
           })
           .filter(Boolean);
@@ -874,7 +823,7 @@ export default function WODs() {
       });
 
       // Mensagem de erro mais amigável
-      let userMessage = "Erro ao salvar WOD";
+      let userMessage = "Erro ao salvar Evento";
       if (errorMessage.includes("is not defined")) {
         userMessage = "Erro interno: variável não definida. Por favor, recarregue a página e tente novamente.";
       } else if (errorMessage.includes("validation") || errorMessage.includes("required")) {
@@ -882,9 +831,9 @@ export default function WODs() {
       } else if (errorMessage.includes("permission") || errorMessage.includes("policy")) {
         userMessage = "Você não tem permissão para realizar esta ação.";
       } else if (errorMessage.includes("duplicate") || errorMessage.includes("unique")) {
-        userMessage = "Já existe um WOD com este nome ou dados duplicados.";
+        userMessage = "Já existe um Evento com este nome ou dados duplicados.";
       } else {
-        userMessage = `Erro ao salvar WOD: ${errorMessage}`;
+        userMessage = `Erro ao salvar Evento: ${errorMessage}`;
       }
 
       toast.error(userMessage);
@@ -906,7 +855,7 @@ export default function WODs() {
       // Update local state
       setWODs(wods.map(w => w.id === wod.id ? { ...w, is_published: newStatus } : w));
 
-      toast.success(newStatus ? "WOD publicado com sucesso!" : "WOD despublicado com sucesso!");
+      toast.success(newStatus ? "Evento publicado com sucesso!" : "Evento despublicado com sucesso!");
     } catch (error) {
       console.error("Erro ao alterar status de publicação:", error);
       toast.error("Erro ao alterar status de publicação");
@@ -920,11 +869,11 @@ export default function WODs() {
       const { error } = await supabase.from("wods").delete().eq("id", wodId);
       if (error) throw error;
 
-      toast.success("WOD removido com sucesso!");
+      toast.success("Evento removido com sucesso!");
       await loadWODs();
     } catch (error: any) {
       console.error("Error deleting WOD:", error);
-      toast.error("Erro ao remover WOD");
+      toast.error("Erro ao remover Evento");
     }
   };
 

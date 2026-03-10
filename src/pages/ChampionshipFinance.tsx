@@ -267,6 +267,7 @@ export default function ChampionshipFinance() {
       cancelled: { variant: "destructive", icon: XCircle, label: "Cancelado" },
       expired: { variant: "destructive", icon: XCircle, label: "Expirado" },
       refunded: { variant: "outline", icon: XCircle, label: "Reembolsado" },
+      courtesy: { variant: "outline", icon: CheckCircle, label: "Cortesia" },
     };
 
     const config = variants[status] || variants.pending;
@@ -567,6 +568,7 @@ export default function ChampionshipFinance() {
                   <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="cancelled">Cancelado</SelectItem>
                   <SelectItem value="expired">Expirado</SelectItem>
+                  <SelectItem value="courtesy">Cortesia</SelectItem>
                 </SelectContent>
               </Select>
             </div>
