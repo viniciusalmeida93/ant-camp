@@ -9,22 +9,18 @@ export default function Logout() {
     useEffect(() => {
         const performLogout = async () => {
             try {
-                // 1. Tentar fazer logout no Supabase
-                const { error } = await supabase.auth.signOut();
-                if (error) throw error;
-
-                // 2. Limpar dados específicos do App
+                // 1. Limpar dados específicos do App e Supabase primeiro
                 localStorage.removeItem('selectedChampionship');
 
-                // 3. Opcional: Limpar TUDO (Cuidado se tivermos outros dados importantes)
-                // localStorage.clear(); // Talvez muito agressivo?
-
-                // Limpar chaves do Supabase explicitamente (padrão sb-...)
                 Object.keys(localStorage).forEach(key => {
                     if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
                         localStorage.removeItem(key);
                     }
                 });
+
+                // 2. Tentar fazer logout no Supabase
+                const { error } = await supabase.auth.signOut();
+                if (error) throw error;
 
             } catch (error) {
                 console.error("Error signing out:", error);

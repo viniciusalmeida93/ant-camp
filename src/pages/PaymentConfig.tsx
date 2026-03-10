@@ -73,6 +73,7 @@ export default function PaymentConfig() {
     const [copyingPix, setCopyingPix] = useState(false);
     const [pixPayload, setPixPayload] = useState("");
     const [asaasWalletId, setAsaasWalletId] = useState("");
+    const [initialAsaasWalletId, setInitialAsaasWalletId] = useState("");
     const [showColumnError, setShowColumnError] = useState(false);
 
     // --- States for Coupons ---
@@ -327,6 +328,7 @@ export default function PaymentConfig() {
 
                 if (!profileError && profileData) {
                     setAsaasWalletId(profileData.asaas_wallet_id || "");
+                    setInitialAsaasWalletId(profileData.asaas_wallet_id || "");
                 }
             }
         } catch (error) {
@@ -365,24 +367,27 @@ export default function PaymentConfig() {
                 }
             }
 
-            // Update Championship (PIX)
+            const walletIdToSave = asaasWalletId.trim() || null;
+
+            // Update Championship (PIX + Wallet ID so Checkout can read it publicly)
             const { error: champError } = await supabase
                 .from("championships")
-                .update({ pix_payload: payload || null })
+                .update({ pix_payload: payload || null, asaas_wallet_id: walletIdToSave })
                 .eq("id", selectedChampionship.id);
 
             if (champError) throw champError;
 
-            // Update Profile (Asaas Wallet)
+            // Update Profile (Asaas Wallet - for backward compatibility)
             const { error: profileError } = await supabase
                 .from("profiles")
-                .update({ asaas_wallet_id: asaasWalletId.trim() || null })
+                .update({ asaas_wallet_id: walletIdToSave })
                 .eq("id", session.user.id);
 
             if (profileError) throw profileError;
 
             // Update Local Context
-            const updatedChamp = { ...selectedChampionship, pix_payload: payload || null };
+            setInitialAsaasWalletId(asaasWalletId.trim() || "");
+            const updatedChamp = { ...selectedChampionship, pix_payload: payload || null, asaas_wallet_id: walletIdToSave };
             setSelectedChampionship(updatedChamp);
             await loadChampionships(); // Refresh list
 
@@ -995,9 +1000,12 @@ export default function PaymentConfig() {
                         {/* PIX CONFIG REMOVED */}
 
                         <div className="flex justify-end pt-4">
-                            <Button onClick={handleSaveSettings} disabled={savingSettings || loadingSettings}>
+                            <Button
+                                onClick={handleSaveSettings}
+                                disabled={savingSettings || loadingSettings}
+                            >
                                 {savingSettings && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                Salvar Todas as Configurações
+                                {asaasWalletId.trim() === initialAsaasWalletId ? "Salvo" : "Salvar"}
                             </Button>
                         </div>
                     </TabsContent>

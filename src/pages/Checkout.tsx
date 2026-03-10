@@ -243,21 +243,23 @@ export default function Checkout() {
         }
       }
 
-      // Verificar se o campeonato tem integração Asaas e se é sandbox
-      if (reg.championships?.organizer_id) {
-        // @ts-ignore
-        const { data: integration } = await supabase
-          .from("organizer_asaas_integrations")
-          .select("id, asaas_api_key")
-          .eq("organizer_id", reg.championships.organizer_id)
-          .eq("is_active", true)
+      // Verificar se o campeonato tem Wallet ID do Asaas configurado (campo público em championships)
+      // Lemos diretamente do registro do campeonato já carregado, que está na tabela pública
+      if (reg.championships?.asaas_wallet_id) {
+        setHasAsaasIntegration(true);
+      } else if (reg.championships?.organizer_id) {
+        // Fallback: verificar no perfil do organizador (pode estar bloqueado por RLS em alguns contextos)
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("asaas_wallet_id")
+          .eq("id", reg.championships.organizer_id)
           .maybeSingle();
+        setHasAsaasIntegration(!!profile?.asaas_wallet_id);
+      }
 
-        setHasAsaasIntegration(!!integration);
-        // Verificar se é sandbox (API key começa com $aact_hmlg_)
-        if (integration?.asaas_api_key?.startsWith("$aact_hmlg_")) {
-          setIsSandbox(true);
-        }
+      // Verificar se é sandbox  
+      if (import.meta.env.VITE_ASAAS_API_KEY?.startsWith("$aact_hmlg_")) {
+        setIsSandbox(true);
       }
       // Verificar se o sistema platform possui configuração sandbox (para pagamentos sem organizador definido)
       if (import.meta.env.VITE_ASAAS_API_KEY?.startsWith("$aact_hmlg_")) {
@@ -942,7 +944,7 @@ export default function Checkout() {
 
                   <Button
                     onClick={handlePayment}
-                    disabled={processing}
+                    disabled={processing || !hasAsaasIntegration}
                     size="lg"
                     className="w-full text-lg h-14 mt-6 bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
                   >
