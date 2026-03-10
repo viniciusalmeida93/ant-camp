@@ -261,24 +261,23 @@ export default function ChampionshipFinance() {
 
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; icon: any; label: string }> = {
-      approved: { variant: "default", icon: CheckCircle, label: "Aprovado" },
-      pending: { variant: "secondary", icon: Clock, label: "Pendente" },
-      cancelled: { variant: "destructive", icon: XCircle, label: "Cancelado" },
-      expired: { variant: "destructive", icon: XCircle, label: "Expirado" },
-      refunded: { variant: "outline", icon: XCircle, label: "Reembolsado" },
-      courtesy: { variant: "outline", icon: CheckCircle, label: "Cortesia" },
-    };
-
-    const config = variants[status] || variants.pending;
-    const Icon = config.icon;
-
-    return (
-      <Badge variant={config.variant} className="gap-1">
-        <Icon className="w-3 h-3" />
-        {config.label}
-      </Badge>
-    );
+    switch (status) {
+      case "approved":
+        return <Badge className="bg-green-500/10 text-green-700 border-green-200 hover:bg-green-500/20 gap-1" variant="outline"><CheckCircle className="w-3 h-3" /> Aprovado</Badge>;
+      case "processing":
+        return <Badge className="bg-orange-500/10 text-orange-700 border-orange-200 hover:bg-orange-500/20 gap-1" variant="outline"><Clock className="w-3 h-3" /> Processando</Badge>;
+      case "cancelled":
+        return <Badge className="bg-red-500/10 text-red-700 border-red-200 hover:bg-red-500/20 gap-1" variant="outline"><XCircle className="w-3 h-3" /> Cancelado</Badge>;
+      case "expired":
+        return <Badge className="bg-red-500/10 text-red-700 border-red-200 hover:bg-red-500/20 gap-1" variant="outline"><XCircle className="w-3 h-3" /> Expirado</Badge>;
+      case "refunded":
+        return <Badge className="bg-slate-500/10 text-slate-700 border-slate-200 hover:bg-slate-500/20 gap-1" variant="outline"><XCircle className="w-3 h-3" /> Reembolsado</Badge>;
+      case "courtesy":
+        return <Badge className="bg-blue-500/10 text-blue-700 border-blue-200 hover:bg-blue-500/20 gap-1" variant="outline"><CheckCircle className="w-3 h-3" /> Cortesia</Badge>;
+      case "pending":
+      default:
+        return <Badge className="bg-yellow-500/10 text-yellow-700 border-yellow-200 hover:bg-yellow-500/20 gap-1" variant="outline"><Clock className="w-3 h-3" /> Pendente</Badge>;
+    }
   };
 
   if (loading) {
