@@ -12,7 +12,11 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  console.log("🛒 [CART RECOVERY] Função iniciada");
+  console.log("🛒 [CART RECOVERY] Função cancelada temporariamente (desativada)");
+  return new Response(JSON.stringify({ success: true, message: "Cart recovery is disabled." }), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
   try {
     const supabase = createClient(
