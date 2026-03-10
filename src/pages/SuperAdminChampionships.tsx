@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 interface Championship {
     id: string;
     name: string;
-    event_date: string;
-    status: string;
+    date: string;
+    is_published: boolean;
     organizer: {
         name: string | null;
         email: string | null;
@@ -41,9 +41,9 @@ export default function SuperAdminChampionships() {
                 .select(`
             id,
             name,
-            event_date,
-            status,
-            owner_id
+            date,
+            is_published,
+            organizer_id
         `)
                 .order('created_at', { ascending: false });
 
@@ -53,19 +53,22 @@ export default function SuperAdminChampionships() {
                 return;
             }
 
-            const ownerIds = Array.from(new Set(data.map(c => c.owner_id)));
+            const ownerIds = Array.from(new Set(data.map(c => c.organizer_id)));
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('id, name')
+                .select('id, full_name')
                 .in('id', ownerIds);
 
             const profileMap = new Map();
             profiles?.forEach(p => profileMap.set(p.id, p));
 
             const formatted = data.map(c => ({
-                ...c,
+                id: c.id,
+                name: c.name,
+                date: c.date,
+                is_published: c.is_published,
                 organizer: {
-                    name: profileMap.get(c.owner_id)?.name || 'N/A',
+                    name: profileMap.get(c.organizer_id)?.full_name || 'N/A',
                     email: null
                 }
             }));
@@ -83,7 +86,7 @@ export default function SuperAdminChampionships() {
             const matchOrganizer = camp.organizer?.name?.toLowerCase().includes(searchOrganizer.toLowerCase()) ?? false;
 
             // Allow basic match on YYYY-MM-DD or partial combinations
-            const matchDate = searchDate === "" || (camp.event_date && camp.event_date.includes(searchDate));
+            const matchDate = searchDate === "" || (camp.date && camp.date.includes(searchDate));
 
             return matchName && matchOrganizer && matchDate;
         });
@@ -172,14 +175,14 @@ export default function SuperAdminChampionships() {
                                             </TableCell>
                                             <TableCell>{camp.organizer?.name}</TableCell>
                                             <TableCell>
-                                                {camp.event_date ? format(new Date(camp.event_date), "dd/MM/yyyy", { locale: ptBR }) : '-'}
+                                                {camp.date ? format(new Date(camp.date), "dd/MM/yyyy", { locale: ptBR }) : '-'}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col gap-1">
-                                                    <Badge variant={camp.status === 'published' ? 'default' : 'secondary'} className="w-fit">
-                                                        {camp.status === 'published' ? 'Publicado' : 'Rascunho'}
+                                                    <Badge variant={camp.is_published ? 'default' : 'secondary'} className="w-fit">
+                                                        {camp.is_published ? 'Publicado' : 'Rascunho'}
                                                     </Badge>
-                                                    {camp.event_date && new Date(camp.event_date) < new Date() && (
+                                                    {camp.date && new Date(camp.date) < new Date() && (
                                                         <Badge variant="outline" className="w-fit border-muted-foreground text-muted-foreground">
                                                             Concluído
                                                         </Badge>
