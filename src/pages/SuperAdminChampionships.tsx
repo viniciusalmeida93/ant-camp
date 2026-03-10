@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Input } from "@/components/ui/input";
 
 interface Championship {
     id: string;
@@ -16,12 +17,17 @@ interface Championship {
     organizer: {
         name: string | null;
         email: string | null;
-    } | null; // Joined profile
+    } | null;
 }
 
 export default function SuperAdminChampionships() {
     const [loading, setLoading] = useState(true);
     const [championships, setChampionships] = useState<Championship[]>([]);
+
+    // Filters state
+    const [searchName, setSearchName] = useState("");
+    const [searchOrganizer, setSearchOrganizer] = useState("");
+    const [searchDate, setSearchDate] = useState("");
 
     useEffect(() => {
         loadData();
@@ -30,10 +36,6 @@ export default function SuperAdminChampionships() {
     const loadData = async () => {
         setLoading(true);
         try {
-            // Fetch championships with organizer details
-            // We need to join with auth.users possibly via profiles if it exists, or just use user_id
-            // Since supabase client types might be strict, we'll try to fetch safely
-
             const { data, error } = await supabase
                 .from('championships')
                 .select(`
@@ -51,10 +53,6 @@ export default function SuperAdminChampionships() {
                 return;
             }
 
-            // Fetch organizer emails manually to avoid complex joins if profiles are not strictly linked or if we need email from auth.users (which we can't join directly in client)
-            // Actually, for Super Admin, we might want to create a View or a Function later. 
-            // For now, let's just show the ID or fetch profiles if possible.
-            // Let's try fetching profiles
             const ownerIds = Array.from(new Set(data.map(c => c.owner_id)));
             const { data: profiles } = await supabase
                 .from('profiles')
@@ -68,7 +66,7 @@ export default function SuperAdminChampionships() {
                 ...c,
                 organizer: {
                     name: profileMap.get(c.owner_id)?.name || 'N/A',
-                    email: null // Can't easily get email from client side without edge function or proper RLS on auth.users view
+                    email: null
                 }
             }));
 
@@ -78,6 +76,18 @@ export default function SuperAdminChampionships() {
             setLoading(false);
         }
     };
+
+    const filteredChampionships = useMemo(() => {
+        return championships.filter(camp => {
+            const matchName = camp.name?.toLowerCase().includes(searchName.toLowerCase()) ?? false;
+            const matchOrganizer = camp.organizer?.name?.toLowerCase().includes(searchOrganizer.toLowerCase()) ?? false;
+
+            // Allow basic match on YYYY-MM-DD or partial combinations
+            const matchDate = searchDate === "" || (camp.event_date && camp.event_date.includes(searchDate));
+
+            return matchName && matchOrganizer && matchDate;
+        });
+    }, [championships, searchName, searchOrganizer, searchDate]);
 
     if (loading) {
         return (
@@ -98,13 +108,47 @@ export default function SuperAdminChampionships() {
 
             <Card>
                 <CardHeader>
+                    <CardTitle>Filtros</CardTitle>
+                    <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Filtrar por nome do campeonato..."
+                                value={searchName}
+                                onChange={(e) => setSearchName(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Filtrar por nome do organizador..."
+                                value={searchOrganizer}
+                                onChange={(e) => setSearchOrganizer(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <Input
+                                type="date"
+                                value={searchDate}
+                                onChange={(e) => setSearchDate(e.target.value)}
+                                className="text-muted-foreground"
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+            </Card>
+
+            <Card>
+                <CardHeader>
                     <CardTitle>Todos os Campeonatos</CardTitle>
                     <CardDescription>
-                        Lista completa de eventos
+                        Lista completa de eventos ({filteredChampionships.length})
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {championships.length === 0 ? (
+                    {filteredChampionships.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             Nenhum campeonato encontrado
                         </div>
@@ -121,7 +165,7 @@ export default function SuperAdminChampionships() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {championships.map((camp) => (
+                                    {filteredChampionships.map((camp) => (
                                         <TableRow key={camp.id}>
                                             <TableCell className="font-medium">
                                                 {camp.name}
@@ -143,7 +187,6 @@ export default function SuperAdminChampionships() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                {/* Placeholder for future actions */}
                                                 <span className="text-xs text-muted-foreground">Visualizar</span>
                                             </TableCell>
                                         </TableRow>
